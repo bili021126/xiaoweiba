@@ -66,7 +66,13 @@ export class GenerateCommitCommand {
 
         // 5. 记录情景记忆
         const durationMs = Date.now() - startTime;
-        await this.recordMemory(commitMessage, diff, durationMs);
+        console.log('[GenerateCommitCommand] About to record memory, duration:', durationMs);
+        try {
+          await this.recordMemory(commitMessage, diff, durationMs);
+          console.log('[GenerateCommitCommand] Memory recording completed');
+        } catch (memoryError) {
+          console.error('[GenerateCommitCommand] Memory recording failed:', memoryError);
+        }
       });
 
       // 6. 记录审计日志
@@ -302,6 +308,7 @@ ${truncatedDiff}
     diff: string,
     durationMs: number
   ): Promise<void> {
+    console.log('[GenerateCommitCommand] recordMemory() called');
     try {
       // 提取变更的文件列表
       const changedFiles = diff
@@ -313,6 +320,7 @@ ${truncatedDiff}
       // 提取提交类型
       const commitType = commitMessage.split(':')[0]?.split('(')[0] || 'unknown';
 
+      console.log('[GenerateCommitCommand] Calling episodicMemory.record...');
       await this.episodicMemory.record({
         taskType: 'COMMIT_GENERATE',
         summary: `生成${commitType}类型的提交信息`,
@@ -322,6 +330,7 @@ ${truncatedDiff}
         durationMs,
         decision: commitMessage.substring(0, 200) // 截取前200字符作为决策摘要
       });
+      console.log('[GenerateCommitCommand] episodicMemory.record() completed');
     } catch (error) {
       // 记忆记录失败不影响主流程，仅记录日志
       console.warn('记忆记录失败:', error);
