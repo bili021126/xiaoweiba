@@ -2,6 +2,7 @@ import "reflect-metadata";
 
 // 加载环境变量（开发环境）
 // TODO: 生产环境应使用更安全的方式管理密钥
+// FIXME: 需要优化环境变量加载逻辑
 import * as path from 'path';
 import * as fs from 'fs';
 const envPath = path.join(__dirname, '..', '.env');
