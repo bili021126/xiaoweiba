@@ -1,7 +1,7 @@
 {
   "name": "xiaoweiba",
   "displayName": "小尾巴 (XiaoWeiba)",
-  "description": "以记忆蒸馏为内核的个人 AI 编程伴侣",
+  "description": "以记忆蒸馏为内核的个人 AI 编程助手",
   "version": "0.1.0",
   "publisher": "xiaoweiba",
   "engines": {
