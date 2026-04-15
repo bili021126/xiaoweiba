@@ -24,18 +24,19 @@ export class DatabaseManager {
 
   constructor(
     @inject(ConfigManager) private configManager: ConfigManager,
-    @inject('extensionContext') context?: vscode.ExtensionContext
+    @inject('extensionContext') context?: vscode.ExtensionContext,
+    customDbPath?: string
   ) {
     this.extensionContext = context || null;
     
     const homeDir = os.homedir();
     const dataDir = path.join(homeDir, '.xiaoweiba', 'data');
-    this.dbPath = path.join(dataDir, 'memory.db');
+    this.dbPath = customDbPath || path.join(dataDir, 'memory.db');
     this.backupDir = path.join(homeDir, '.xiaoweiba', 'backups');
 
     // 确保目录存在
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
+    if (!fs.existsSync(path.dirname(this.dbPath))) {
+      fs.mkdirSync(path.dirname(this.dbPath), { recursive: true });
     }
     if (!fs.existsSync(this.backupDir)) {
       fs.mkdirSync(this.backupDir, { recursive: true });
@@ -578,21 +579,37 @@ export class DatabaseManager {
    */
   runQuery(sql: string, params?: any[]): any[] {
     const db = this.getDatabase();
-    const result = db.exec(sql);
     
-    if (result.length === 0 || result[0].values.length === 0) {
-      return [];
-    }
+    // 如果有参数，使用参数化查询
+    if (params && params.length > 0) {
+      const stmt = db.prepare(sql);
+      stmt.bind(params);
+      
+      const results: any[] = [];
+      while (stmt.step()) {
+        results.push(stmt.getAsObject());
+      }
+      stmt.free();
+      
+      return results;
+    } else {
+      // 无参数时使用exec
+      const result = db.exec(sql);
+      
+      if (result.length === 0 || result[0].values.length === 0) {
+        return [];
+      }
 
-    // 将sql.js的结果格式转换为数组对象
-    const columns = result[0].columns;
-    return result[0].values.map((row: any[]) => {
-      const obj: any = {};
-      columns.forEach((col: string, idx: number) => {
-        obj[col] = row[idx];
+      // 将sql.js的结果格式化为数组对象
+      const columns = result[0].columns;
+      return result[0].values.map((row: any[]) => {
+        const obj: any = {};
+        columns.forEach((col: string, idx: number) => {
+          obj[col] = row[idx];
+        });
+        return obj;
       });
-      return obj;
-    });
+    }
   }
 
   /**

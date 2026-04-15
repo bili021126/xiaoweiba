@@ -28,7 +28,23 @@ module.exports = {
   },
   commands: {
     registerCommand: jest.fn(() => ({ dispose: jest.fn() })),
-    executeCommand: jest.fn()
+    executeCommand: jest.fn(),
+    getCommands: jest.fn().mockResolvedValue([
+      'xiaoweiba.explainCode',
+      'xiaoweiba.generateCommit',
+      'xiaoweiba.checkNaming',
+      'xiaoweiba.optimizeSQL',
+      'xiaoweiba.repair-memory',
+      'xiaoweiba.export-memory',
+      'xiaoweiba.import-memory'
+    ])
+  },
+  extensions: {
+    getExtension: jest.fn().mockReturnValue({
+      isActive: true,
+      activate: jest.fn().mockResolvedValue({}),
+      exports: {}
+    })
   },
   ExtensionMode: {
     Production: 1,

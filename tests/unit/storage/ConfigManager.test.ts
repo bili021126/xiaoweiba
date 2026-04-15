@@ -561,6 +561,25 @@ skill:
 
       expect(apiKey).toBeUndefined();
     });
+
+    it('应该从环境变量获取API Key', async () => {
+      (mockSecretStorage.get as jest.Mock).mockResolvedValue(undefined);
+      (mockFs.existsSync as jest.Mock).mockReturnValue(true);
+      (mockFs.readFileSync as jest.Mock).mockReturnValue(
+        'mode: private\nmodel:\n  providers:\n    - id: deepseek\n      apiUrl: https://api.deepseek.com/v1\n'
+      );
+
+      // 设置环境变量
+      process.env.DEEPSEEK_API_KEY = 'env-api-key-123';
+
+      await configManager.loadConfig();
+      const apiKey = await configManager.getApiKey('deepseek');
+
+      expect(apiKey).toBe('env-api-key-123');
+
+      // 清理
+      delete process.env.DEEPSEEK_API_KEY;
+    });
   });
 
   describe('resolveEnvVariables数组和嵌套对象', () => {

@@ -46,6 +46,26 @@ export interface BestPracticeConfig {
   builtinOnly: boolean;
 }
 
+export interface ChatConfig {
+  maxHistoryMessages: number;
+  autoGenerateTitle: boolean;
+  defaultSystemPrompt: string;
+  enableCrossSession: boolean;
+}
+
+export interface InlineCompletionConfig {
+  enabled: boolean;
+  triggerDelayMs: number;
+  maxTokens: number;
+  enableCache: boolean;
+  cacheTTLSeconds: number;
+}
+
+export interface CommandCompatConfig {
+  showDeprecationWarning: boolean;
+  deprecationMessage: string;
+}
+
 export interface XiaoWeibaConfig {
   mode: 'private' | 'general';
   model: {
@@ -64,6 +84,9 @@ export interface XiaoWeibaConfig {
     onSelection: boolean; // 选中代码时提示
     onScmOpen: boolean; // 打开SCM时提示
   };
+  chat?: ChatConfig;
+  inlineCompletion?: InlineCompletionConfig;
+  commandCompat?: CommandCompatConfig;
 }
 
 const DEFAULT_CONFIG: XiaoWeibaConfig = {
@@ -119,6 +142,23 @@ const DEFAULT_CONFIG: XiaoWeibaConfig = {
   autoSuggest: {
     onSelection: true, // 默认开启
     onScmOpen: true
+  },
+  chat: {
+    maxHistoryMessages: 20,
+    autoGenerateTitle: true,
+    defaultSystemPrompt: '你是一个AI编程助手，擅长解释代码、生成代码和解答技术问题。',
+    enableCrossSession: true
+  },
+  inlineCompletion: {
+    enabled: true,
+    triggerDelayMs: 300,
+    maxTokens: 50,
+    enableCache: true,
+    cacheTTLSeconds: 5
+  },
+  commandCompat: {
+    showDeprecationWarning: true,
+    deprecationMessage: '该命令已弃用，请使用侧边栏 AI 助手（快捷键 Ctrl+Shift+L）获得更好体验。'
   }
 };
 

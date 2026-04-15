@@ -132,5 +132,24 @@ describe('AuditLogger', () => {
       auditLogger.cleanupOldLogs();
       expect(mockFs.unlinkSync).toHaveBeenCalledTimes(5);
     });
+
+    it('应该日志目录不存在时创建目录', async () => {
+      (mockFs.existsSync as jest.Mock).mockReturnValueOnce(false);
+      
+      await auditLogger.log('test', 'success', 100);
+      
+      expect(mockFs.mkdirSync).toHaveBeenCalled();
+    });
+
+    it('应该appendFileSync失败时捕获错误', async () => {
+      (mockFs.appendFileSync as jest.Mock).mockImplementationOnce(() => {
+        throw new Error('写入失败');
+      });
+
+      // 不应该抛出异常
+      await expect(
+        auditLogger.log('test', 'success', 100)
+      ).resolves.toBeUndefined();
+    });
   });
 });

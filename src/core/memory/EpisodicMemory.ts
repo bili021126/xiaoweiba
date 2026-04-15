@@ -137,35 +137,40 @@ export class EpisodicMemory {
         return [];
       }
 
-      // 使用参数化方式构建 SQL（防止注入）
-      const safeFp = projectFingerprint.replace(/'/g, "''");
-      let sql = `SELECT * FROM episodic_memory WHERE project_fingerprint = '${safeFp}'`;
+      // 使用白名单验证防止SQL注入（仅用于ORDER BY子句）
+      const sortBy = options.sortBy === 'finalWeight' ? 'final_weight' : 'timestamp';
+      const sortOrder = options.sortOrder === 'ASC' ? 'ASC' : 'DESC';
+      const limit = Math.min(options.limit || 20, 100);
+      const offset = Math.max(options.offset || 0, 0);
+
+      // 构建SQL（使用?占位符）
+      let sql = `SELECT * FROM episodic_memory WHERE project_fingerprint = ?`;
+      const params: any[] = [projectFingerprint];
       
       if (options.taskType) {
-        const safeTaskType = options.taskType.replace(/'/g, "''");
-        sql += ` AND task_type = '${safeTaskType}'`;
+        sql += ` AND task_type = ?`;
+        params.push(options.taskType);
       }
 
       if (options.sinceTimestamp) {
-        sql += ` AND timestamp >= ${options.sinceTimestamp}`;
+        sql += ` AND timestamp >= ?`;
+        params.push(options.sinceTimestamp);
       }
 
-      const sortBy = options.sortBy === 'finalWeight' ? 'final_weight' : 'timestamp';
-      const sortOrder = options.sortOrder === 'ASC' ? 'ASC' : 'DESC';
-      sql += ` ORDER BY ${sortBy} ${sortOrder}`;
+      sql += ` ORDER BY ${sortBy} ${sortOrder}`; // 白名单验证，安全
+      sql += ` LIMIT ? OFFSET ?`;
+      params.push(limit, offset);
 
-      const limit = Math.min(options.limit || 20, 100); // 限制最大返回数量
-      const offset = Math.max(options.offset || 0, 0); // 确保非负
-      sql += ` LIMIT ${limit} OFFSET ${offset}`;
-
-      const rows = db.exec(sql);
-
-      // 改进的返回值处理
-      if (rows.length === 0 || rows[0].values.length === 0) {
-        return [];
+      // 使用sql.js的真正参数化查询
+      const stmt = db.prepare(sql);
+      stmt.bind(params);
+      
+      const memories: EpisodicMemoryRecord[] = [];
+      while (stmt.step()) {
+        const row = stmt.getAsObject();
+        memories.push(this.objectToMemory(row));
       }
-
-      const memories: EpisodicMemoryRecord[] = rows[0].values.map((row: any[]) => this.rowToMemory(row));
+      stmt.free();
 
       const duration = Date.now() - startTime;
       await this.auditLogger.log('memory_retrieve', 'success', duration, {
@@ -197,30 +202,34 @@ export class EpisodicMemory {
         return [];
       }
 
-      // 验证和清理搜索查询（FTS5 特殊字符转义）
+      // 严格验证和清理搜索查询
       const sanitizedQuery = this.sanitizeFtsQuery(query);
-      const limit = Math.min(options.limit || 20, 100); // 限制最大返回数量
-      const offset = Math.max(options.offset || 0, 0); // 确保非负
+      if (!sanitizedQuery || sanitizedQuery.trim().length === 0) {
+        return []; // 空查询直接返回
+      }
 
-      // 使用参数化查询保护项目指纹（虽然已验证，但仍需防御）
-      const safeFp = projectFingerprint.replace(/'/g, "''");
-      
+      const limit = Math.min(options.limit || 20, 100);
+      const offset = Math.max(options.offset || 0, 0);
+
+      // 使用真正的参数化查询（FTS5 MATCH也使用占位符）
       const sql = `
         SELECT em.* FROM episodic_memory em
         JOIN episodic_memory_fts fts ON em.rowid = fts.rowid
-        WHERE em.project_fingerprint = '${safeFp}' AND episodic_memory_fts MATCH '${sanitizedQuery}'
+        WHERE em.project_fingerprint = ? AND episodic_memory_fts MATCH ?
         ORDER BY rank
-        LIMIT ${limit} OFFSET ${offset}
+        LIMIT ? OFFSET ?
       `;
+
+      // 使用sql.js的真正参数化查询
+      const stmt = db.prepare(sql);
+      stmt.bind([projectFingerprint, sanitizedQuery, limit, offset]);
       
-      const rows = db.exec(sql);
-
-      // 改进的返回值处理
-      if (rows.length === 0 || rows[0].values.length === 0) {
-        return [];
+      const memories: EpisodicMemoryRecord[] = [];
+      while (stmt.step()) {
+        const row = stmt.getAsObject();
+        memories.push(this.objectToMemory(row));
       }
-
-      const memories: EpisodicMemoryRecord[] = rows[0].values.map((row: any[]) => this.rowToMemory(row));
+      stmt.free();
 
       const duration = Date.now() - startTime;
       await this.auditLogger.log('memory_search', 'success', duration, {
@@ -308,41 +317,42 @@ export class EpisodicMemory {
       return { totalCount: 0, byTaskType: {}, byOutcome: {}, averageWeight: 0 };
     }
 
-    const safeFp = projectFingerprint.replace(/'/g, "''");
-
-    const totalResult = db.exec(
-      `SELECT COUNT(*) as count FROM episodic_memory WHERE project_fingerprint = '${safeFp}'`
+    // 使用真正的参数化查询
+    const totalStmt = db.prepare(
+      'SELECT COUNT(*) as count FROM episodic_memory WHERE project_fingerprint = ?'
     );
-    const totalCount = totalResult.length > 0 && totalResult[0].values.length > 0
-      ? (totalResult[0].values[0][0] as number)
-      : 0;
+    totalStmt.bind([projectFingerprint]);
+    const totalCount = totalStmt.step() ? (totalStmt.getAsObject().count as number) : 0;
+    totalStmt.free();
 
-    const byTaskTypeResult = db.exec(
-      `SELECT task_type, COUNT(*) as count FROM episodic_memory WHERE project_fingerprint = '${safeFp}' GROUP BY task_type`
+    const byTaskTypeStmt = db.prepare(
+      'SELECT task_type, COUNT(*) as count FROM episodic_memory WHERE project_fingerprint = ? GROUP BY task_type'
     );
+    byTaskTypeStmt.bind([projectFingerprint]);
     const byTaskType: Record<string, number> = {};
-    if (byTaskTypeResult.length > 0 && byTaskTypeResult[0].values.length > 0) {
-      for (const row of byTaskTypeResult[0].values) {
-        byTaskType[row[0] as string] = row[1] as number;
-      }
+    while (byTaskTypeStmt.step()) {
+      const row = byTaskTypeStmt.getAsObject();
+      byTaskType[row.task_type as string] = row.count as number;
     }
+    byTaskTypeStmt.free();
 
-    const byOutcomeResult = db.exec(
-      `SELECT outcome, COUNT(*) as count FROM episodic_memory WHERE project_fingerprint = '${safeFp}' GROUP BY outcome`
+    const byOutcomeStmt = db.prepare(
+      'SELECT outcome, COUNT(*) as count FROM episodic_memory WHERE project_fingerprint = ? GROUP BY outcome'
     );
+    byOutcomeStmt.bind([projectFingerprint]);
     const byOutcome: Record<string, number> = {};
-    if (byOutcomeResult.length > 0 && byOutcomeResult[0].values.length > 0) {
-      for (const row of byOutcomeResult[0].values) {
-        byOutcome[row[0] as string] = row[1] as number;
-      }
+    while (byOutcomeStmt.step()) {
+      const row = byOutcomeStmt.getAsObject();
+      byOutcome[row.outcome as string] = row.count as number;
     }
+    byOutcomeStmt.free();
 
-    const avgWeightResult = db.exec(
-      `SELECT AVG(final_weight) as avg_weight FROM episodic_memory WHERE project_fingerprint = '${safeFp}'`
+    const avgWeightStmt = db.prepare(
+      'SELECT AVG(final_weight) as avg_weight FROM episodic_memory WHERE project_fingerprint = ?'
     );
-    const averageWeight = avgWeightResult.length > 0 && avgWeightResult[0].values.length > 0
-      ? (avgWeightResult[0].values[0][0] as number) || 0
-      : 0;
+    avgWeightStmt.bind([projectFingerprint]);
+    const averageWeight = avgWeightStmt.step() ? (avgWeightStmt.getAsObject().avg_weight as number) || 0 : 0;
+    avgWeightStmt.free();
 
     return { totalCount, byTaskType, byOutcome, averageWeight };
   }
@@ -366,7 +376,27 @@ export class EpisodicMemory {
   }
 
   /**
-   * 将数据库行转换为记忆对象
+   * 将数据库对象转换为记忆对象（用于参数化查询）
+   */
+  private objectToMemory(row: any): EpisodicMemoryRecord {
+    return {
+      id: row.id as string,
+      projectFingerprint: row.project_fingerprint as string,
+      timestamp: row.timestamp as number,
+      taskType: row.task_type as TaskType,
+      summary: row.summary as string,
+      entities: JSON.parse((row.entities as string) || '[]'),
+      decision: row.decision as string | undefined,
+      outcome: row.outcome as TaskOutcome,
+      finalWeight: row.final_weight as number,
+      modelId: row.model_id as string,
+      durationMs: (row.latency_ms as number) || 0,
+      metadata: undefined
+    };
+  }
+
+  /**
+   * 将数据库行转换为记忆对象（用于exec查询）
    */
   private rowToMemory(row: any[]): EpisodicMemoryRecord {
     return {

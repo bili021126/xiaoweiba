@@ -6,6 +6,7 @@ import { container } from 'tsyringe';
 import { EpisodicMemory } from '../core/memory/EpisodicMemory';
 import { AuditLogger } from '../core/security/AuditLogger';
 import { getUserFriendlyMessage } from '../utils/ErrorCodes';
+import * as crypto from 'crypto';
 
 const writeFile = promisify(fs.writeFile);
 
@@ -167,7 +168,6 @@ export class ExportMemoryCommand {
       }
 
       // 简单实现：使用工作区路径的哈希
-      const crypto = require('crypto');
       const workspacePath = workspaceFolders[0].uri.fsPath;
       return crypto.createHash('sha256').update(workspacePath).digest('hex').substring(0, 16);
     } catch (error) {

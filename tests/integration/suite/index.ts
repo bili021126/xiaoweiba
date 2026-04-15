@@ -4,7 +4,7 @@
  */
 
 import * as path from 'path';
-import Mocha from 'mocha';
+import * as Mocha from 'mocha';
 import { glob } from 'glob';
 
 export function run(): Promise<void> {

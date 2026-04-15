@@ -1,16 +1,7 @@
 import "reflect-metadata";
 
-// 加载环境变量（开发环境）
-// TODO: 生产环境应使用更安全的方式管理密钥
-// FIXME: 需要优化环境变量加载逻辑
-import * as path from 'path';
-import * as fs from 'fs';
-const envPath = path.join(__dirname, '..', '.env');
-if (fs.existsSync(envPath)) {
-  require('dotenv').config({ path: envPath });
-  console.log('[Extension] Loaded environment variables from .env file');
-}
-
+// 生产环境不使用.env文件，改用VS Code SecretStorage API
+// 开发环境的API密钥应通过VS Code设置或环境变量注入
 import * as vscode from 'vscode';
 import { container } from 'tsyringe';
 import { ConfigManager } from './storage/ConfigManager';
@@ -25,13 +16,19 @@ import { ConfigureApiKeyCommand } from './commands/ConfigureApiKeyCommand';
 import { CheckNamingCommand } from './commands/CheckNamingCommand';
 import { CodeGenerationCommand } from './commands/CodeGenerationCommand';
 import { EpisodicMemory } from './core/memory/EpisodicMemory';
+import { PreferenceMemory } from './core/memory/PreferenceMemory';
 import { LLMTool } from './tools/LLMTool';
+import { ChatViewProvider } from './chat/ChatViewProvider';
+import { AICompletionProvider } from './completion/AICompletionProvider';
 
 let configManager: ConfigManager;
 let databaseManager: DatabaseManager;
 let auditLogger: AuditLogger;
 let episodicMemory: EpisodicMemory;
+let preferenceMemory: PreferenceMemory;
 let llmTool: LLMTool;
+let chatViewProvider: ChatViewProvider;
+let aiCompletionProvider: AICompletionProvider;
 
 /**
  * 插件激活入口
@@ -66,6 +63,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     console.log('[Extension] Step 4: Initializing EpisodicMemory and LLMTool...');
     // 预解析核心服务（确保单例）
     episodicMemory = container.resolve(EpisodicMemory);
+    preferenceMemory = container.resolve(PreferenceMemory);
     llmTool = container.resolve(LLMTool);
     console.log('[Extension] Core services initialized');
     console.log('[Extension] Step 4 complete');
@@ -73,8 +71,35 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // 初始化审计日志
     auditLogger = container.resolve(AuditLogger);
 
+    // 初始化聊天视图提供者
+    chatViewProvider = new ChatViewProvider(
+      context,
+      llmTool,
+      episodicMemory,
+      preferenceMemory,
+      configManager,
+      auditLogger
+    );
+
+    // 初始化AI补全提供器
+    aiCompletionProvider = new AICompletionProvider(llmTool, configManager);
+
     // 注册命令
     registerCommands(context);
+
+    // 注册聊天视图提供者
+    const chatViewRegistration = vscode.window.registerWebviewViewProvider(
+      ChatViewProvider.viewType,
+      chatViewProvider
+    );
+    context.subscriptions.push(chatViewRegistration);
+
+    // 注册行内补全提供器
+    const completionRegistration = vscode.languages.registerInlineCompletionItemProvider(
+      { pattern: '**/*' },
+      aiCompletionProvider
+    );
+    context.subscriptions.push(completionRegistration);
 
     // 记录激活时间
     const activationTime = Date.now() - startTime;
@@ -236,6 +261,16 @@ function registerCommands(context: vscode.ExtensionContext): void {
     }
   );
 
+  // 打开AI助手命令
+  const openChatCmd = vscode.commands.registerCommand(
+    'xiaoweiba.openChat',
+    async () => {
+      await vscode.commands.executeCommand('workbench.view.extension.xiaoweiba');
+      // 聚焦到聊天视图
+      await vscode.commands.executeCommand('xiaoweiba.chatView.focus');
+    }
+  );
+
   // ========== 智能唤醒机制 ==========
   
   // 1. 保存文件时自动检查命名规范
@@ -303,6 +338,7 @@ function registerCommands(context: vscode.ExtensionContext): void {
     optimizeSQLCmd,
     repairMemoryCmd,
     configureApiKeyCmd,
+    openChatCmd,
     // 智能唤醒监听器
     onDidSaveTextDocument,
     onDidChangeActiveTextEditor,

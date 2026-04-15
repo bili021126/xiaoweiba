@@ -519,5 +519,54 @@ describe('CodeGenerationCommand', () => {
       // Assert
       expect(mockEditor.edit).not.toHaveBeenCalled();
     });
+
+    it('应该输入超过500字符时显示验证错误', async () => {
+      const mockEditor = {
+        document: {
+          languageId: 'typescript',
+          getText: jest.fn().mockReturnValue('')
+        }
+      };
+      (vscode.window.activeTextEditor as any) = mockEditor;
+      
+      // Mock showInputBox调用validateInput
+      const longInput = 'a'.repeat(501);
+      (vscode.window.showInputBox as jest.Mock).mockImplementation(async (options) => {
+        // 模拟验证
+        const validationResult = options.validateInput(longInput);
+        expect(validationResult).toBe('需求不能超过500个字符');
+        return null; // 用户取消
+      });
+
+      await command.execute();
+    });
+
+    it('应该LLM调用失败时显示错误', async () => {
+      const mockEditor = {
+        document: {
+          languageId: 'typescript',
+          getText: jest.fn().mockReturnValue('')
+        },
+        selection: {
+          active: { line: 0, character: 0 }
+        }
+      };
+      (vscode.window.activeTextEditor as any) = mockEditor;
+      (vscode.window.showInputBox as jest.Mock).mockResolvedValue('测试需求');
+      (vscode.window.showQuickPick as jest.Mock).mockResolvedValue({
+        label: '$(check) 插入到当前位置'
+      });
+
+      mockLLMTool.call.mockResolvedValue({
+        success: false,
+        error: 'LLM调用失败'
+      });
+
+      await command.execute();
+
+      expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+        expect.stringContaining('代码生成失败')
+      );
+    });
   });
 });

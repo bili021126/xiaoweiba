@@ -196,7 +196,7 @@ ${code}
 
     const explanationCard = generateCard({
       title: '💡 AI 解释',
-      content: explanation.replace(/\n/g, '<br>'),
+      content: this.escapeHtml(explanation).replace(/\n/g, '<br>'),
       icon: '🤖'
     });
 

@@ -394,5 +394,49 @@ describe('ExplainCodeCommand', () => {
         })
       );
     });
+
+    it('应该LLM调用失败时显示错误', async () => {
+      const mockEditor = {
+        selection: {},
+        document: {
+          getText: jest.fn().mockReturnValue('const x = 42;'),
+          languageId: 'typescript',
+          fileName: 'test.ts'
+        }
+      };
+      (vscode.window.activeTextEditor as any) = mockEditor;
+
+      mockLLMTool.call.mockResolvedValue({
+        success: false,
+        error: 'LLM调用失败'
+      });
+
+      await command.execute();
+
+      expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+        expect.stringContaining('代码解释失败')
+      );
+    });
+
+    it('应该记忆记录失败时不阻塞主流程', async () => {
+      const mockEditor = {
+        selection: {},
+        document: {
+          getText: jest.fn().mockReturnValue('const x = 42;'),
+          languageId: 'typescript',
+          fileName: 'test.ts'
+        }
+      };
+      (vscode.window.activeTextEditor as any) = mockEditor;
+
+      mockLLMTool.call.mockResolvedValue({
+        success: true,
+        data: '解释'
+      });
+
+      mockEpisodicMemory.record.mockRejectedValue(new Error('数据库错误'));
+
+      await expect(command.execute()).resolves.not.toThrow();
+    });
   });
 });

@@ -4,6 +4,7 @@ import { AuditLogger } from '../security/AuditLogger';
 import { ProjectFingerprint } from '../../utils/ProjectFingerprint';
 import { ConfigManager } from '../../storage/ConfigManager';
 import { createError } from '../../utils/ErrorCodes';
+import * as crypto from 'crypto';
 
 /**
  * 偏好领域类型
@@ -142,7 +143,14 @@ export class PreferenceMemory {
       }
 
       const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-      const limitClause = options.limit ? `LIMIT ${options.limit}` : '';
+      
+      // ✅ 验证并限制LIMIT值，防止注入
+      const limit = options.limit ? Math.min(Math.max(options.limit, 1), 100) : undefined;
+      const limitClause = limit ? 'LIMIT ?' : '';
+      
+      if (limit) {
+        params.push(limit);
+      }
 
       const sql = `
         SELECT id, domain, pattern, confidence, sample_count, 
@@ -416,7 +424,6 @@ export class PreferenceMemory {
    * 计算模式哈希（用于去重）
    */
   private hashPattern(pattern: Record<string, any>): string {
-    const crypto = require('crypto');
     const sorted = Object.keys(pattern)
       .sort()
       .reduce((obj, key) => {

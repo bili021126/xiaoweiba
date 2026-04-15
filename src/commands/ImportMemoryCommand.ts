@@ -283,14 +283,21 @@ export class ImportMemoryCommand {
       // 优先通过ID检查（如果导出的记录有ID）
       if (memory.id) {
         const db = this.episodicMemory['dbManager'].getDatabase();
-        const result = db.exec(`SELECT COUNT(*) as count FROM episodic_memory WHERE id = '${memory.id}'`);
         
-        if (result.length > 0 && result[0].values.length > 0) {
-          const count = result[0].values[0][0] as number;
-          if (count > 0) {
-            console.log('[ImportMemoryCommand] Memory with same ID exists:', memory.id);
-            return true;
-          }
+        // 使用sql.js的真正参数化查询
+        const stmt = db.prepare('SELECT COUNT(*) as count FROM episodic_memory WHERE id = ?');
+        stmt.bind([memory.id]);
+        
+        let exists = false;
+        if (stmt.step()) {
+          const result = stmt.getAsObject();
+          exists = (result.count as number) > 0;
+        }
+        stmt.free();
+        
+        if (exists) {
+          console.log('[ImportMemoryCommand] Memory with same ID exists:', memory.id);
+          return true;
         }
       }
 

@@ -6,9 +6,17 @@ import { ConfigManager } from '../../../src/storage/ConfigManager';
 
 // Mock sql.js
 jest.mock('sql.js', () => {
+  const mockStatement = {
+    bind: jest.fn().mockReturnThis(),
+    step: jest.fn().mockReturnValue(false),
+    getAsObject: jest.fn(),
+    free: jest.fn()
+  };
+  
   const mockDb = {
     run: jest.fn(),
-    exec: jest.fn(),
+    exec: jest.fn().mockReturnValue([]),
+    prepare: jest.fn().mockReturnValue(mockStatement),
     export: jest.fn().mockReturnValue(new Uint8Array()),
     close: jest.fn(),
     getRowsModified: jest.fn().mockReturnValue(5)
@@ -81,6 +89,21 @@ describe('EpisodicMemory', () => {
         expect.any(Number),
         expect.any(Object)
       );
+    });
+
+    it('should throw error when dbManager not injected', async () => {
+      const episodicMemoryNoDb = new EpisodicMemory(null as any, mockAuditLogger, mockProjectFingerprint, mockConfigManager);
+      
+      await expect(
+        episodicMemoryNoDb.record({
+          taskType: 'CODE_EXPLAIN',
+          summary: 'Test',
+          entities: [],
+          outcome: 'SUCCESS',
+          modelId: 'deepseek',
+          durationMs: 100
+        })
+      ).rejects.toThrow('DatabaseManager not injected');
     });
 
     it('should throw error when no workspace', async () => {
@@ -166,14 +189,26 @@ describe('EpisodicMemory', () => {
 
   describe('retrieve', () => {
     it('should retrieve memories with filters', async () => {
-      mockDb.exec.mockReturnValue([
-        {
-          columns: ['id', 'project_fingerprint', 'timestamp', 'task_type', 'summary', 'entities', 'decision', 'outcome', 'final_weight', 'model_id', 'duration_ms', 'metadata'],
-          values: [
-            ['ep_123_abc', 'fp123', Date.now(), 'CODE_EXPLAIN', 'Summary', '[]', null, 'SUCCESS', 8, 'deepseek', 1000, null]
-          ]
-        }
-      ]);
+      const mockStatement = {
+        bind: jest.fn().mockReturnThis(),
+        step: jest.fn().mockReturnValueOnce(true).mockReturnValueOnce(false),
+        getAsObject: jest.fn().mockReturnValue({
+          id: 'ep_123_abc',
+          project_fingerprint: 'fp123',
+          timestamp: Date.now(),
+          task_type: 'CODE_EXPLAIN',
+          summary: 'Summary',
+          entities: '[]',
+          decision: null,
+          outcome: 'SUCCESS',
+          final_weight: 8,
+          model_id: 'deepseek',
+          latency_ms: 1000,
+          metadata: null
+        }),
+        free: jest.fn()
+      };
+      mockDb.prepare.mockReturnValue(mockStatement);
 
       const memories = await episodicMemory.retrieve({
         taskType: 'CODE_EXPLAIN',
@@ -186,7 +221,13 @@ describe('EpisodicMemory', () => {
     });
 
     it('should return empty array when no memories', async () => {
-      mockDb.exec.mockReturnValue([]);
+      const mockStatement = {
+        bind: jest.fn().mockReturnThis(),
+        step: jest.fn().mockReturnValue(false),
+        getAsObject: jest.fn(),
+        free: jest.fn()
+      };
+      mockDb.prepare.mockReturnValue(mockStatement);
 
       const memories = await episodicMemory.retrieve();
 
@@ -202,14 +243,13 @@ describe('EpisodicMemory', () => {
     });
 
     it('should apply custom sort order', async () => {
-      mockDb.exec.mockReturnValue([
-        {
-          columns: ['id', 'project_fingerprint', 'timestamp', 'task_type', 'summary', 'entities', 'decision', 'outcome', 'final_weight', 'model_id', 'duration_ms', 'metadata'],
-          values: [
-            ['ep_1', 'fp', Date.now(), 'CODE_EXPLAIN', 'Summary', '[]', null, 'SUCCESS', 8, 'deepseek', 1000, null]
-          ]
-        }
-      ]);
+      const mockStatement = {
+        bind: jest.fn().mockReturnThis(),
+        step: jest.fn().mockReturnValue(false),
+        getAsObject: jest.fn(),
+        free: jest.fn()
+      };
+      mockDb.prepare.mockReturnValue(mockStatement);
 
       await episodicMemory.retrieve({
         sortBy: 'finalWeight',
@@ -217,39 +257,68 @@ describe('EpisodicMemory', () => {
       });
 
       // Check that SQL contains ORDER BY final_weight ASC
-      const sqlCall = (mockDb.exec as jest.Mock).mock.calls[0][0];
+      const sqlCall = (mockDb.prepare as jest.Mock).mock.calls[0][0];
       expect(sqlCall).toContain('ORDER BY final_weight ASC');
     });
 
     it('should limit results to maximum 100', async () => {
-      mockDb.exec.mockReturnValue([]);
+      const mockStatement = {
+        bind: jest.fn().mockReturnThis(),
+        step: jest.fn().mockReturnValue(false),
+        getAsObject: jest.fn(),
+        free: jest.fn()
+      };
+      mockDb.prepare.mockReturnValue(mockStatement);
 
       await episodicMemory.retrieve({ limit: 150 });
 
-      const sqlCall = (mockDb.exec as jest.Mock).mock.calls[0][0];
-      expect(sqlCall).toContain('LIMIT 100');
+      // Verify SQL uses parameterized query
+      const sqlCall = (mockDb.prepare as jest.Mock).mock.calls[0][0];
+      expect(sqlCall).toContain('LIMIT ?');
+      
+      // Verify the bound parameter is capped at 100
+      const bindCall = mockStatement.bind.mock.calls[0][0];
+      expect(bindCall).toContain(100);
     });
   });
 
   describe('search', () => {
     it('should search memories using FTS5', async () => {
-      mockDb.exec.mockReturnValue([
-        {
-          columns: ['id', 'project_fingerprint', 'timestamp', 'task_type', 'summary', 'entities', 'decision', 'outcome', 'final_weight', 'model_id', 'duration_ms', 'metadata'],
-          values: [
-            ['ep_1', 'fp', Date.now(), 'CODE_EXPLAIN', 'Test summary', '[]', null, 'SUCCESS', 8, 'deepseek', 1000, null]
-          ]
-        }
-      ]);
+      const mockStatement = {
+        bind: jest.fn().mockReturnThis(),
+        step: jest.fn().mockReturnValueOnce(true).mockReturnValueOnce(false),
+        getAsObject: jest.fn().mockReturnValue({
+          id: 'ep_1',
+          project_fingerprint: 'fp',
+          timestamp: Date.now(),
+          task_type: 'CODE_EXPLAIN',
+          summary: 'Test summary',
+          entities: '[]',
+          decision: null,
+          outcome: 'SUCCESS',
+          final_weight: 8,
+          model_id: 'deepseek',
+          latency_ms: 1000,
+          metadata: null
+        }),
+        free: jest.fn()
+      };
+      mockDb.prepare.mockReturnValue(mockStatement);
 
       const results = await episodicMemory.search('test query');
 
       expect(results.length).toBe(1);
-      expect(mockDb.exec).toHaveBeenCalled();
+      expect(mockDb.prepare).toHaveBeenCalled();
     });
 
     it('should return empty array when no results', async () => {
-      mockDb.exec.mockReturnValue([]);
+      const mockStatement = {
+        bind: jest.fn().mockReturnThis(),
+        step: jest.fn().mockReturnValue(false),
+        getAsObject: jest.fn(),
+        free: jest.fn()
+      };
+      mockDb.prepare.mockReturnValue(mockStatement);
 
       const results = await episodicMemory.search('nonexistent');
 
@@ -265,52 +334,89 @@ describe('EpisodicMemory', () => {
     });
 
     it('should sanitize special characters in query', async () => {
-      mockDb.exec.mockReturnValue([]);
+      const mockStmt = {
+        bind: jest.fn().mockReturnThis(),
+        step: jest.fn().mockReturnValue(false),
+        getAsObject: jest.fn(),
+        free: jest.fn()
+      };
+      mockDb.prepare.mockReturnValue(mockStmt);
 
       await episodicMemory.search("test'; DROP TABLE--");
 
-      const sqlCall = (mockDb.exec as jest.Mock).mock.calls[0][0];
-      // Should not contain SQL injection
-      expect(sqlCall).not.toContain('; DROP TABLE');
+      // 验证使用了参数化查询
+      expect(mockDb.prepare).toHaveBeenCalled();
+      const sqlCall = (mockDb.prepare as jest.Mock).mock.calls[0][0];
+      // 应该包含?占位符而非直接拼接
+      expect(sqlCall).toContain('?');
+      expect(sqlCall).not.toContain("'; DROP TABLE");
+      
+      // 验证参数绑定
+      expect(mockStmt.bind).toHaveBeenCalled();
+      const boundParams = (mockStmt.bind as jest.Mock).mock.calls[0][0];
+      expect(boundParams[1]).not.toContain('; DROP TABLE');
     });
 
     it('should limit query length to 200 characters', async () => {
-      mockDb.exec.mockReturnValue([]);
+      const mockStmt = {
+        bind: jest.fn().mockReturnThis(),
+        step: jest.fn().mockReturnValue(false),
+        getAsObject: jest.fn(),
+        free: jest.fn()
+      };
+      mockDb.prepare.mockReturnValue(mockStmt);
+      
       const longQuery = 'a'.repeat(300);
 
       await episodicMemory.search(longQuery);
 
-      // The sanitized query should be truncated to 200 chars
-      const sqlCall = (mockDb.exec as jest.Mock).mock.calls[0][0];
-      // SQL contains the query, and original query is 300 chars but should be truncated to 200
-      // Just verify it executed without error and the sanitization worked
-      expect(mockDb.exec).toHaveBeenCalled();
+      // 验证使用了参数化查询
+      expect(mockDb.prepare).toHaveBeenCalled();
+      expect(mockStmt.bind).toHaveBeenCalled();
+      
+      // 验证查询长度被限制
+      const boundParams = (mockStmt.bind as jest.Mock).mock.calls[0][0];
+      expect(boundParams[1].length).toBeLessThanOrEqual(200);
     });
 
     it('should support Chinese search', async () => {
-      mockDb.exec.mockReturnValue([]);
+      const mockStmt = {
+        bind: jest.fn().mockReturnThis(),
+        step: jest.fn().mockReturnValue(false),
+        getAsObject: jest.fn(),
+        free: jest.fn()
+      };
+      mockDb.prepare.mockReturnValue(mockStmt);
 
       await episodicMemory.search('测试中文搜索');
 
-      expect(mockDb.exec).toHaveBeenCalled();
+      expect(mockDb.prepare).toHaveBeenCalled();
+      expect(mockStmt.bind).toHaveBeenCalled();
     });
 
     it('should handle empty query', async () => {
-      mockDb.exec.mockReturnValue([]);
-
+      // 空查询应该直接返回，不执行SQL
       await episodicMemory.search('');
 
-      // Should still execute without error
-      expect(mockDb.exec).toHaveBeenCalled();
+      // 不应该调用prepare
+      expect(mockDb.prepare).not.toHaveBeenCalled();
     });
 
     it('should limit results to maximum 100', async () => {
-      mockDb.exec.mockReturnValue([]);
+      const mockStmt = {
+        bind: jest.fn().mockReturnThis(),
+        step: jest.fn().mockReturnValue(false),
+        getAsObject: jest.fn(),
+        free: jest.fn()
+      };
+      mockDb.prepare.mockReturnValue(mockStmt);
 
       await episodicMemory.search('test', { limit: 150 });
 
-      const sqlCall = (mockDb.exec as jest.Mock).mock.calls[0][0];
-      expect(sqlCall).toContain('LIMIT 100');
+      // 验证limit被限制到100
+      expect(mockStmt.bind).toHaveBeenCalled();
+      const boundParams = (mockStmt.bind as jest.Mock).mock.calls[0][0];
+      expect(boundParams[2]).toBe(100); // limit参数
     });
   });
 
@@ -393,12 +499,44 @@ describe('EpisodicMemory', () => {
 
   describe('getStats', () => {
     it('should return statistics', async () => {
-      // Mock exec to return different values for each call
-      (mockDb.exec as jest.Mock)
-        .mockReturnValueOnce([{ values: [[100]] }]) // COUNT(*)
-        .mockReturnValueOnce([{ values: [['CODE_EXPLAIN', 50], ['CODE_GENERATE', 30]] }]) // GROUP BY task_type
-        .mockReturnValueOnce([{ values: [['SUCCESS', 80], ['FAILED', 20]] }]) // GROUP BY outcome
-        .mockReturnValueOnce([{ values: [[6.5]] }]); // AVG
+      // Mock prepare to return different statements for each call
+      const totalStmt = {
+        bind: jest.fn().mockReturnThis(),
+        step: jest.fn().mockReturnValue(true),
+        getAsObject: jest.fn().mockReturnValue({ count: 100 }),
+        free: jest.fn()
+      };
+
+      const byTaskTypeStmt = {
+        bind: jest.fn().mockReturnThis(),
+        step: jest.fn().mockReturnValueOnce(true).mockReturnValueOnce(true).mockReturnValueOnce(false),
+        getAsObject: jest.fn()
+          .mockReturnValueOnce({ task_type: 'CODE_EXPLAIN', count: 50 })
+          .mockReturnValueOnce({ task_type: 'CODE_GENERATE', count: 30 }),
+        free: jest.fn()
+      };
+
+      const byOutcomeStmt = {
+        bind: jest.fn().mockReturnThis(),
+        step: jest.fn().mockReturnValueOnce(true).mockReturnValueOnce(true).mockReturnValueOnce(false),
+        getAsObject: jest.fn()
+          .mockReturnValueOnce({ outcome: 'SUCCESS', count: 80 })
+          .mockReturnValueOnce({ outcome: 'FAILED', count: 20 }),
+        free: jest.fn()
+      };
+
+      const avgWeightStmt = {
+        bind: jest.fn().mockReturnThis(),
+        step: jest.fn().mockReturnValue(true),
+        getAsObject: jest.fn().mockReturnValue({ avg_weight: 6.5 }),
+        free: jest.fn()
+      };
+
+      (mockDb.prepare as jest.Mock)
+        .mockReturnValueOnce(totalStmt)
+        .mockReturnValueOnce(byTaskTypeStmt)
+        .mockReturnValueOnce(byOutcomeStmt)
+        .mockReturnValueOnce(avgWeightStmt);
 
       const stats = await episodicMemory.getStats();
 
@@ -420,7 +558,13 @@ describe('EpisodicMemory', () => {
     });
 
     it('should handle empty result sets', async () => {
-      mockDb.exec.mockReturnValue([]);
+      const mockStmt = {
+        bind: jest.fn().mockReturnThis(),
+        step: jest.fn().mockReturnValue(false),
+        getAsObject: jest.fn(),
+        free: jest.fn()
+      };
+      (mockDb.prepare as jest.Mock).mockReturnValue(mockStmt);
 
       const stats = await episodicMemory.getStats();
 
@@ -441,46 +585,70 @@ describe('EpisodicMemory', () => {
 
   describe('FTS5 集成测试', () => {
     it('应能正确使用FTS5进行全文搜索', async () => {
-      mockDb.exec.mockReturnValue([
-        {
-          columns: ['id', 'project_fingerprint', 'timestamp', 'task_type', 'summary', 'entities', 'decision', 'outcome', 'final_weight', 'model_id', 'duration_ms', 'metadata'],
-          values: [
-            ['ep_1', 'test-fingerprint-123', Date.now(), 'CODE_EXPLAIN', 'React组件优化', '[]', null, 'SUCCESS', 8, 'deepseek', 1000, null]
-          ]
-        }
-      ]);
+      const mockStatement = {
+        bind: jest.fn().mockReturnThis(),
+        step: jest.fn().mockReturnValueOnce(true).mockReturnValueOnce(false),
+        getAsObject: jest.fn().mockReturnValue({
+          id: 'ep_1',
+          project_fingerprint: 'test-fingerprint-123',
+          timestamp: Date.now(),
+          task_type: 'CODE_EXPLAIN',
+          summary: 'React组件优化',
+          entities: '[]',
+          decision: null,
+          outcome: 'SUCCESS',
+          final_weight: 8,
+          model_id: 'deepseek',
+          latency_ms: 1000,
+          metadata: null
+        }),
+        free: jest.fn()
+      };
+      mockDb.prepare.mockReturnValue(mockStatement);
 
       const results = await episodicMemory.search('React 优化', { limit: 10 });
       
       expect(results.length).toBe(1);
       expect(results[0].summary).toContain('React');
       // 验证 SQL 包含 FTS5 MATCH
-      const sqlCall = (mockDb.exec as jest.Mock).mock.calls[0][0];
+      const sqlCall = (mockDb.prepare as jest.Mock).mock.calls[0][0];
       expect(sqlCall).toContain('MATCH');
     });
 
     it('应正确处理特殊字符的搜索查询', async () => {
-      mockDb.exec.mockReturnValue([]);
+      const mockStatement = {
+        bind: jest.fn().mockReturnThis(),
+        step: jest.fn().mockReturnValue(false),
+        getAsObject: jest.fn(),
+        free: jest.fn()
+      };
+      mockDb.prepare.mockReturnValue(mockStatement);
 
       const results = await episodicMemory.search('SELECT * FROM users; DROP TABLE--', { limit: 10 });
       
       expect(results).toEqual([]);
       // 验证特殊字符被清理
-      const sqlCall = (mockDb.exec as jest.Mock).mock.calls[0][0];
+      const sqlCall = (mockDb.prepare as jest.Mock).mock.calls[0][0];
       expect(sqlCall).not.toContain('; DROP TABLE');
     });
   });
 
   describe('SQL注入防护', () => {
     it('应阻止SQL注入攻击', async () => {
-      mockDb.exec.mockReturnValue([]);
+      const mockStatement = {
+        bind: jest.fn().mockReturnThis(),
+        step: jest.fn().mockReturnValue(false),
+        getAsObject: jest.fn(),
+        free: jest.fn()
+      };
+      mockDb.prepare.mockReturnValue(mockStatement);
       
       const maliciousQuery = "' OR '1'='1";
       const results = await episodicMemory.search(maliciousQuery, { limit: 10 });
       
       expect(results).toEqual([]);
       // 验证查询被清理
-      const sqlCall = (mockDb.exec as jest.Mock).mock.calls[0][0];
+      const sqlCall = (mockDb.prepare as jest.Mock).mock.calls[0][0];
       expect(sqlCall).not.toContain("' OR '1'='1");
     });
 

@@ -263,8 +263,8 @@ describe('PreferenceMemory', () => {
       await preferenceMemory.queryPreferences({ limit: 5 });
 
       expect(mockDbManager.runQuery).toHaveBeenCalledWith(
-        expect.stringContaining('LIMIT 5'),
-        []
+        expect.stringContaining('LIMIT ?'),
+        [5]
       );
     });
 
@@ -291,8 +291,8 @@ describe('PreferenceMemory', () => {
       const callArgs = (mockDbManager.runQuery as jest.Mock).mock.calls[0];
       expect(callArgs[0]).toContain('WHERE domain = ?');
       expect(callArgs[0]).toContain('AND confidence >= ?');
-      expect(callArgs[0]).toContain('LIMIT 10');
-      expect(callArgs[1]).toEqual(['NAMING', 0.6]);
+      expect(callArgs[0]).toContain('LIMIT ?');
+      expect(callArgs[1]).toEqual(['NAMING', 0.6, 10]);
     });
 
     it('should log error when query fails', async () => {

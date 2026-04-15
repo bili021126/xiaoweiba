@@ -17,6 +17,24 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "xiaoweiba",
+          "title": "小尾巴AI助手",
+          "icon": "$(comment)"
+        }
+      ]
+    },
+    "views": {
+      "xiaoweiba": [
+        {
+          "type": "webview",
+          "id": "xiaoweiba.chatView",
+          "name": "AI对话"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "xiaoweiba.explainCode",
@@ -53,6 +71,10 @@
       {
         "command": "xiaoweiba.configure-api-key",
         "title": "小尾巴: 配置 API Key"
+      },
+      {
+        "command": "xiaoweiba.openChat",
+        "title": "小尾巴: 打开AI助手"
       }
     ],
     "menus": {
@@ -88,6 +110,13 @@
         }
       ]
     },
+    "keybindings": [
+      {
+        "command": "xiaoweiba.openChat",
+        "key": "ctrl+shift+l",
+        "when": "editorTextFocus"
+      }
+    ],
     "configuration": {
       "title": "小尾巴 (XiaoWeiba)",
       "properties": {
