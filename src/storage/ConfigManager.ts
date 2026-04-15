@@ -57,6 +57,13 @@ export interface XiaoWeibaConfig {
   skill: SkillConfig;
   audit: AuditConfig;
   bestPractice: BestPracticeConfig;
+  autoCheck?: {
+    onSave: boolean; // 保存时自动检查
+  };
+  autoSuggest?: {
+    onSelection: boolean; // 选中代码时提示
+    onScmOpen: boolean; // 打开SCM时提示
+  };
 }
 
 const DEFAULT_CONFIG: XiaoWeibaConfig = {
@@ -105,6 +112,13 @@ const DEFAULT_CONFIG: XiaoWeibaConfig = {
   bestPractice: {
     sources: ['builtin'],
     builtinOnly: true
+  },
+  autoCheck: {
+    onSave: false // 默认关闭，用户可手动开启
+  },
+  autoSuggest: {
+    onSelection: true, // 默认开启
+    onScmOpen: true
   }
 };
 

@@ -194,12 +194,11 @@ export class DatabaseManager {
         id TEXT PRIMARY KEY,
         domain TEXT NOT NULL,
         pattern TEXT NOT NULL,
-        preference_value TEXT NOT NULL,
         confidence REAL NOT NULL,
-        usage_count INTEGER NOT NULL DEFAULT 0,
-        project_fingerprint TEXT NOT NULL,
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL,
+        sample_count INTEGER NOT NULL DEFAULT 1,
+        last_updated INTEGER NOT NULL,
+        model_id TEXT,
+        project_fingerprint TEXT,
         pattern_hash TEXT NOT NULL
       )
     `);
@@ -265,6 +264,8 @@ export class DatabaseManager {
     db.run(`CREATE INDEX IF NOT EXISTS idx_episodic_outcome ON episodic_memory(outcome)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_preference_domain ON preference_memory(domain)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_preference_project ON preference_memory(project_fingerprint)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_preference_pattern_hash ON preference_memory(pattern_hash)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_preference_model ON preference_memory(model_id)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_procedural_hash ON procedural_memory(pattern_hash)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_procedural_project ON procedural_memory(project_fingerprint)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_task_status ON task_state(status)`);

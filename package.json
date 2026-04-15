@@ -61,6 +61,30 @@
           "command": "xiaoweiba.explainCode",
           "group": "xiaoweiba@1",
           "when": "editorHasSelection"
+        },
+        {
+          "command": "xiaoweiba.checkNaming",
+          "group": "xiaoweiba@2",
+          "when": "editorHasSelection && editorLangId =~ /typescript|javascript|python|java|go|rust/"
+        },
+        {
+          "command": "xiaoweiba.generateCode",
+          "group": "xiaoweiba@3",
+          "when": "editorTextFocus"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "xiaoweiba.explainCode",
+          "group": "navigation@1",
+          "when": "editorHasSelection"
+        }
+      ],
+      "scm/title": [
+        {
+          "command": "xiaoweiba.generateCommit",
+          "group": "navigation@1",
+          "when": "scmProvider == git"
         }
       ]
     },
@@ -103,20 +127,20 @@
     "lint": "eslint src --ext ts",
     "lint:fix": "eslint src --ext ts --fix",
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
-    "check": "npm run compile && npm run lint && npm run test:unit",
-    "package": "vsce package"
+    "check": "npm run compile && npm run lint && npm run test:unit"
   },
   "devDependencies": {
     "@types/glob": "^8.1.0",
     "@types/jest": "^29.5.11",
     "@types/js-yaml": "^4.0.9",
     "@types/mocha": "^10.0.10",
-    "@types/node": "^20.10.0",
+    "@types/node": "^20.19.39",
     "@types/vscode": "^1.85.0",
     "@typescript-eslint/eslint-plugin": "^6.13.0",
     "@typescript-eslint/parser": "^6.13.0",
     "@vscode/test-electron": "^2.3.8",
     "@vscode/vsce": "^2.22.0",
+    "esbuild": "^0.28.0",
     "eslint": "^8.54.0",
     "glob": "^13.0.6",
     "jest": "^29.7.0",

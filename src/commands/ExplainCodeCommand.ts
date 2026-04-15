@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { container } from 'tsyringe';
 import { LLMTool } from '../tools/LLMTool';
 import { EpisodicMemory } from '../core/memory/EpisodicMemory';
+import { PreferenceMemory } from '../core/memory/PreferenceMemory';
 import { AuditLogger } from '../core/security/AuditLogger';
 import { getUserFriendlyMessage } from '../utils/ErrorCodes';
 import { LLMResponseCache } from '../core/cache/LLMResponseCache';
@@ -14,6 +15,7 @@ import { generateCard, generateCodeBlock, generateBadge, generateWebviewTemplate
 export class ExplainCodeCommand {
   private auditLogger: AuditLogger;
   private episodicMemory: EpisodicMemory;
+  private preferenceMemory: PreferenceMemory;
   private llmTool: LLMTool;
   private cache: LLMResponseCache;
 
@@ -25,6 +27,7 @@ export class ExplainCodeCommand {
     this.auditLogger = container.resolve(AuditLogger);
     // 如果传入了实例则使用，否则从容器解析（兼容测试）
     this.episodicMemory = episodicMemory || container.resolve(EpisodicMemory);
+    this.preferenceMemory = container.resolve(PreferenceMemory);
     this.llmTool = llmTool || container.resolve(LLMTool);
     this.cache = new LLMResponseCache();
     
@@ -98,6 +101,20 @@ export class ExplainCodeCommand {
    * 使用 LLM 解释代码
    */
   private async explainCodeWithLLM(code: string, languageId: string): Promise<string> {
+    // F04: 查询用户偏好
+    const preferences = await this.preferenceMemory.getRecommendations(
+      'CODE_PATTERN',
+      { language: languageId }
+    );
+    
+    let preferenceHint = '';
+    if (preferences.length > 0) {
+      preferenceHint = '\n\n根据用户历史偏好：\n';
+      preferences.forEach((pref, index) => {
+        preferenceHint += `${index + 1}. ${JSON.stringify(pref.record.pattern)} (置信度: ${(pref.record.confidence * 100).toFixed(0)}%)\n`;
+      });
+    }
+
     const prompt = `请简要解释以下${languageId}代码：
 
 \`\`\`${languageId}
@@ -107,7 +124,7 @@ ${code}
 请用中文回答（300字以内），包含：
 1. 功能概述
 2. 关键逻辑
-3. 改进建议（如有）`;
+3. 改进建议（如有）${preferenceHint}`;
 
     // 尝试从缓存获取
     const cachedResult = this.cache.get(prompt);

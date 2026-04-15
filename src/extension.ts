@@ -155,7 +155,7 @@ function registerCommands(context: vscode.ExtensionContext): void {
   const exportMemoryHandler = new ExportMemoryCommand();
   const importMemoryHandler = new ImportMemoryCommand();
   const configureApiKeyHandler = new ConfigureApiKeyCommand();
-  const checkNamingHandler = new CheckNamingCommand(llmTool, episodicMemory);
+  const checkNamingHandler = new CheckNamingCommand(episodicMemory, llmTool);
   const codeGenerationHandler = new CodeGenerationCommand(episodicMemory, llmTool);
   
   const explainCodeCmd = vscode.commands.registerCommand(
@@ -236,6 +236,62 @@ function registerCommands(context: vscode.ExtensionContext): void {
     }
   );
 
+  // ========== 智能唤醒机制 ==========
+  
+  // 1. 保存文件时自动检查命名规范
+  const onDidSaveTextDocument = vscode.workspace.onDidSaveTextDocument(async (document) => {
+    const config = configManager.getConfig();
+    if (!config.autoCheck?.onSave) return; // 配置开关
+    
+    // 仅检查代码文件
+    const codeLanguages = ['typescript', 'javascript', 'python', 'java', 'go', 'rust', 'cpp', 'c'];
+    if (!codeLanguages.includes(document.languageId)) return;
+    
+    console.log('[Auto-Check] File saved, checking naming conventions...');
+    // TODO: 实现后台静默检查，仅在发现问题时提示
+  });
+
+  // 2. Git提交前自动生成提交信息（拦截）
+  const onDidChangeActiveTextEditor = vscode.window.onDidChangeActiveTextEditor(async (editor) => {
+    if (!editor) return;
+    
+    const config = configManager.getConfig();
+    if (!config.autoSuggest?.onScmOpen) return;
+    
+    // 检测是否打开SCM面板
+    if (editor.document.uri.scheme === 'scm' || editor.document.uri.path.includes('scm')) {
+      console.log('[Auto-Suggest] SCM panel visible, suggesting commit message generation');
+      // 显示通知提示
+      vscode.window.showInformationMessage(
+        '💡 检测到Git变更，需要生成提交信息吗？',
+        '生成', '取消'
+      ).then(selection => {
+        if (selection === '生成') {
+          vscode.commands.executeCommand('xiaoweiba.generateCommit');
+        }
+      });
+    }
+  });
+
+  // 3. 选中代码后显示CodeLens提示
+  const onDidChangeTextEditorSelection = vscode.window.onDidChangeTextEditorSelection(async (e) => {
+    if (e.selections.length === 0 || e.selections[0].isEmpty) return;
+    
+    const config = configManager.getConfig();
+    if (!config.autoSuggest?.onSelection) return; // 配置开关
+    
+    // 延迟500ms显示提示，避免频繁触发
+    setTimeout(() => {
+      const selection = e.selections[0];
+      const selectedText = e.textEditor.document.getText(selection);
+      
+      if (selectedText.trim().length > 0 && selectedText.length < 500) {
+        // 显示悬浮提示
+        vscode.commands.executeCommand('editor.action.showHover');
+      }
+    }, 500);
+  });
+
   // 添加到订阅
   context.subscriptions.push(
     explainCodeCmd,
@@ -246,6 +302,10 @@ function registerCommands(context: vscode.ExtensionContext): void {
     codeGenerationCmd,
     optimizeSQLCmd,
     repairMemoryCmd,
-    configureApiKeyCmd
+    configureApiKeyCmd,
+    // 智能唤醒监听器
+    onDidSaveTextDocument,
+    onDidChangeActiveTextEditor,
+    onDidChangeTextEditorSelection
   );
 }

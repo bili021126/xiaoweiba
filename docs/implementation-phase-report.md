@@ -1,4 +1,6 @@
-# 小尾巴（xiaoweiba）实现阶段报告 - 阶段0→1过渡
+# 小尾巴（xiaoweiba）实现阶段报告
+
+> **注意**: 本文档为历史详细版本，快速查阅请使用 [IMPLEMENTATION-PROGRESS.md](IMPLEMENTATION-PROGRESS.md)
 
 **报告日期：** 2026-04-15  
 **阶段名称：** 基础架构完成 + P0功能实现中  

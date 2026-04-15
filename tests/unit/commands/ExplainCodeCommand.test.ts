@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 import { ExplainCodeCommand } from '../../../src/commands/ExplainCodeCommand';
 import { LLMTool } from '../../../src/tools/LLMTool';
 import { EpisodicMemory } from '../../../src/core/memory/EpisodicMemory';
+import { PreferenceMemory } from '../../../src/core/memory/PreferenceMemory';
 import { AuditLogger } from '../../../src/core/security/AuditLogger';
 
 // Mock LLMResponseCache
@@ -43,6 +44,7 @@ describe('ExplainCodeCommand', () => {
   let command: ExplainCodeCommand;
   let mockLLMTool: any;
   let mockEpisodicMemory: any;
+  let mockPreferenceMemory: any;
   let mockAuditLogger: any;
 
   beforeEach(() => {
@@ -58,6 +60,10 @@ describe('ExplainCodeCommand', () => {
       record: jest.fn().mockResolvedValue('ep_test_123')
     };
 
+    mockPreferenceMemory = {
+      getRecommendations: jest.fn().mockResolvedValue([])
+    };
+
     mockAuditLogger = {
       log: jest.fn().mockResolvedValue(undefined),
       logError: jest.fn().mockResolvedValue(undefined)
@@ -66,6 +72,7 @@ describe('ExplainCodeCommand', () => {
     // 注册mock到容器
     container.registerInstance(LLMTool, mockLLMTool);
     container.registerInstance(EpisodicMemory, mockEpisodicMemory);
+    container.registerInstance(PreferenceMemory, mockPreferenceMemory);
     container.registerInstance(AuditLogger, mockAuditLogger);
 
     // 创建命令实例

@@ -5,19 +5,26 @@
  */
 
 import * as vscode from 'vscode';
-import { inject, injectable } from 'tsyringe';
+import { container } from 'tsyringe';
 import { LLMTool } from '../tools/LLMTool';
 import { EpisodicMemory } from '../core/memory/EpisodicMemory';
+import { AuditLogger } from '../core/security/AuditLogger';
+import { getUserFriendlyMessage } from '../utils/ErrorCodes';
 import { LLMResponseCache } from '../core/cache/LLMResponseCache';
 
-@injectable()
 export class CheckNamingCommand {
+  private auditLogger: AuditLogger;
+  private episodicMemory: EpisodicMemory;
+  private llmTool: LLMTool;
   private cache: LLMResponseCache;
 
   constructor(
-    @inject(LLMTool) private llmTool: LLMTool,
-    @inject(EpisodicMemory) private episodicMemory: EpisodicMemory
+    episodicMemory?: EpisodicMemory,
+    llmTool?: LLMTool
   ) {
+    this.auditLogger = container.resolve(AuditLogger);
+    this.episodicMemory = episodicMemory || container.resolve(EpisodicMemory);
+    this.llmTool = llmTool || container.resolve(LLMTool);
     this.cache = new LLMResponseCache();
   }
 
@@ -25,35 +32,39 @@ export class CheckNamingCommand {
    * 执行命名检查
    */
   async execute(): Promise<void> {
-    const editor = vscode.window.activeTextEditor;
+    const startTime = Date.now();
     
-    if (!editor) {
-      vscode.window.showWarningMessage('⚠️ 请先打开一个文件');
-      return;
-    }
+    try {
+      const editor = vscode.window.activeTextEditor;
+      
+      if (!editor) {
+        vscode.window.showWarningMessage('⚠️ 请先打开一个文件');
+        return;
+      }
 
-    const selection = editor.selection;
-    if (selection.isEmpty) {
-      vscode.window.showWarningMessage('⚠️ 请先选中要检查的命名');
-      return;
-    }
+      const selection = editor.selection;
+      if (selection.isEmpty) {
+        vscode.window.showWarningMessage('⚠️ 请先选中要检查的命名');
+        return;
+      }
 
-    const selectedText = editor.document.getText(selection);
-    
-    if (!selectedText || selectedText.trim().length === 0) {
-      vscode.window.showWarningMessage('⚠️ 选中的内容为空');
-      return;
-    }
+      const selectedText = editor.document.getText(selection);
+      
+      if (!selectedText || selectedText.trim().length === 0) {
+        vscode.window.showWarningMessage('⚠️ 选中的内容为空');
+        return;
+      }
 
-    // 显示进度提示
-    await vscode.window.withProgress(
-      {
-        location: vscode.ProgressLocation.Notification,
-        title: '正在检查命名规范...',
-        cancellable: false
-      },
-      async () => {
-        try {
+      // 显示进度提示
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: '🔍 检查命名规范',
+          cancellable: false
+        },
+        async (progress) => {
+          progress.report({ message: '🤖 分析命名...', increment: 20 });
+          
           // 获取文件语言
           const languageId = editor.document.languageId;
           
@@ -64,20 +75,36 @@ export class CheckNamingCommand {
             throw new Error(result.error || '命名检查失败');
           }
 
+          progress.report({ message: '✨ 生成报告...', increment: 60 });
+
           // 显示检查结果
           await this.showNamingResult(result.data, selectedText);
           
+          progress.report({ message: '💾 记录记忆...', increment: 80 });
+
           // 记录情景记忆
           await this.recordMemory(selectedText, result.data);
           
-        } catch (error) {
-          console.error('[CheckNamingCommand] Error:', error);
-          vscode.window.showErrorMessage(
-            `命名检查失败: ${error instanceof Error ? error.message : String(error)}`
-          );
+          progress.report({ message: '✅ 完成！', increment: 100 });
         }
-      }
-    );
+      );
+
+      // 记录审计日志
+      const durationMs = Date.now() - startTime;
+      await this.auditLogger.log('check_naming', 'success', durationMs, {
+        parameters: {
+          language: editor.document.languageId,
+          nameLength: selectedText.length
+        }
+      });
+
+    } catch (error) {
+      const durationMs = Date.now() - startTime;
+      const errorMessage = getUserFriendlyMessage(error);
+      vscode.window.showErrorMessage(`命名检查失败: ${errorMessage}`);
+      
+      await this.auditLogger.logError('check_naming', error as Error, durationMs);
+    }
   }
 
   /**
