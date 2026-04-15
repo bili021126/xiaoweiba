@@ -4,6 +4,9 @@ import { LLMTool } from '../tools/LLMTool';
 import { EpisodicMemory } from '../core/memory/EpisodicMemory';
 import { AuditLogger } from '../core/security/AuditLogger';
 import { getUserFriendlyMessage } from '../utils/ErrorCodes';
+import { LLMResponseCache } from '../core/cache/LLMResponseCache';
+import { generateCompleteStyles } from '../ui/styles';
+import { generateCard, generateCodeBlock, generateBadge, generateWebviewTemplate } from '../ui/components';
 
 /**
  * 代码解释命令处理器
@@ -12,6 +15,7 @@ export class ExplainCodeCommand {
   private auditLogger: AuditLogger;
   private episodicMemory: EpisodicMemory;
   private llmTool: LLMTool;
+  private cache: LLMResponseCache;
 
   constructor(episodicMemory?: EpisodicMemory, llmTool?: LLMTool) {
     console.log('[ExplainCodeCommand] Constructor called');
@@ -22,6 +26,7 @@ export class ExplainCodeCommand {
     // 如果传入了实例则使用，否则从容器解析（兼容测试）
     this.episodicMemory = episodicMemory || container.resolve(EpisodicMemory);
     this.llmTool = llmTool || container.resolve(LLMTool);
+    this.cache = new LLMResponseCache();
     
     console.log('[ExplainCodeCommand] episodicMemory instance:', this.episodicMemory ? 'initialized' : 'null');
     console.log('[ExplainCodeCommand] dbManager:', this.episodicMemory['dbManager'] ? 'exists' : 'null');
@@ -37,7 +42,7 @@ export class ExplainCodeCommand {
       // 1. 获取当前编辑器和选中代码
       const editor = vscode.window.activeTextEditor;
       if (!editor) {
-        vscode.window.showWarningMessage('请先打开一个文件并选中要解释的代码');
+        vscode.window.showWarningMessage('⚠️ 请先打开一个文件并选中要解释的代码');
         return;
       }
 
@@ -45,7 +50,7 @@ export class ExplainCodeCommand {
       const selectedCode = editor.document.getText(selection);
       
       if (!selectedCode || selectedCode.trim().length === 0) {
-        vscode.window.showWarningMessage('请先选中要解释的代码');
+        vscode.window.showWarningMessage('⚠️ 请先选中要解释的代码');
         return;
       }
 
@@ -104,6 +109,13 @@ ${code}
 2. 关键逻辑
 3. 改进建议（如有）`;
 
+    // 尝试从缓存获取
+    const cachedResult = this.cache.get(prompt);
+    if (cachedResult) {
+      console.log('[ExplainCodeCommand] Using cached result');
+      return cachedResult;
+    }
+
     const result = await this.llmTool.call({
       messages: [
         { role: 'system', content: '你是一位资深的软件工程师，擅长代码审查和技术解释。' },
@@ -116,6 +128,9 @@ ${code}
     if (!result.success || !result.data) {
       throw new Error(result.error || 'LLM 调用失败');
     }
+
+    // 存入缓存
+    this.cache.set(prompt, result.data);
 
     return result.data;
   }
@@ -150,69 +165,63 @@ ${code}
     code: string,
     languageId: string
   ): string {
-    // 简单的 Markdown 渲染（实际项目中可以使用 marked.js）
-    const formattedExplanation = explanation
-      .replace(/\n/g, '<br>')
-      .replace(/```(\w+)?/g, '<pre><code>')
-      .replace(/```/g, '</code></pre>');
+    // 使用新UI系统生成
+    const badge = generateBadge({ 
+      text: languageId.toUpperCase(), 
+      type: 'info' 
+    });
 
-    return `<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>代码解释</title>
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      padding: 20px;
-      line-height: 1.6;
-      color: var(--vscode-foreground);
-      background-color: var(--vscode-editor-background);
-    }
-    h1 {
-      color: var(--vscode-textLink-foreground);
-      border-bottom: 2px solid var(--vscode-textLink-foreground);
-      padding-bottom: 10px;
-    }
-    h2 {
-      color: var(--vscode-textPreformat-foreground);
-      margin-top: 20px;
-    }
-    pre {
-      background-color: var(--vscode-textCodeBlock-background);
-      padding: 15px;
-      border-radius: 5px;
-      overflow-x: auto;
-    }
-    code {
-      font-family: 'Consolas', 'Monaco', monospace;
-    }
-    .code-section {
-      margin: 20px 0;
-      padding: 15px;
-      background-color: var(--vscode-editor-inactiveSelectionBackground);
-      border-radius: 5px;
-    }
-    .explanation-section {
-      margin-top: 20px;
-    }
-  </style>
-</head>
-<body>
-  <h1>🔍 代码解释</h1>
-  
-  <div class="code-section">
-    <h2>选中的代码</h2>
-    <pre><code class="language-${languageId}">${this.escapeHtml(code)}</code></pre>
-  </div>
-  
-  <div class="explanation-section">
-    <h2>AI 解释</h2>
-    <div>${formattedExplanation}</div>
-  </div>
-</body>
-</html>`;
+    const codeBlock = generateCodeBlock({
+      code,
+      language: languageId,
+      showCopyButton: true
+    });
+
+    const explanationCard = generateCard({
+      title: '💡 AI 解释',
+      content: explanation.replace(/\n/g, '<br>'),
+      icon: '🤖'
+    });
+
+    const content = `
+      <div style="max-width: 900px; margin: 0 auto;">
+        <h1 style="
+          font-size: 28px;
+          margin-bottom: 24px;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          border-bottom: 3px solid var(--vscode-focusBorder);
+          padding-bottom: 16px;
+        ">
+          🔍 代码解释
+          ${badge}
+        </h1>
+
+        <div class="fade-in">
+          <h2 style="
+            font-size: 18px;
+            margin: 24px 0 16px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+          ">
+            📝 选中的代码
+          </h2>
+          ${codeBlock}
+        </div>
+
+        <div class="fade-in" style="animation-delay: 0.1s;">
+          ${explanationCard}
+        </div>
+      </div>
+    `;
+
+    return generateWebviewTemplate(
+      '代码解释 - 小尾巴',
+      content,
+      generateCompleteStyles()
+    );
   }
 
   /**

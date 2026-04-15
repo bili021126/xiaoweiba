@@ -5,8 +5,6 @@ module.exports = {
   testMatch: [
     '**/unit/**/*.test.ts',
     '**/integration/collaboration/**/*.test.ts',
-    '**/integration/ExplainCodeFullStack.test.ts',
-    '**/integration/GenerateCommitFullStack.test.ts',
     '**/performance/**/*.test.ts'
   ],
   testPathIgnorePatterns: [

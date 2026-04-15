@@ -6,6 +6,19 @@ import { LLMTool } from '../../../src/tools/LLMTool';
 import { EpisodicMemory } from '../../../src/core/memory/EpisodicMemory';
 import { AuditLogger } from '../../../src/core/security/AuditLogger';
 
+// Mock LLMResponseCache
+jest.mock('../../../src/core/cache/LLMResponseCache', () => {
+  return {
+    LLMResponseCache: jest.fn().mockImplementation(() => ({
+      get: jest.fn().mockReturnValue(null),
+      set: jest.fn(),
+      clear: jest.fn(),
+      clearExpired: jest.fn(),
+      getStats: jest.fn().mockReturnValue({ size: 0, keys: [] })
+    }))
+  };
+});
+
 // Mock VS Code API
 jest.mock('vscode', () => ({
   window: {
@@ -77,7 +90,7 @@ describe('ExplainCodeCommand', () => {
 
       // Assert
       expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
-        '请先打开一个文件并选中要解释的代码'
+        '⚠️ 请先打开一个文件并选中要解释的代码'
       );
       expect(mockLLMTool.call).not.toHaveBeenCalled();
     });
@@ -99,7 +112,7 @@ describe('ExplainCodeCommand', () => {
 
       // Assert
       expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
-        '请先选中要解释的代码'
+        '⚠️ 请先选中要解释的代码'
       );
       expect(mockLLMTool.call).not.toHaveBeenCalled();
     });

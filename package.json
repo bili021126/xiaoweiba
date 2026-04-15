@@ -31,6 +31,10 @@
         "title": "小尾巴: 检查命名"
       },
       {
+        "command": "xiaoweiba.generateCode",
+        "title": "小尾巴: 生成代码"
+      },
+      {
         "command": "xiaoweiba.optimizeSQL",
         "title": "小尾巴: 优化 SQL"
       },

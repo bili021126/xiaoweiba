@@ -42,27 +42,29 @@ export class GenerateCommitCommand {
       // 2. 获取 Git diff
       await vscode.window.withProgress({
         location: vscode.ProgressLocation.Notification,
-        title: '正在分析代码变更...',
+        title: '🚀 生成提交信息',
         cancellable: false
       }, async (progress) => {
-        progress.report({ message: '获取 Git 差异...' });
+        progress.report({ message: '📊 分析代码变更...', increment: 10 });
 
         const diff = await this.getGitDiff(workspacePath);
         
         if (!diff || diff.trim().length === 0) {
-          vscode.window.showInformationMessage('没有检测到代码变更');
+          vscode.window.showInformationMessage('✅ 没有检测到代码变更');
           return;
         }
 
-        progress.report({ message: '调用 AI 生成提交信息...' });
+        progress.report({ message: '🤖 调用 AI 生成提交信息...', increment: 30 });
 
         // 3. 调用 LLM 生成提交信息
         const commitMessage = await this.generateCommitMessage(diff);
         
-        progress.report({ message: '生成完成' });
+        progress.report({ message: '✨ 生成完成，准备提交...', increment: 50 });
 
         // 4. 展示生成结果并提供操作选项
         await this.showCommitMessageOptions(commitMessage, diff, workspacePath);
+
+        progress.report({ message: '💾 记录情景记忆...', increment: 80 });
 
         // 5. 记录情景记忆
         const durationMs = Date.now() - startTime;
@@ -70,8 +72,10 @@ export class GenerateCommitCommand {
         try {
           await this.recordMemory(commitMessage, diff, durationMs);
           console.log('[GenerateCommitCommand] Memory recording completed');
+          progress.report({ message: '✅ 全部完成！', increment: 100 });
         } catch (memoryError) {
           console.error('[GenerateCommitCommand] Memory recording failed:', memoryError);
+          progress.report({ message: '⚠️ 记忆记录失败，但提交已成功', increment: 100 });
         }
       });
 

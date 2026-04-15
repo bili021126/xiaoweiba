@@ -22,6 +22,8 @@ import { GenerateCommitCommand } from './commands/GenerateCommitCommand';
 import { ExportMemoryCommand } from './commands/ExportMemoryCommand';
 import { ImportMemoryCommand } from './commands/ImportMemoryCommand';
 import { ConfigureApiKeyCommand } from './commands/ConfigureApiKeyCommand';
+import { CheckNamingCommand } from './commands/CheckNamingCommand';
+import { CodeGenerationCommand } from './commands/CodeGenerationCommand';
 import { EpisodicMemory } from './core/memory/EpisodicMemory';
 import { LLMTool } from './tools/LLMTool';
 
@@ -153,6 +155,8 @@ function registerCommands(context: vscode.ExtensionContext): void {
   const exportMemoryHandler = new ExportMemoryCommand();
   const importMemoryHandler = new ImportMemoryCommand();
   const configureApiKeyHandler = new ConfigureApiKeyCommand();
+  const checkNamingHandler = new CheckNamingCommand(llmTool, episodicMemory);
+  const codeGenerationHandler = new CodeGenerationCommand(episodicMemory, llmTool);
   
   const explainCodeCmd = vscode.commands.registerCommand(
     'xiaoweiba.explainCode',
@@ -185,8 +189,14 @@ function registerCommands(context: vscode.ExtensionContext): void {
   const checkNamingCmd = vscode.commands.registerCommand(
     'xiaoweiba.checkNaming',
     async () => {
-      vscode.window.showInformationMessage('命名检查功能开发中...');
-      await auditLogger.log('check_naming', 'success', 0);
+      await checkNamingHandler.execute();
+    }
+  );
+
+  const codeGenerationCmd = vscode.commands.registerCommand(
+    'xiaoweiba.generateCode',
+    async () => {
+      await codeGenerationHandler.execute();
     }
   );
 
@@ -233,6 +243,7 @@ function registerCommands(context: vscode.ExtensionContext): void {
     exportMemoryCmd,
     importMemoryCmd,
     checkNamingCmd,
+    codeGenerationCmd,
     optimizeSQLCmd,
     repairMemoryCmd,
     configureApiKeyCmd
