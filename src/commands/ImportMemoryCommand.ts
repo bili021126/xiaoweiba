@@ -202,13 +202,17 @@ export class ImportMemoryCommand {
         }
 
         // 检查是否已存在（通过ID或时间戳+摘要判断）
+        console.log('[ImportMemoryCommand] Checking if memory exists:', memory.summary.substring(0, 50));
         const exists = await this.checkMemoryExists(memory);
+        console.log('[ImportMemoryCommand] Memory exists:', exists);
         if (exists) {
+          console.log('[ImportMemoryCommand] Skipping duplicate memory');
           result.skipCount++;
           continue;
         }
 
         // 导入记忆
+        console.log('[ImportMemoryCommand] Importing memory...');
         await this.episodicMemory.record({
           taskType: memory.taskType,
           summary: memory.summary,
@@ -220,6 +224,7 @@ export class ImportMemoryCommand {
         });
 
         result.successCount++;
+        console.log('[ImportMemoryCommand] Memory imported successfully, total success:', result.successCount);
       } catch (error) {
         result.errorCount++;
         result.errors.push({
@@ -275,15 +280,37 @@ export class ImportMemoryCommand {
    */
   private async checkMemoryExists(memory: any): Promise<boolean> {
     try {
-      // 通过摘要和时间范围搜索相似记忆
+      // 优先通过ID检查（如果导出的记录有ID）
+      if (memory.id) {
+        const db = this.episodicMemory['dbManager'].getDatabase();
+        const result = db.exec(`SELECT COUNT(*) as count FROM episodic_memory WHERE id = '${memory.id}'`);
+        
+        if (result.length > 0 && result[0].values.length > 0) {
+          const count = result[0].values[0][0] as number;
+          if (count > 0) {
+            console.log('[ImportMemoryCommand] Memory with same ID exists:', memory.id);
+            return true;
+          }
+        }
+      }
+
+      // 其次通过摘要和时间范围搜索相似记忆
       const similarMemories = await this.episodicMemory.search(memory.summary, { limit: 5 });
       
-      // 如果找到完全匹配的摘要，认为已存在
-      return similarMemories.some((m: any) => 
+      // 如果找到完全匹配的摘要和任务类型，且时间戳相近（±1秒），认为已存在
+      const isDuplicate = similarMemories.some((m: any) => 
         m.summary === memory.summary && 
-        m.taskType === memory.taskType
+        m.taskType === memory.taskType &&
+        Math.abs(m.timestamp - memory.timestamp) < 2000  // 2秒内视为同一条
       );
+      
+      if (isDuplicate) {
+        console.log('[ImportMemoryCommand] Duplicate memory found by summary+taskType');
+      }
+      
+      return isDuplicate;
     } catch (error) {
+      console.warn('[ImportMemoryCommand] checkMemoryExists failed:', error);
       // 搜索失败时，保守处理：不跳过
       return false;
     }
