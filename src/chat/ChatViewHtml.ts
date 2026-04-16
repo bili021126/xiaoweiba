@@ -666,6 +666,16 @@ export function generateChatViewHtml(webview: vscode.Webview): string {
           enableInput();
           break;
 
+        case 'commandExecuted':
+          // 命令执行完成，恢复输入状态
+          enableInput();
+          if (message.success) {
+            console.log('[ChatView] Command executed successfully: ' + message.command);
+          } else {
+            console.error('[ChatView] Command execution failed: ' + message.error);
+          }
+          break;
+
         case 'loadSession':
           const container = document.getElementById('messagesContainer');
           container.innerHTML = '';

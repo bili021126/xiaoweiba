@@ -305,6 +305,40 @@ private async executeCommandFromChat(command: string, context?: string): Promise
 }
 ```
 
+**智能意图识别**：自动检测用户意图
+
+```typescript
+// 新增detectIntent方法，基于关键词匹配
+private detectIntent(message: string): string | null {
+  const lowerMessage = message.toLowerCase();
+  
+  if (lowerMessage.includes('解释') || lowerMessage.includes('explain')) {
+    return 'explainCode';
+  }
+  // ... 其他意图
+  
+  return null;
+}
+```
+
+**修复聊天界面转圈Bug**：命令执行后恢复输入状态
+
+```typescript
+// 后端：执行完命令后通知前端
+this.view.webview.postMessage({
+  type: 'commandExecuted',
+  success: true,
+  command: command
+});
+
+// 前端：监听消息并恢复输入
+window.addEventListener('message', event => {
+  if (event.data.type === 'commandExecuted') {
+    enableInput(); // 恢复输入框状态
+  }
+});
+```
+
 ---
 
 ## 9. 后续规划

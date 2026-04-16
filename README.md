@@ -290,11 +290,13 @@ MIT License
 - 意图分析器和专家选择器
 - 跨会话记忆检索（FTS5降级方案）
 - ChatViewProvider命令执行支持
+- 智能意图识别（关键词匹配自动触发命令）
 
 #### 🐛 Bug修复
 - 修复代码插入失败问题（检查editor.edit返回值）
 - 修复记忆衰减参数不一致（decayLambda: 0.01 → 0.1）
 - 修复ChatViewProvider资源泄漏（添加dispose调用）
+- 修复聊天界面执行命令后转圈Bug（添加commandExecuted消息通知）
 
 #### 🔧 优化
 - 移除未使用依赖（@xenova/transformers, dotenv）

@@ -320,9 +320,27 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         default:
           vscode.window.showWarningMessage(`⚠️ 未知命令: ${command}`);
       }
+      
+      // 通知前端恢复输入状态
+      if (this.view) {
+        this.view.webview.postMessage({
+          type: 'commandExecuted',
+          success: true,
+          command: command
+        });
+      }
     } catch (error) {
       console.error('[ChatViewProvider] Command execution failed:', error);
       vscode.window.showErrorMessage(`命令执行失败: ${error instanceof Error ? error.message : String(error)}`);
+      
+      // 通知前端命令执行失败
+      if (this.view) {
+        this.view.webview.postMessage({
+          type: 'commandExecuted',
+          success: false,
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
     }
   }
 

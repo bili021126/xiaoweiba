@@ -37,7 +37,9 @@
 | 日期 | 问题 | 严重程度 | 原因 | 修复方案 | 状态 | 相关文件 |
 |------|------|---------|------|---------|------|----------|
 | 2026-04-17 | 代码插入失败无提示 | P1 | editor.edit返回值未检查 | 添加返回值检查，成功/失败分别提示 | ✅ 已修复 | src/commands/CodeGenerationCommand.ts:248-260 |
-| 2026-04-17 | ChatViewProvider无法执行命令 | P0 | 缺少命令执行逻辑 | 新增executeCommandFromChat方法，支持4个核心命令 | ✅ 已修复 | src/chat/ChatViewProvider.ts:258-286 |
+| 2026-04-17 | ChatViewProvider无法执行命令 | P0 | 缺少命令执行逻辑 | 新增executeCommandFromChat方法，支持4个核心命令 | ✅ 已修复 | src/chat/ChatViewProvider.ts:299-345 |
+| 2026-04-17 | 智能意图识别无效 | P1 | 修改源码后未重新加载窗口 | 添加关键词匹配逻辑，需Reload Window生效 | ✅ 已修复 | src/chat/ChatViewProvider.ts:267-297 |
+| 2026-04-17 | 聊天界面执行命令后转圈 | P0 | 前端输入框未恢复状态 | 后端发送commandExecuted消息，前端监听并调用enableInput() | ✅ 已修复 | src/chat/ChatViewProvider.ts, src/chat/ChatViewHtml.ts |
 
 ---
 
