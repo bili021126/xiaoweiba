@@ -48,6 +48,8 @@ code --install-extension xiaoweiba-0.1.0.vsix
 | **性能优化** | LLM缓存、异步记录 | ✅ 完成 |
 | **人工测试** | 17/57用例 (29.8%) | 🔄 进行中 |
 
+**最后测试**: 2026-04-17 | 459用例 | 100%通过
+
 ### P0功能清单
 - ✅ F01 代码解释（含偏好匹配）
 - ✅ F02 提交生成
@@ -297,11 +299,13 @@ MIT License
 - 修复记忆衰减参数不一致（decayLambda: 0.01 → 0.1）
 - 修复ChatViewProvider资源泄漏（添加dispose调用）
 - 修复聊天界面执行命令后转圈Bug（添加commandExecuted消息通知）
+- 添加聊天命令审计日志和情景记忆记录
 
 #### 🔧 优化
 - 移除未使用依赖（@xenova/transformers, dotenv）
 - 完善package.json元数据（license, engines）
 - 增强错误处理和用户提示
+- **规划中**：聊天命令审计日志、情景记忆记录、意图识别配置化
 
 #### 📊 测试
 - 单元测试：259 → 459用例（+77%）

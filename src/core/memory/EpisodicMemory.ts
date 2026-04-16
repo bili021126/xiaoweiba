@@ -16,7 +16,8 @@ export type TaskType =
   | 'NAMING_CHECK'
   | 'COMMIT_GENERATE'
   | 'SKILL_EXECUTE'
-  | 'WORKFLOW_EXECUTE';
+  | 'WORKFLOW_EXECUTE'
+  | 'CHAT_COMMAND';
 
 export type TaskOutcome = 'SUCCESS' | 'FAILED' | 'PARTIAL' | 'CANCELLED';
 

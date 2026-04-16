@@ -265,32 +265,20 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   /**
    * 智能意图识别
    */
+  private readonly INTENT_KEYWORDS: Record<string, string[]> = {
+    explainCode: ['解释', 'explain', '什么意思', '这段代码'],
+    generateCommit: ['提交', 'commit', 'git提交', '生成提交'],
+    checkNaming: ['命名', 'naming', '变量名', '方法名'],
+    generateCode: ['生成', 'create', '写一个', '实现一个', '帮我写']
+  };
+
   private detectIntent(message: string): string | null {
     const lowerMessage = message.toLowerCase();
     
-    // 代码解释相关关键词
-    if (lowerMessage.includes('解释') || lowerMessage.includes('explain') || 
-        lowerMessage.includes('什么意思') || lowerMessage.includes('这段代码')) {
-      return 'explainCode';
-    }
-    
-    // 提交信息生成相关关键词
-    if (lowerMessage.includes('提交') || lowerMessage.includes('commit') || 
-        lowerMessage.includes('git提交') || lowerMessage.includes('生成提交')) {
-      return 'generateCommit';
-    }
-    
-    // 命名检查相关关键词
-    if (lowerMessage.includes('命名') || lowerMessage.includes('naming') || 
-        lowerMessage.includes('变量名') || lowerMessage.includes('方法名')) {
-      return 'checkNaming';
-    }
-    
-    // 代码生成相关关键词
-    if (lowerMessage.includes('生成') || lowerMessage.includes('create') || 
-        lowerMessage.includes('写一个') || lowerMessage.includes('实现一个') ||
-        lowerMessage.includes('帮我写')) {
-      return 'generateCode';
+    for (const [intent, keywords] of Object.entries(this.INTENT_KEYWORDS)) {
+      if (keywords.some(keyword => lowerMessage.includes(keyword))) {
+        return intent;
+      }
     }
     
     return null;
@@ -300,6 +288,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
    * 从聊天界面执行命令
    */
   private async executeCommandFromChat(command: string, context?: string): Promise<void> {
+    const startTime = Date.now();
     console.log(`[ChatViewProvider] Executing command from chat: ${command}`);
     
     try {
@@ -321,6 +310,26 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           vscode.window.showWarningMessage(`⚠️ 未知命令: ${command}`);
       }
       
+      // 记录审计日志
+      const duration = Date.now() - startTime;
+      await this.auditLogger.log('chat_command_executed', 'success', duration, {
+        parameters: {
+          command: command,
+          source: 'chat'
+        }
+      });
+      
+      // 记录情景记忆
+      await this.episodicMemory.record({
+        taskType: 'CHAT_COMMAND',
+        summary: `聊天触发命令: ${command}`,
+        entities: [command, context?.substring(0, 50) || ''],
+        outcome: 'SUCCESS',
+        modelId: 'deepseek',
+        durationMs: duration,
+        decision: context || ''
+      });
+      
       // 通知前端恢复输入状态
       if (this.view) {
         this.view.webview.postMessage({
@@ -330,8 +339,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         });
       }
     } catch (error) {
+      const duration = Date.now() - startTime;
       console.error('[ChatViewProvider] Command execution failed:', error);
       vscode.window.showErrorMessage(`命令执行失败: ${error instanceof Error ? error.message : String(error)}`);
+      
+      // 记录错误日志
+      await this.auditLogger.logError('chat_command_executed', error as Error, duration);
       
       // 通知前端命令执行失败
       if (this.view) {

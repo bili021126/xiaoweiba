@@ -42,6 +42,8 @@
 | 模块协同测试 | 11 | 100% | N/A | ✅ |
 | E2E全链路 | 0（手动） | 待执行 | N/A | ❌ |
 
+**最后测试时间**: 2026-04-17
+
 #### 核心模块覆盖率
 
 | 模块 | 语句 | 分支 | 函数 | 目标 | 状态 |
@@ -339,11 +341,57 @@ window.addEventListener('message', event => {
 });
 ```
 
+**添加审计日志和情景记忆**：追踪聊天命令执行
+
+```typescript
+// 记录审计日志
+await this.auditLogger.log('chat_command_executed', 'success', duration, {
+  parameters: { command, source: 'chat' }
+});
+
+// 记录情景记忆
+await this.episodicMemory.record({
+  taskType: 'CHAT_COMMAND',
+  summary: `聊天触发命令: ${command}`,
+  entities: [command, context?.substring(0, 50) || ''],
+  outcome: 'SUCCESS',
+  modelId: 'deepseek',
+  durationMs: duration,
+  decision: context || ''
+});
+```
+
 ---
 
 ## 9. 后续规划
 
-**结论**：开发环境使用LIKE完全可用，生产环境启用FTS5获得最佳性能。
+### 短期优化（v0.2.0）
+
+| 优先级 | 功能 | 说明 | 预计工作量 |
+|--------|------|------|----------|
+| P0 | Agent执行引擎 | LLM驱动的意图理解 + 工具调用 + Diff确认 | 2-3周 |
+| P1 | 聊天命令审计日志 | 记录所有通过聊天触发的命令操作 | 1天 |
+| P1 | 聊天命令情景记忆 | 记录CHAT_COMMAND类型记忆，支持跨会话检索 | 1天 |
+| P1 | 意图识别配置化 | 关键词提取为常量或从config.yaml加载 | 0.5天 |
+| P2 | F07 Diff确认机制 | 所有写入操作前展示差异对比 | 3-5天 |
+
+### 中期规划（v0.3.0）
+
+| 优先级 | 功能 | 说明 | 预计工作量 |
+|--------|------|------|----------|
+| P0 | F05 内置最佳实践库 | 预置编码规范、SQL优化原则 | 1周 |
+| P1 | F12 单元测试生成 | 为选中方法生成测试用例 | 1-2周 |
+| P1 | F13 SQL优化 | 连接数据库获取EXPLAIN生成优化报告 | 1-2周 |
+| P2 | LLM驱动意图识别 | 替代关键词匹配，支持复杂自然语言理解 | 1周 |
+
+### 长期愿景（v1.0.0）
+
+| 功能 | 说明 |
+|------|------|
+| F06 用户手写技能系统 | JSON格式技能定义，支持动态加载 |
+| F15 沉淀技能建议 | 检测重复操作，智能建议保存为技能 |
+| 多Agent协作框架 | 基于IAgent接口的可扩展Agent架构 |
+| 技能市场 | 社区共享技能平台 |
 
 ---
 
