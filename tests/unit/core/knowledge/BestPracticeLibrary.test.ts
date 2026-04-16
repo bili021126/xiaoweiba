@@ -1,4 +1,4 @@
-import { BestPracticeLibrary } from '../../../src/core/knowledge/BestPracticeLibrary';
+import { BestPracticeLibrary } from 'D:/xiaoweiba/src/core/knowledge/BestPracticeLibrary.ts';
 
 describe('BestPracticeLibrary - 最佳实践库', () => {
   let library: BestPracticeLibrary;

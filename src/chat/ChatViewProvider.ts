@@ -42,6 +42,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     context: vscode.WebviewViewResolveContext,
     _token: vscode.CancellationToken
   ): Promise<void> {
+    console.log('[ChatViewProvider] resolveWebviewView called');
     this.view = webviewView;
 
     webviewView.webview.options = {
@@ -49,7 +50,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       localResourceRoots: [this.context.extensionUri]
     };
 
+    console.log('[ChatViewProvider] Setting webview HTML...');
     webviewView.webview.html = this.getHtmlForWebview(webviewView.webview);
+    console.log('[ChatViewProvider] Webview HTML set successfully');
 
     // 处理来自Webview的消息
     webviewView.webview.onDidReceiveMessage(async (message) => {
