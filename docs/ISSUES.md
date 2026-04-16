@@ -29,7 +29,7 @@
 | 2026-04-17 | 智能意图识别不够灵活 | P1 | 基于关键词匹配，无法理解复杂需求 | 升级为LLM驱动的意图识别，支持自然语言理解和多步任务规划 | 📋 计划中 | src/chat/ChatViewProvider.ts |
 | 2026-04-17 | 聊天命令缺少审计日志 | P1 | executeCommandFromChat未记录操作日志 | 添加auditLogger.log调用，追踪所有聊天触发的命令 | ✅ 已修复 | src/chat/ChatViewProvider.ts:325-332 |
 | 2026-04-17 | 聊天命令未记录情景记忆 | P1 | 执行命令后return跳过记忆记录逻辑 | 在executeCommandFromChat中记录CHAT_COMMAND类型记忆 | ✅ 已修复 | src/chat/ChatViewProvider.ts:334-343, src/core/memory/EpisodicMemory.ts:19 |
-| 2026-04-17 | 意图识别关键词硬编码 | P2 | INTENT_KEYWORDS内联在方法中，难以维护 | 提取为配置常量或从config.yaml加载 | 📋 计划中 | src/chat/ChatViewProvider.ts |
+| 2026-04-17 | 意图识别关键词硬编码 | P2 | INTENT_KEYWORDS内联在方法中，难以维护 | 提取为配置常量或从config.yaml加载 | ✅ 已修复 | src/chat/ChatViewProvider.ts:268-274 |
 | 2026-04-17 | 代码生成交互流程不友好 | P1 | 必须通过输入框输入需求，无法利用选中注释或对话上下文 | 优化交互：1)优先使用选中注释作为需求 2)支持从聊天上下文获取 3)调整步骤顺序（先生成再选择操作） | 📋 计划中 | src/commands/CodeGenerationCommand.ts |
 | 2026-04-17 | 命令注册数量不足（6/10） | P1 | 部分功能模块未完成 | 实现缺失的命令：SQL优化、记忆导入导出、数据库修复等 | 📋 计划中 | package.json, src/commands/* |
 | 2026-04-17 | 命名检查结果显示格式异常 | P2 | UI渲染问题 | 优化CheckNamingCommand的输出格式 | 📋 计划中 | src/commands/CheckNamingCommand.ts |

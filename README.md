@@ -305,7 +305,7 @@ MIT License
 - 移除未使用依赖（@xenova/transformers, dotenv）
 - 完善package.json元数据（license, engines）
 - 增强错误处理和用户提示
-- **规划中**：聊天命令审计日志、情景记忆记录、意图识别配置化
+- 意图识别关键词配置化（提取为INTENT_KEYWORDS常量）
 
 #### 📊 测试
 - 单元测试：259 → 459用例（+77%）
