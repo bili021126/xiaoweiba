@@ -72,9 +72,16 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       }
     });
 
-    // 加载当前会话
-    await this.loadCurrentSession();
-    await this.updateSessionList();
+    // 异步加载会话数据（不阻塞视图显示）
+    Promise.all([
+      this.loadCurrentSession(),
+      this.updateSessionList()
+    ]).then(() => {
+      // 加载完成后隐藏loading指示器
+      if (this.view) {
+        this.view.webview.postMessage({ type: 'hideLoading' });
+      }
+    }).catch(err => console.error('[ChatView] 初始化失败:', err));
   }
 
   /**
@@ -460,6 +467,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   </style>
 </head>
 <body>
+  <div id="loadingIndicator" style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: var(--vscode-descriptionForeground);">
+    <div style="font-size: 24px; margin-bottom: 10px;">⏳</div>
+    <div>加载中...</div>
+  </div>
+  
   <div class="header">
     <h2>🤖 小尾巴AI助手</h2>
     <div class="session-selector">
@@ -585,6 +597,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         case 'updateSessionList':
           updateSessionList(message.sessions, message.currentSessionId);
           break;
+
+        case 'hideLoading':
+          hideLoading();
+          break;
       }
     });
 
@@ -698,6 +714,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         }
         select.appendChild(option);
       });
+    }
+
+    // 隐藏loading指示器
+    function hideLoading() {
+      const loading = document.getElementById('loadingIndicator');
+      if (loading) {
+        loading.style.display = 'none';
+      }
     }
   </script>
 </body>

@@ -24,14 +24,13 @@ export class DatabaseManager {
 
   constructor(
     @inject(ConfigManager) private configManager: ConfigManager,
-    @inject('extensionContext') context?: vscode.ExtensionContext,
-    customDbPath?: string
+    @inject('extensionContext') context?: vscode.ExtensionContext
   ) {
     this.extensionContext = context || null;
     
     const homeDir = os.homedir();
     const dataDir = path.join(homeDir, '.xiaoweiba', 'data');
-    this.dbPath = customDbPath || path.join(dataDir, 'memory.db');
+    this.dbPath = path.join(dataDir, 'memory.db');
     this.backupDir = path.join(homeDir, '.xiaoweiba', 'backups');
 
     // 确保目录存在

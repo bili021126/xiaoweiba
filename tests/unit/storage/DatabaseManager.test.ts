@@ -66,7 +66,9 @@ describe('DatabaseManager - 数据库管理器', () => {
       }
     };
 
-    dbManager = new DatabaseManager(mockConfigManager, undefined, testDbPath);
+    dbManager = new DatabaseManager(mockConfigManager, undefined);
+    // 通过类型断言设置测试数据库路径
+    (dbManager as any).dbPath = testDbPath;
     await dbManager.initialize();
   });
 
