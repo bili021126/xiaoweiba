@@ -437,18 +437,22 @@ export function generateChatViewHtml(webview: vscode.Webview): string {
     const backtick = '\x60';
     const codeBlockRegex = new RegExp(backtick + backtick + backtick + '([\\s\\S]*?)' + backtick + backtick + backtick, 'g');
     const inlineCodeRegex = new RegExp(backtick + '([^' + backtick + ']+)' + backtick, 'g');
+    const ampRegex = new RegExp('&', 'g');
+    const ltRegex = new RegExp('<', 'g');
+    const gtRegex = new RegExp('>', 'g');
+    const newlineRegex = new RegExp('\\n', 'g');
 
     // 简单Markdown渲染（替换代码块和换行）
     function renderMarkdown(text) {
       if (!text) return '';
       // 转义HTML
-      let html = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      let html = text.replace(ampRegex, '&amp;').replace(ltRegex, '&lt;').replace(gtRegex, '&gt;');
       // 代码块
       html = html.replace(codeBlockRegex, '<pre><code>$1</code></pre>');
       // 行内代码
       html = html.replace(inlineCodeRegex, '<code>$1</code>');
       // 换行
-      html = html.replace(/\n/g, '<br>');
+      html = html.replace(newlineRegex, '<br>');
       return html;
     }
 

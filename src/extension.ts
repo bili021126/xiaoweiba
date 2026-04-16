@@ -131,6 +131,12 @@ export async function deactivate(): Promise<void> {
     if (configManager) {
       configManager.dispose();
     }
+    if (episodicMemory) {
+      await episodicMemory.dispose();
+    }
+    if (preferenceMemory) {
+      // PreferenceMemory暂无dispose，预留
+    }
     if (auditLogger) {
       await auditLogger.log('extension_deactivate', 'success', 0);
     }

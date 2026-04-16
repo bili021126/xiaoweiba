@@ -1,7 +1,7 @@
 // VS Code API Mock for Jest
 module.exports = {
   window: {
-    showInformationMessage: jest.fn(),
+    showInformationMessage: jest.fn().mockResolvedValue(undefined),
     showErrorMessage: jest.fn(),
     showWarningMessage: jest.fn(),
     createOutputChannel: jest.fn(() => ({
@@ -11,7 +11,12 @@ module.exports = {
     })),
     showQuickPick: jest.fn(),
     showInputBox: jest.fn(),
-    createWebviewPanel: jest.fn()
+    createWebviewPanel: jest.fn(),
+    withProgress: jest.fn(async (options: any, task: any) => {
+      const progress = { report: jest.fn() };
+      const token = { isCancellationRequested: false, onCancellationRequested: jest.fn() };
+      return await task(progress, token);
+    })
   },
   workspace: {
     getConfiguration: jest.fn(() => ({

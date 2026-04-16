@@ -184,7 +184,8 @@ export class DatabaseManager {
         outcome TEXT NOT NULL,
         final_weight REAL NOT NULL,
         model_id TEXT NOT NULL,
-        latency_ms INTEGER
+        latency_ms INTEGER,
+        vector BLOB
       )
     `);
 

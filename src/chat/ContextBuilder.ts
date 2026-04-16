@@ -66,9 +66,14 @@ export class ContextBuilder {
     const baseLimit = options.enableCrossSession ? 6 : 3;
     const memoryLimit = Math.min(baseLimit + (messageComplexity > 0.7 ? 2 : 0), 10);
     
+    console.log(`[ContextBuilder] Searching memories with limit=${memoryLimit}, enableCrossSession=${options.enableCrossSession}`);
+    console.log('[ContextBuilder] episodicMemory object:', this.episodicMemory ? 'exists' : 'NULL');
+    console.log('[ContextBuilder] episodicMemory.search method:', typeof this.episodicMemory.search);
+    
     const allEpisodes = await this.episodicMemory.search(options.userMessage, {
       limit: memoryLimit
     });
+    console.log(`[ContextBuilder] Found ${allEpisodes.length} memories`);
 
     // 4. 跨会话检索（从检索结果中分割）
     let crossSessionMemories: EpisodicMemoryRecord[] = [];

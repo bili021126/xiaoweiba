@@ -53,8 +53,8 @@ security:
 memory:
   # 记忆保留天数
   retentionDays: 90
-  # 衰减系数（指数衰减 weight * exp(-λ * age_days)）
-  decayLambda: 0.01
+  # 衰减系数（指数衰减 weight * exp(-λ * age_days)，λ=0.1时半衰期约7天）
+  decayLambda: 0.1
   # 冷启动信任值（新项目初始信任度）
   coldStartTrust: 20
 

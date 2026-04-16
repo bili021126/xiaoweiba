@@ -4,6 +4,9 @@ import { AuditLogger } from '../security/AuditLogger';
 import { ProjectFingerprint } from '../../utils/ProjectFingerprint';
 import { ConfigManager } from '../../storage/ConfigManager';
 import { ErrorCode, createError } from '../../utils/ErrorCodes';
+import { IntentAnalyzer } from './IntentAnalyzer';
+import { ExpertSelector } from './ExpertSelector';
+import { RetrievalWeights } from './types';
 
 export type TaskType =
   | 'CODE_EXPLAIN'
@@ -30,6 +33,7 @@ export interface EpisodicMemoryRecord {
   modelId: string;
   durationMs: number;
   metadata?: Record<string, unknown>;
+  vector?: Buffer; // 向量数据（从数据库加载）
 }
 
 export interface MemoryQueryOptions {
@@ -42,10 +46,50 @@ export interface MemoryQueryOptions {
   sinceTimestamp?: number;
 }
 
+/**
+ * 内存索引结构（用于混合检索）
+ */
+interface IndexedMemory {
+  id: string;
+  timestamp: number;
+  summary: string;
+  entities: string[];
+  decision?: string;
+  termFreq: Map<string, number>; // 词频（TF）
+}
+
 @injectable()
 export class EpisodicMemory {
   private readonly decayLambda: number;
   private readonly retentionDays: number;
+
+  // ========== 内存索引（混合检索核心） ==========
+  private invertedIndex: Map<string, Map<string, number>> = new Map(); // term -> Map<memoryId, tf>
+  private docTermFreq: Map<string, Map<string, number>> = new Map();   // memoryId -> Map<term, tf>
+  private idfCache: Map<string, number> = new Map();
+  private totalDocs: number = 0;
+  private indexReady: boolean = false;
+  private indexBuildPromise: Promise<void> | null = null;
+
+  // ========== 向量检索（语义增强） ==========
+  private vectorCache: Map<string, Float32Array> = new Map(); // memoryId -> vector
+  private vectorReady: boolean = false;
+  private enableSemanticSearch: boolean = true; // 可配置开关
+  
+  // 评分权重
+  private weights = {
+    keyword: 0.3,
+    time: 0.2,
+    entity: 0.2,
+    vector: 0.3
+  };
+
+  // ========== 意图感知与自适应权重 ==========
+  private intentAnalyzer: IntentAnalyzer;
+  private expertSelector: ExpertSelector;
+
+  // ========== 初始化控制 ==========
+  private initPromise: Promise<void> | null = null;
 
   constructor(
     @inject(DatabaseManager) private dbManager: DatabaseManager,
@@ -56,6 +100,12 @@ export class EpisodicMemory {
     const config = this.configManager.getConfig();
     this.decayLambda = config.memory.decayLambda;
     this.retentionDays = config.memory.retentionDays;
+    
+    // 初始化意图感知模块
+    this.intentAnalyzer = new IntentAnalyzer();
+    this.expertSelector = new ExpertSelector();
+    
+    // 注意：不在构造函数中启动异步操作，由initialize()显式控制
   }
 
   /**
@@ -115,6 +165,18 @@ export class EpisodicMemory {
         parameters: { id, taskType: memory.taskType }
       });
 
+      console.log(`[EpisodicMemory] Memory recorded successfully: ${id} (${memory.taskType})`);
+      
+      // 增量更新内存索引
+      const newMemory: EpisodicMemoryRecord = {
+        id,
+        projectFingerprint,
+        timestamp,
+        ...memory,
+        finalWeight
+      };
+      this.addToIndex(newMemory);
+      
       return id;
     } catch (error) {
       const duration = Date.now() - startTime;
@@ -195,53 +257,102 @@ export class EpisodicMemory {
   async search(query: string, options: MemoryQueryOptions = {}): Promise<EpisodicMemoryRecord[]> {
     const startTime = Date.now();
     try {
-      const db = this.dbManager.getDatabase();
-      const projectFingerprint = await this.projectFingerprint.getCurrentProjectFingerprint();
+      // 确保已初始化
+      await this.ensureInitialized();
 
-      if (!projectFingerprint) {
-        return [];
+      // 1. 时间指代检测
+      if (this.isTemporalQuery(query)) {
+        console.log('[EpisodicMemory] Temporal query detected, returning recent memories');
+        return this.getRecentMemoriesFromDB(options.limit || 3);
       }
 
-      // 严格验证和清理搜索查询
-      const sanitizedQuery = this.sanitizeFtsQuery(query);
-      if (!sanitizedQuery || sanitizedQuery.trim().length === 0) {
-        return []; // 空查询直接返回
-      }
-
-      const limit = Math.min(options.limit || 20, 100);
-      const offset = Math.max(options.offset || 0, 0);
-
-      // 使用真正的参数化查询（FTS5 MATCH也使用占位符）
-      const sql = `
-        SELECT em.* FROM episodic_memory em
-        JOIN episodic_memory_fts fts ON em.rowid = fts.rowid
-        WHERE em.project_fingerprint = ? AND episodic_memory_fts MATCH ?
-        ORDER BY rank
-        LIMIT ? OFFSET ?
-      `;
-
-      // 使用sql.js的真正参数化查询
-      const stmt = db.prepare(sql);
-      stmt.bind([projectFingerprint, sanitizedQuery, limit, offset]);
+      // 2. 使用语义检索（混合评分）
+      const limit = Math.min(options.limit || 5, 20);
+      const memories = await this.searchSemantic(query, limit);
       
-      const memories: EpisodicMemoryRecord[] = [];
-      while (stmt.step()) {
-        const row = stmt.getAsObject();
-        memories.push(this.objectToMemory(row));
-      }
-      stmt.free();
-
       const duration = Date.now() - startTime;
       await this.auditLogger.log('memory_search', 'success', duration, {
-        parameters: { query: sanitizedQuery, count: memories.length }
+        parameters: { query, count: memories.length, method: 'hybrid' }
       });
 
+      console.log(`[EpisodicMemory] Hybrid search found ${memories.length} memories in ${duration}ms`);
       return memories;
     } catch (error) {
       const duration = Date.now() - startTime;
       await this.auditLogger.logError('memory_search', error as Error, duration);
+      console.error('[EpisodicMemory] Search error:', error);
       return [];
     }
+  }
+
+  /**
+   * 使用 FTS5 全文搜索（保留作为备用）
+   */
+  private async searchWithFTS5(
+    db: any,
+    projectFingerprint: string,
+    query: string,
+    limit: number,
+    offset: number
+  ): Promise<EpisodicMemoryRecord[]> {
+    const sql = `
+      SELECT em.* FROM episodic_memory em
+      JOIN episodic_memory_fts fts ON em.rowid = fts.rowid
+      WHERE em.project_fingerprint = ? AND episodic_memory_fts MATCH ?
+      ORDER BY rank
+      LIMIT ? OFFSET ?
+    `;
+
+    const stmt = db.prepare(sql);
+    stmt.bind([projectFingerprint, query, limit, offset]);
+    
+    const memories: EpisodicMemoryRecord[] = [];
+    while (stmt.step()) {
+      const row = stmt.getAsObject();
+      memories.push(this.objectToMemory(row));
+    }
+    stmt.free();
+
+    return memories;
+  }
+
+  /**
+   * 使用 LIKE 查询（FTS5 降级方案）
+   */
+  private async searchWithLike(
+    db: any,
+    projectFingerprint: string,
+    query: string,
+    limit: number,
+    offset: number
+  ): Promise<EpisodicMemoryRecord[]> {
+    // 将空格分隔的查询词转换为多个 LIKE 条件
+    const terms = query.split(/\s+/).filter(t => t.length > 0);
+    console.log(`[EpisodicMemory] LIKE search terms: [${terms.join(', ')}]`);
+    
+    const likeConditions = terms.map(() => '(em.summary LIKE ? OR em.entities LIKE ? OR em.decision LIKE ?)').join(' AND ');
+    const likeParams = terms.flatMap(t => [`%${t}%`, `%${t}%`, `%${t}%`]);
+    
+    const sql = `
+      SELECT em.* FROM episodic_memory em
+      WHERE em.project_fingerprint = ? AND (${likeConditions})
+      ORDER BY em.timestamp DESC
+      LIMIT ? OFFSET ?
+    `;
+
+    console.log(`[EpisodicMemory] LIKE SQL: ${sql.substring(0, 100)}...`);
+    const stmt = db.prepare(sql);
+    stmt.bind([projectFingerprint, ...likeParams, limit, offset]);
+    
+    const memories: EpisodicMemoryRecord[] = [];
+    while (stmt.step()) {
+      const row = stmt.getAsObject();
+      memories.push(this.objectToMemory(row));
+    }
+    stmt.free();
+
+    console.log(`[EpisodicMemory] LIKE search returned ${memories.length} results`);
+    return memories;
   }
 
   /**
@@ -413,5 +524,412 @@ export class EpisodicMemory {
       durationMs: (row[12] as number) || 0, // latency_ms
       metadata: undefined
     };
+  }
+
+  /**
+   * 获取最近的记忆（用于模糊查询降级）
+   */
+  private async getRecentMemories(
+    db: any,
+    projectFingerprint: string,
+    limit: number
+  ): Promise<EpisodicMemoryRecord[]> {
+    const sql = `
+      SELECT em.* FROM episodic_memory em
+      WHERE em.project_fingerprint = ?
+      ORDER BY em.timestamp DESC
+      LIMIT ?
+    `;
+
+    const stmt = db.prepare(sql);
+    stmt.bind([projectFingerprint, limit]);
+    
+    const memories: EpisodicMemoryRecord[] = [];
+    while (stmt.step()) {
+      const row = stmt.getAsObject();
+      memories.push(this.objectToMemory(row));
+    }
+    stmt.free();
+
+    return memories;
+  }
+
+  // ========== 混合检索核心方法 ==========
+
+  /**
+   * 从数据库加载记忆，建立倒排索引
+   */
+  private async buildIndex(limit: number = 2000): Promise<void> {
+    try {
+      const db = this.dbManager.getDatabase();
+      const projectFingerprint = await this.projectFingerprint.getCurrentProjectFingerprint();
+      
+      if (!projectFingerprint) {
+        console.warn('[EpisodicMemory] No project fingerprint, skip index build');
+        return;
+      }
+
+      // 加载最近 limit 条记忆
+      const sql = `
+        SELECT em.* FROM episodic_memory em
+        WHERE em.project_fingerprint = ?
+        ORDER BY em.timestamp DESC
+        LIMIT ?
+      `;
+
+      const stmt = db.prepare(sql);
+      stmt.bind([projectFingerprint, limit]);
+
+      const memories: EpisodicMemoryRecord[] = [];
+      while (stmt.step()) {
+        const row = stmt.getAsObject();
+        memories.push(this.objectToMemory(row));
+      }
+      stmt.free();
+
+      // 清空旧索引
+      this.invertedIndex.clear();
+      this.docTermFreq.clear();
+      this.idfCache.clear();
+      this.totalDocs = memories.length;
+
+      // 构建索引
+      for (const mem of memories) {
+        const text = this.getIndexText(mem);
+        const terms = this.tokenize(text);
+        const tfMap = new Map<string, number>();
+        for (const term of terms) {
+          tfMap.set(term, (tfMap.get(term) || 0) + 1);
+        }
+        this.docTermFreq.set(mem.id, tfMap);
+        for (const [term, tf] of tfMap) {
+          if (!this.invertedIndex.has(term)) this.invertedIndex.set(term, new Map());
+          this.invertedIndex.get(term)!.set(mem.id, tf);
+        }
+      }
+
+      // 预计算 IDF
+      for (const [term, docMap] of this.invertedIndex) {
+        const idf = Math.log((this.totalDocs + 1) / (docMap.size + 1)) + 1;
+        this.idfCache.set(term, idf);
+      }
+
+      this.indexReady = true;
+      console.log(`[EpisodicMemory] Index built: ${this.totalDocs} memories indexed`);
+    } catch (error) {
+      console.error('[EpisodicMemory] Index build error:', error);
+      this.indexReady = false;
+    }
+  }
+
+  /**
+   * 获取用于索引的文本（summary + entities + decision）
+   */
+  private getIndexText(memory: EpisodicMemoryRecord): string {
+    const parts = [memory.summary];
+    if (memory.entities && memory.entities.length) parts.push(memory.entities.join(' '));
+    if (memory.decision) parts.push(memory.decision);
+    return parts.join(' ');
+  }
+
+  /**
+   * 分词（支持中英文）
+   */
+  private tokenize(text: string): string[] {
+    // 转小写，保留字母数字中文，按空格拆分
+    const normalized = text.toLowerCase().replace(/[^\w\u4e00-\u9fa5]/g, ' ');
+    return normalized.split(/\s+/).filter(t => t.length > 1);
+  }
+
+  // ========== 意图感知与自适应权重 ==========
+
+  /**
+   * 获取自适应权重（根据查询意图动态调整）
+   */
+  private getAdaptiveWeights(query: string): RetrievalWeights {
+    const intent = this.intentAnalyzer.analyze(query);
+    const base = this.expertSelector.getBaseWeights();
+    
+    // 门控调制：根据意图增强对应因子
+    let k = base.k * (1 + intent.entity * 0.5);      // 实体敏感增强关键词
+    let t = base.t * (1 + intent.temporal * 0.8);    // 时间敏感增强时间
+    let e = base.e * (1 + intent.entity * 0.6);      // 实体敏感增强实体加分
+    let v = base.v * (1 + intent.semantic * 0.7);    // 语义敏感增强向量
+    
+    // 归一化（保持和为1）
+    const sum = k + t + e + v;
+    return { 
+      k: k / sum, 
+      t: t / sum, 
+      e: e / sum, 
+      v: v / sum 
+    };
+  }
+
+  /**
+   * 记录用户反馈（用于专家选择器学习）
+   * @param query 用户查询
+   * @param clickedMemoryId 用户点击的记忆ID
+   */
+  public recordFeedback(query: string, clickedMemoryId: string): void {
+    const intent = this.intentAnalyzer.analyze(query);
+    const weights = this.getAdaptiveWeights(query);
+    this.expertSelector.recordFeedback(intent, weights);
+    console.log(`[EpisodicMemory] Feedback recorded for query: "${query}", expert: ${this.expertSelector.getCurrentExpert()}`);
+  }
+
+  /**
+   * 重置专家选择（用于命令 xiaoweiba.reset-expert）
+   */
+  public resetExpert(): void {
+    this.expertSelector.reset();
+    console.log('[EpisodicMemory] Expert state reset');
+  }
+
+  /**
+   * 获取当前专家名称（用于调试）
+   */
+  public getCurrentExpert(): string {
+    return this.expertSelector.getCurrentExpert();
+  }
+
+  /**
+   * 增量更新索引（record成功后调用）
+   */
+  private addToIndex(memory: EpisodicMemoryRecord): void {
+    if (!this.indexReady) return;
+
+    const text = this.getIndexText(memory);
+    const terms = this.tokenize(text);
+    const tfMap = new Map<string, number>();
+    for (const term of terms) {
+      tfMap.set(term, (tfMap.get(term) || 0) + 1);
+    }
+    this.docTermFreq.set(memory.id, tfMap);
+    for (const [term, tf] of tfMap) {
+      if (!this.invertedIndex.has(term)) this.invertedIndex.set(term, new Map());
+      this.invertedIndex.get(term)!.set(memory.id, tf);
+      // 更新 IDF（因为文档数增加）
+      const newIdf = Math.log((this.totalDocs + 2) / (this.invertedIndex.get(term)!.size + 1)) + 1;
+      this.idfCache.set(term, newIdf);
+    }
+    this.totalDocs++;
+  }
+
+  /**
+   * 检测时间指代查询
+   */
+  private isTemporalQuery(query: string): boolean {
+    const patterns = [/^刚才/, /^上次/, /^前一个/, /^刚刚/, /^最近/, /^上一个/];
+    return patterns.some(p => p.test(query));
+  }
+
+  /**
+   * 语义检索（混合评分）
+   */
+  private async searchSemantic(query: string, limit: number = 5): Promise<EpisodicMemoryRecord[]> {
+    if (!this.indexReady) {
+      console.log('[EpisodicMemory] Index not ready, using LIKE fallback');
+      return this.searchWithLikeFallback(query, limit);
+    }
+
+    // 获取自适应权重
+    const adaptiveWeights = this.getAdaptiveWeights(query);
+    const dominantIntent = this.intentAnalyzer.getDominantIntent(this.intentAnalyzer.analyze(query));
+    console.log(`[EpisodicMemory] Adaptive weights for "${query}": k=${adaptiveWeights.k.toFixed(2)}, t=${adaptiveWeights.t.toFixed(2)}, e=${adaptiveWeights.e.toFixed(2)}, v=${adaptiveWeights.v.toFixed(2)} (intent: ${dominantIntent})`);
+
+    const queryTerms = this.tokenize(query);
+    const candidateIds = new Set<string>();
+    for (const term of queryTerms) {
+      const docs = this.invertedIndex.get(term);
+      if (docs) {
+        for (const id of docs.keys()) candidateIds.add(id);
+      }
+    }
+    if (candidateIds.size === 0) {
+      console.log('[EpisodicMemory] No candidates found, returning recent memories');
+      return this.getRecentMemoriesFromDB(limit);
+    }
+
+    const now = Date.now();
+    const scores: Array<{ id: string; score: number }> = [];
+
+    for (const id of candidateIds) {
+      const memory = await this.getMemoryById(id);
+      if (!memory) continue;
+
+      // 1. TF-IDF 得分
+      let tfidf = 0;
+      for (const term of queryTerms) {
+        const tf = this.docTermFreq.get(id)?.get(term) || 0;
+        const idf = this.idfCache.get(term) || 1;
+        tfidf += tf * idf;
+      }
+      // 归一化（简单除以查询词数）
+      const normTfidf = Math.min(tfidf / queryTerms.length, 1);
+
+      // 2. 时间衰减得分
+      const ageDays = (now - memory.timestamp) / (1000 * 3600 * 24);
+      const timeScore = Math.exp(-ageDays * this.decayLambda); // λ=0.1，半衰期约7天
+
+      // 3. 实体匹配加分
+      let entityBonus = 0;
+      if (memory.entities && memory.entities.length) {
+        for (const term of queryTerms) {
+          if (memory.entities.some(e => e.toLowerCase().includes(term))) {
+            entityBonus += 0.2;
+          }
+        }
+      }
+      entityBonus = Math.min(entityBonus, 0.5);
+
+      // 最终得分（使用自适应权重）
+      const finalScore = 
+        normTfidf * adaptiveWeights.k +
+        timeScore * adaptiveWeights.t +
+        entityBonus * adaptiveWeights.e;
+      
+      scores.push({ id, score: finalScore });
+    }
+
+    scores.sort((a, b) => b.score - a.score);
+    const topIds = scores.slice(0, limit).map(s => s.id);
+    if (topIds.length === 0) return [];
+    
+    // 根据 ID 获取完整记忆对象
+    const results: EpisodicMemoryRecord[] = [];
+    for (const id of topIds) {
+      const mem = await this.getMemoryById(id);
+      if (mem) results.push(mem);
+    }
+    return results;
+  }
+
+  /**
+   * 根据 ID 获取单条记忆
+   */
+  private async getMemoryById(id: string): Promise<EpisodicMemoryRecord | null> {
+    try {
+      const db = this.dbManager.getDatabase();
+      const sql = 'SELECT * FROM episodic_memory WHERE id = ? LIMIT 1';
+      const stmt = db.prepare(sql);
+      stmt.bind([id]);
+      
+      if (stmt.step()) {
+        const row = stmt.getAsObject();
+        stmt.free();
+        return this.objectToMemory(row);
+      }
+      stmt.free();
+      return null;
+    } catch (error) {
+      console.error('[EpisodicMemory] getMemoryById error:', error);
+      return null;
+    }
+  }
+
+  /**
+   * LIKE 查询降级方案
+   */
+  private async searchWithLikeFallback(query: string, limit: number): Promise<EpisodicMemoryRecord[]> {
+    try {
+      const db = this.dbManager.getDatabase();
+      const projectFingerprint = await this.projectFingerprint.getCurrentProjectFingerprint();
+      if (!projectFingerprint) return [];
+
+      const terms = this.tokenize(query);
+      if (terms.length === 0) return this.getRecentMemoriesFromDB(limit);
+
+      const likeConditions = terms.map(() => '(em.summary LIKE ? OR em.entities LIKE ? OR em.decision LIKE ?)').join(' AND ');
+      const likeParams = terms.flatMap(t => [`%${t}%`, `%${t}%`, `%${t}%`]);
+      
+      const sql = `
+        SELECT em.* FROM episodic_memory em
+        WHERE em.project_fingerprint = ? AND (${likeConditions})
+        ORDER BY em.timestamp DESC
+        LIMIT ?
+      `;
+
+      const stmt = db.prepare(sql);
+      stmt.bind([projectFingerprint, ...likeParams, limit]);
+      
+      const memories: EpisodicMemoryRecord[] = [];
+      while (stmt.step()) {
+        const row = stmt.getAsObject();
+        memories.push(this.objectToMemory(row));
+      }
+      stmt.free();
+      return memories;
+    } catch (error) {
+      console.error('[EpisodicMemory] LIKE fallback error:', error);
+      return this.getRecentMemoriesFromDB(limit);
+    }
+  }
+
+  /**
+   * 从数据库获取最近记忆
+   */
+  private async getRecentMemoriesFromDB(limit: number): Promise<EpisodicMemoryRecord[]> {
+    try {
+      const db = this.dbManager.getDatabase();
+      const projectFingerprint = await this.projectFingerprint.getCurrentProjectFingerprint();
+      if (!projectFingerprint) return [];
+
+      const sql = `
+        SELECT em.* FROM episodic_memory em
+        WHERE em.project_fingerprint = ?
+        ORDER BY em.timestamp DESC
+        LIMIT ?
+      `;
+
+      const stmt = db.prepare(sql);
+      stmt.bind([projectFingerprint, limit]);
+      
+      const memories: EpisodicMemoryRecord[] = [];
+      while (stmt.step()) {
+        const row = stmt.getAsObject();
+        memories.push(this.objectToMemory(row));
+      }
+      stmt.free();
+      return memories;
+    } catch (error) {
+      console.error('[EpisodicMemory] getRecentMemoriesFromDB error:', error);
+      return [];
+    }
+  }
+
+  // ========== 初始化控制 ==========
+
+  /**
+   * 显式初始化（由外部调用，如extension.ts）
+   */
+  async initialize(): Promise<void> {
+    if (this.initPromise) return this.initPromise;
+    this.initPromise = this.buildIndex();
+    await this.initPromise;
+    this.indexReady = true;
+    console.log('[EpisodicMemory] Initialized successfully');
+  }
+
+  /**
+   * 确保已初始化（检索前自动调用）
+   */
+  private async ensureInitialized(): Promise<void> {
+    if (!this.indexReady && this.initPromise) {
+      await this.initPromise;
+    }
+  }
+
+  /**
+   * 清理资源（插件停用时调用）
+   */
+  async dispose(): Promise<void> {
+    this.invertedIndex.clear();
+    this.docTermFreq.clear();
+    this.idfCache.clear();
+    this.vectorCache.clear();
+    this.indexReady = false;
+    this.initPromise = null;
+    console.log('[EpisodicMemory] Disposed');
   }
 }

@@ -24,12 +24,16 @@
 ### 2026-04-17
 
 | 日期 | 问题 | 严重程度 | 原因 | 修复方案 | 状态 | 相关文件 |
-|------|------|---------|------|---------|------|---------|
+|------|------|---------|------|---------|------|----------|
+| 2026-04-17 | 记忆检索权重固定，无法适应用户习惯 | P1 | 缺乏意图感知和自适应机制 | 实现意图分析器+专家选择器，基于反馈动态调整权重 | ✅ 已集成到 EpisodicMemory | src/core/memory/types.ts, IntentAnalyzer.ts, ExpertSelector.ts, EpisodicMemory.ts |
+| 2026-04-17 | 记忆检索无法理解时间指代和语义 | P0 | 纯关键词匹配，无近因性加权，实体未有效利用 | 实现混合检索系统：时间指代检测 + TF-IDF + 时间衰减 + 实体加权 | ✅ 已修复 | src/core/memory/EpisodicMemory.ts:219-830 |
 | 2026-04-17 | ContextBuilder.messages使用any[]类型 | P0 | 缺乏类型安全 | 改为ChatMessage[]接口 | ✅ 已修复 | src/chat/ContextBuilder.ts:21 |
 | 2026-04-17 | ContextBuilder console.warn调试日志 | P1 | 生产环境遗留 | 移除console.warn，静默处理错误 | ✅ 已修复 | src/chat/ContextBuilder.ts:80 |
 | 2026-04-17 | assessMessageComplexity硬编码阈值 | P1 | 可维护性差 | 提取为COMPLEXITY_CONSTANTS常量对象 | ✅ 已修复 | src/chat/ContextBuilder.ts:9-15 |
 | 2026-04-17 | ChatViewProvider消息类型不明确 | P0 | any[]导致类型不安全 | 定义ChatMessage接口并应用 | ✅ 已修复 | src/chat/ChatViewProvider.ts:13-19 |
 | 2026-04-17 | 审计日志durationMs硬编码为0 | P1 | 数据不准确 | 使用Date.now()计算实际耗时 | ✅ 已修复 | src/chat/ChatViewProvider.ts:186-187 |
+| 2026-04-17 | ChatViewHtml正则表达式模板字符串转义错误 | P0 | 模板字符串中直接使用正则字面量导致解析失败 | 改用new RegExp()构造函数避免转义问题 | ✅ 已修复 | src/chat/ChatViewHtml.ts:438-443 |
+| 2026-04-17 | FTS5不可用导致跨会话记忆失效 | P0 | sql.js开发环境不支持FTS5模块，search()返回空数组 | 添加降级方案：FTS5失败时自动切换到LIKE查询 | ✅ 已修复 | src/core/memory/EpisodicMemory.ts:195-303 |
 
 ### 2026-04-16
 
@@ -62,11 +66,11 @@
 
 | 指标 | 数值 |
 |------|------|
-| 总问题数 | 16 |
-| 已修复 | 16 |
+| 总问题数 | 20 |
+| 已修复 | 20（19个完全修复，1个核心功能已完成） |
 | 待修复 | 0 |
-| P0 严重 | 7（全部修复） |
-| P1 警告 | 7（全部修复） |
+| P0 严重 | 10（全部修复） |
+| P1 警告 | 8（全部完成核心功能） |
 | P2 建议 | 2（全部修复） |
 
 ---

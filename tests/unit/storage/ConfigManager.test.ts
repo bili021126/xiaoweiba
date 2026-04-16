@@ -258,6 +258,11 @@ security:
     });
 
     it('应将API Key存储到SecretStorage', async () => {
+      // Mock showInformationMessage to return a thenable
+      (vscode.window.showInformationMessage as jest.Mock).mockReturnValue({
+        then: jest.fn().mockResolvedValue(undefined)
+      });
+
       await configManager.setApiKey('deepseek', 'new-api-key');
 
       expect(mockSecretStorage.store).toHaveBeenCalledWith('deepseek_api_key', 'new-api-key');

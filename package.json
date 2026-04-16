@@ -4,12 +4,14 @@
   "description": "以记忆蒸馏为内核的个人 AI 编程助手",
   "version": "0.1.0",
   "publisher": "xiaoweiba",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/xiaoweiba/xiaoweiba.git"
   },
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.85.0",
+    "node": ">=18.0.0"
   },
   "categories": [
     "AI",
@@ -183,7 +185,6 @@
     "typescript": "^5.3.2"
   },
   "dependencies": {
-    "dotenv": "^17.4.2",
     "js-yaml": "^4.1.0",
     "openai": "^6.34.0",
     "pino": "^8.17.1",

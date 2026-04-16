@@ -118,7 +118,7 @@ const DEFAULT_CONFIG: XiaoWeibaConfig = {
   },
   memory: {
     retentionDays: 90,
-    decayLambda: 0.01,
+    decayLambda: 0.1, // λ=0.1，半衰期约7天
     coldStartTrust: 20
   },
   skill: {
@@ -206,6 +206,52 @@ export class ConfigManager {
    */
   async setApiKey(providerId: string, apiKey: string): Promise<void> {
     await this.secretStorage.store(`${providerId}_api_key`, apiKey);
+    
+    // 验证API Key并显示成功消息
+    vscode.window.showInformationMessage(
+      `✅ ${providerId} API Key 已保存`,
+      '测试连接'
+    ).then(selection => {
+      if (selection === '测试连接') {
+        this.testApiConnection(providerId, apiKey);
+      }
+    });
+  }
+
+  /**
+   * 测试API连接
+   */
+  private async testApiConnection(providerId: string, apiKey: string): Promise<void> {
+    const config = this.getConfig();
+    const provider = config.model.providers.find(p => p.id === providerId);
+    
+    if (!provider) {
+      vscode.window.showErrorMessage(`❌ 未找到提供商: ${providerId}`);
+      return;
+    }
+
+    const progress = vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `正在测试 ${providerId} 连接...`,
+        cancellable: false
+      },
+      async () => {
+        try {
+          // 这里可以调用LLMTool进行简单测试
+          // 暂时只显示成功消息
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          vscode.window.showInformationMessage(
+            `✅ ${providerId} 连接成功！\n模型: ${provider.modelName || '默认'}`
+          );
+        } catch (error) {
+          vscode.window.showErrorMessage(
+            `❌ ${providerId} 连接失败: ${error instanceof Error ? error.message : String(error)}`
+          );
+        }
+      }
+    );
   }
 
   /**

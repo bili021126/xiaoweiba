@@ -66,12 +66,12 @@ describe('ProjectFingerprint', () => {
       expect(result!.length).toBe(64);
     });
 
-    it('should return null when no workspace folders', async () => {
+    it('should return default fingerprint when no workspace folders', async () => {
       mockWorkspaceFolders = undefined;
 
       const result = await fingerprint.getCurrentProjectFingerprint();
 
-      expect(result).toBeNull();
+      expect(result).toBe('default_workspace');
     });
 
     it('should cache results', async () => {
