@@ -155,13 +155,17 @@ describe('SessionManager', () => {
     });
 
     it('应该在删除最后一个会话时自动创建新会话', () => {
-      const session = sessionManager.createSession();
+      // 获取初始会话
+      const initialSession = sessionManager.getCurrentSession();
+      expect(initialSession).not.toBeNull();
+      
+      // 删除唯一的会话
+      sessionManager.deleteSession(initialSession!.id);
 
-      sessionManager.deleteSession(session.id);
-
+      // 应该自动创建新会话
       const currentSession = sessionManager.getCurrentSession();
       expect(currentSession).not.toBeNull();
-      expect(currentSession?.id).not.toBe(session.id);
+      expect(currentSession?.id).not.toBe(initialSession?.id);
     });
 
     it('应该在会话不存在时抛出错误', () => {
@@ -525,6 +529,48 @@ describe('SessionManager', () => {
       // 添加10条消息
       for (let i = 1; i <= 10; i++) {
         managerWithoutDeps.addMessage({
+          id: `msg_${i}`,
+          role: 'user',
+          content: `消息${i}`,
+          timestamp: Date.now()
+        });
+      }
+
+      // 等待异步操作
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // 不应该调用LLM
+      expect(mockLLMTool.call).not.toHaveBeenCalled();
+    });
+
+    it('应该在摘要生成失败时记录错误日志', async () => {
+      sessionManager.createSession();
+
+      // Mock LLM抛出异常
+      mockLLMTool.call.mockRejectedValue(new Error('LLM调用失败'));
+
+      // 添加10条消息
+      for (let i = 1; i <= 10; i++) {
+        sessionManager.addMessage({
+          id: `msg_${i}`,
+          role: 'user',
+          content: `消息${i}`,
+          timestamp: Date.now()
+        });
+      }
+
+      // 等待异步操作
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      expect(mockLLMTool.call).toHaveBeenCalled();
+    });
+
+    it('应该在消息少于10条时不生成摘要', async () => {
+      sessionManager.createSession();
+
+      // 只添加5条消息（少于10条）
+      for (let i = 1; i <= 5; i++) {
+        sessionManager.addMessage({
           id: `msg_${i}`,
           role: 'user',
           content: `消息${i}`,

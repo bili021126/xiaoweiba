@@ -16,13 +16,3 @@
 **/*.txt
 **/.env*
 **/esbuild.js
-node_modules/.bin/**
-node_modules/*/.github/**
-node_modules/*/.gitignore
-node_modules/*/README.md
-node_modules/*/LICENSE*
-node_modules/*/CHANGELOG*
-node_modules/*/test/**
-node_modules/*/tests/**
-node_modules/*/dist/**/*.map
-node_modules/*/*.md

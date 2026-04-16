@@ -153,6 +153,71 @@ describe('ChatViewProvider - 聊天视图提供者', () => {
       await chatViewProvider.resolveWebviewView(mockWebviewView as any, {} as any, {} as any);
       await new Promise(resolve => setTimeout(resolve, 10));
     });
+
+    it('应该处理newSession消息', async () => {
+      const mockWebviewView = {
+        webview: {
+          options: {},
+          html: '',
+          onDidReceiveMessage: jest.fn((cb) => {
+            setTimeout(() => cb({ type: 'newSession' }), 0);
+          }),
+          postMessage: jest.fn()
+        }
+      };
+
+      await chatViewProvider.resolveWebviewView(mockWebviewView as any, {} as any, {} as any);
+      await new Promise(resolve => setTimeout(resolve, 10));
+      expect(mockWebviewView.webview.postMessage).toHaveBeenCalled();
+    });
+
+    it('应该在初始化失败时隐藏loading', async () => {
+      const mockWebviewView = {
+        webview: {
+          options: {},
+          html: '',
+          onDidReceiveMessage: jest.fn(),
+          postMessage: jest.fn()
+        }
+      };
+
+      // Mock loadCurrentSession抛出异常
+      jest.spyOn(chatViewProvider as any, 'loadCurrentSession').mockRejectedValue(
+        new Error('加载失败')
+      );
+
+      await chatViewProvider.resolveWebviewView(mockWebviewView as any, {} as any, {} as any);
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      expect(mockWebviewView.webview.postMessage).toHaveBeenCalledWith(
+        { type: 'hideLoading' }
+      );
+    });
+
+    it('应该处理带options的sendMessage消息', async () => {
+      const mockWebviewView = {
+        webview: {
+          options: {},
+          html: '',
+          onDidReceiveMessage: jest.fn((cb) => {
+            setTimeout(() => cb({ 
+              type: 'sendMessage', 
+              text: 'test',
+              options: { command: '/explain' }
+            }), 0);
+          }),
+          postMessage: jest.fn()
+        }
+      };
+
+      // Mock handleUserMessage
+      jest.spyOn(chatViewProvider, 'handleUserMessage').mockResolvedValue();
+
+      await chatViewProvider.resolveWebviewView(mockWebviewView as any, {} as any, {} as any);
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      expect(chatViewProvider.handleUserMessage).toHaveBeenCalledWith('test', { command: '/explain' });
+    });
   });
 
   describe('handleUserMessage - 处理用户消息', () => {
@@ -368,7 +433,7 @@ describe('ChatViewProvider - 聊天视图提供者', () => {
   });
 
   describe('getHtmlForWebview - Webview HTML生成', () => {
-    it('应该生成包含必要CDN的HTML', () => {
+    it('应该生成包含基本结构的HTML', () => {
       const mockWebview = {
         cspSource: 'vscode-resource:',
         asWebviewUri: jest.fn()
@@ -376,13 +441,15 @@ describe('ChatViewProvider - 聊天视图提供者', () => {
 
       const html = (chatViewProvider as any).getHtmlForWebview(mockWebview);
 
-      expect(html).toContain('DOMPurify');
-      expect(html).toContain('marked');
-      expect(html).toContain('highlight.js');
+      expect(html).toContain('<!DOCTYPE html>');
+      expect(html).toContain('小尾巴AI助手');
+      expect(html).toContain('messagesContainer');
+      expect(html).toContain('messageInput');
+      expect(html).toContain('sendBtn');
       expect(html).toContain('Content-Security-Policy');
     });
 
-    it('应该配置严格的CSP策略', () => {
+    it('应该配置严格的CSP策略（无CDN）', () => {
       const mockWebview = {
         cspSource: 'vscode-resource:',
         asWebviewUri: jest.fn()
@@ -390,12 +457,14 @@ describe('ChatViewProvider - 聊天视图提供者', () => {
 
       const html = (chatViewProvider as any).getHtmlForWebview(mockWebview);
 
-      expect(html).toContain("script-src https://cdn.jsdelivr.net");
-      // style-src 需要 'unsafe-inline' 以支持动态样式
-      expect(html).toContain("style-src");
-      expect(html).toContain("'unsafe-inline'");
-      // 但 script-src 不应该有 'unsafe-inline'
-      expect(html).toMatch(/script-src https:\/\/cdn\.jsdelivr\.net(?!.*'unsafe-inline')/);
+      // 不应包含CDN引用
+      expect(html).not.toContain('cdn.jsdelivr.net');
+      expect(html).not.toContain('DOMPurify');
+      expect(html).not.toContain('marked');
+      
+      // CSP应只允许本地资源
+      expect(html).toContain("script-src vscode-resource: 'unsafe-inline'");
+      expect(html).toContain("style-src vscode-resource: 'unsafe-inline'");
     });
   });
 });

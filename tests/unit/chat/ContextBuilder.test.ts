@@ -244,4 +244,41 @@ describe('ContextBuilder - 上下文构建器', () => {
       expect(mockSessionManager.getRecentMessages).toHaveBeenCalledWith(5);
     });
   });
+
+  describe('assessMessageComplexity - 消息复杂度评估', () => {
+    it('应该识别短消息为低复杂度', () => {
+      const complexity = (contextBuilder as any).assessMessageComplexity('你好');
+      expect(complexity).toBe(0);
+    });
+
+    it('应该识别长消息为中高复杂度', () => {
+      const longMessage = 'a'.repeat(250);
+      const complexity = (contextBuilder as any).assessMessageComplexity(longMessage);
+      expect(complexity).toBeGreaterThanOrEqual(0.3);
+    });
+
+    it('应该识别代码块增加复杂度', () => {
+      const message = '```typescript\nconst x = 1;\n```';
+      const complexity = (contextBuilder as any).assessMessageComplexity(message);
+      expect(complexity).toBeGreaterThanOrEqual(0.3);
+    });
+
+    it('应该识别技术术语增加复杂度', () => {
+      const message = 'How to implement a function with interface and class?';
+      const complexity = (contextBuilder as any).assessMessageComplexity(message);
+      expect(complexity).toBeGreaterThanOrEqual(0.2);
+    });
+
+    it('应该识别多个问题增加复杂度', () => {
+      const message = 'What is this? How does it work? Why use it?';
+      const complexity = (contextBuilder as any).assessMessageComplexity(message);
+      expect(complexity).toBeGreaterThanOrEqual(0.2);
+    });
+
+    it('应该限制最大复杂度为1', () => {
+      const complexMessage = '```typescript\nclass Test {\n  constructor() {}\n}\n``` What is this? How does it work? Why use it? ' + 'a'.repeat(200);
+      const complexity = (contextBuilder as any).assessMessageComplexity(complexMessage);
+      expect(complexity).toBeLessThanOrEqual(1);
+    });
+  });
 });

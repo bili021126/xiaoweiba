@@ -1,7 +1,7 @@
 # 小尾巴（XiaoWeiba）问题记录
 
 **版本**: 1.0  
-**最后更新**: 2026-04-16
+**最后更新**: 2026-04-17
 
 ---
 
@@ -20,6 +20,16 @@
 ---
 
 ## 已修复问题
+
+### 2026-04-17
+
+| 日期 | 问题 | 严重程度 | 原因 | 修复方案 | 状态 | 相关文件 |
+|------|------|---------|------|---------|------|---------|
+| 2026-04-17 | ContextBuilder.messages使用any[]类型 | P0 | 缺乏类型安全 | 改为ChatMessage[]接口 | ✅ 已修复 | src/chat/ContextBuilder.ts:21 |
+| 2026-04-17 | ContextBuilder console.warn调试日志 | P1 | 生产环境遗留 | 移除console.warn，静默处理错误 | ✅ 已修复 | src/chat/ContextBuilder.ts:80 |
+| 2026-04-17 | assessMessageComplexity硬编码阈值 | P1 | 可维护性差 | 提取为COMPLEXITY_CONSTANTS常量对象 | ✅ 已修复 | src/chat/ContextBuilder.ts:9-15 |
+| 2026-04-17 | ChatViewProvider消息类型不明确 | P0 | any[]导致类型不安全 | 定义ChatMessage接口并应用 | ✅ 已修复 | src/chat/ChatViewProvider.ts:13-19 |
+| 2026-04-17 | 审计日志durationMs硬编码为0 | P1 | 数据不准确 | 使用Date.now()计算实际耗时 | ✅ 已修复 | src/chat/ChatViewProvider.ts:186-187 |
 
 ### 2026-04-16
 
@@ -52,11 +62,11 @@
 
 | 指标 | 数值 |
 |------|------|
-| 总问题数 | 11 |
-| 已修复 | 11 |
+| 总问题数 | 16 |
+| 已修复 | 16 |
 | 待修复 | 0 |
-| P0 严重 | 5（全部修复） |
-| P1 警告 | 4（全部修复） |
+| P0 严重 | 7（全部修复） |
+| P1 警告 | 7（全部修复） |
 | P2 建议 | 2（全部修复） |
 
 ---

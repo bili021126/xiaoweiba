@@ -346,4 +346,102 @@ describe('LLMTool', () => {
       );
     });
   });
+
+  describe('边界条件测试', () => {
+    it('应该处理空响应', async () => {
+      mockCreate.mockResolvedValue({
+        choices: []
+      });
+
+      const result = await llmTool.call({
+        messages: [{ role: 'user', content: 'test' }]
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('空响应');
+    });
+
+    it('应该处理choices[0]为undefined', async () => {
+      mockCreate.mockResolvedValue({
+        choices: [undefined]
+      });
+
+      const result = await llmTool.call({
+        messages: [{ role: 'user', content: 'test' }]
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data).toBe('');
+    });
+
+    it('应该处理Ollama不需要API Key', async () => {
+      // Ollama provider 没有配置apiKey
+      (mockConfigManager.getConfig as jest.Mock).mockReturnValue({
+        model: {
+          default: 'ollama',
+          providers: [
+            {
+              id: 'ollama',
+              apiUrl: 'http://localhost:11434/v1',
+              maxTokens: 2048,
+              temperature: 0.6
+            }
+          ]
+        }
+      });
+      
+      mockCreate.mockResolvedValue({
+        choices: [{ message: { content: 'Ollama response' } }]
+      });
+
+      const result = await llmTool.call({
+        messages: [{ role: 'user', content: 'test' }]
+      });
+
+      expect(result.success).toBe(true);
+    });
+
+    it('应该在流式响应中跳过空content', async () => {
+      let callCount = 0;
+      const mockAsyncIterator = {
+        [Symbol.asyncIterator]() {
+          return {
+            async next() {
+              callCount++;
+              if (callCount === 1) {
+                return { value: { choices: [{ delta: { content: '' } }] }, done: false };
+              } else if (callCount === 2) {
+                return { value: { choices: [{ delta: { content: 'Hello' } }] }, done: false };
+              } else {
+                return { done: true };
+              }
+            }
+          };
+        }
+      };
+
+      mockCreate.mockResolvedValue(mockAsyncIterator);
+
+      const chunks: string[] = [];
+      const result = await llmTool.callStream(
+        { messages: [{ role: 'user', content: 'test' }] },
+        (chunk) => chunks.push(chunk)
+      );
+
+      expect(result.success).toBe(true);
+      expect(chunks).toEqual(['Hello']);
+    });
+
+    it('应该处理流式响应错误', async () => {
+      mockCreate.mockRejectedValue(new Error('Stream error'));
+
+      const result = await llmTool.callStream(
+        { messages: [{ role: 'user', content: 'test' }] },
+        () => {}
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Stream error');
+    });
+  });
 });

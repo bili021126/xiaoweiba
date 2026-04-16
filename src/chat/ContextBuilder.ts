@@ -4,6 +4,17 @@ import { PreferenceMemory, PreferenceRecommendation } from '../core/memory/Prefe
 import { SessionManager, ChatMessage } from './SessionManager';
 
 /**
+ * 消息复杂度评估常量
+ */
+const COMPLEXITY_CONSTANTS = {
+  LONG_MESSAGE_THRESHOLD: 200,
+  CODE_BLOCK_WEIGHT: 0.3,
+  TECHNICAL_TERM_WEIGHT: 0.2,
+  MULTI_QUESTION_WEIGHT: 0.2,
+  MAX_COMPLEXITY: 1
+};
+
+/**
  * 编辑器上下文
  */
 interface EditorContext {
@@ -18,7 +29,7 @@ interface EditorContext {
  * 上下文构建结果
  */
 interface ContextBuildResult {
-  messages: any[];
+  messages: ChatMessage[];
   systemPrompt: string;
 }
 
@@ -50,8 +61,11 @@ export class ContextBuilder {
     const historyMessages = this.sessionManager.getRecentMessages(options.maxHistoryMessages || 5);
 
     // 3. 检索情景记忆（相关记忆）
-    // 如果启用跨会话，则获取更多记忆，然后分割
-    const memoryLimit = options.enableCrossSession ? 6 : 3;
+    // 根据用户消息长度和内容复杂度动态调整检索数量
+    const messageComplexity = this.assessMessageComplexity(options.userMessage);
+    const baseLimit = options.enableCrossSession ? 6 : 3;
+    const memoryLimit = Math.min(baseLimit + (messageComplexity > 0.7 ? 2 : 0), 10);
+    
     const allEpisodes = await this.episodicMemory.search(options.userMessage, {
       limit: memoryLimit
     });
@@ -77,7 +91,7 @@ export class ContextBuilder {
         undefined
       );
     } catch (error) {
-      console.warn('[ContextBuilder] 偏好检索失败:', error);
+      // 偏好检索失败不影响主流程，静默处理
     }
 
     // 6. 构建系统提示
@@ -92,6 +106,32 @@ export class ContextBuilder {
     const messages = this.buildMessages(historyMessages, options.userMessage, editorContext);
 
     return { messages, systemPrompt };
+  }
+
+  /**
+   * 评估消息复杂度（0-1）
+   */
+  private assessMessageComplexity(message: string): number {
+    const length = message.length;
+    const hasCodeBlock = /```/.test(message);
+    const hasTechnicalTerms = /(function|class|interface|type|const|let|var|import|export)/i.test(message);
+    const questionCount = (message.match(/\?/g) || []).length;
+    
+    let complexity = 0;
+    if (length > COMPLEXITY_CONSTANTS.LONG_MESSAGE_THRESHOLD) {
+      complexity += 0.3;
+    }
+    if (hasCodeBlock) {
+      complexity += COMPLEXITY_CONSTANTS.CODE_BLOCK_WEIGHT;
+    }
+    if (hasTechnicalTerms) {
+      complexity += COMPLEXITY_CONSTANTS.TECHNICAL_TERM_WEIGHT;
+    }
+    if (questionCount > 1) {
+      complexity += COMPLEXITY_CONSTANTS.MULTI_QUESTION_WEIGHT;
+    }
+    
+    return Math.min(complexity, COMPLEXITY_CONSTANTS.MAX_COMPLEXITY);
   }
 
   /**
