@@ -248,11 +248,16 @@ export class CodeGenerationCommand {
   private async insertCodeAtCursor(editor: vscode.TextEditor, code: string): Promise<void> {
     const position = editor.selection.active;
     
-    await editor.edit(editBuilder => {
+    const success = await editor.edit(editBuilder => {
       editBuilder.insert(position, code + '\n');
     });
 
-    vscode.window.showInformationMessage('✅ 代码已插入');
+    if (success) {
+      vscode.window.showInformationMessage('✅ 代码已插入');
+    } else {
+      vscode.window.showErrorMessage('❌ 代码插入失败，请重试');
+      console.error('[CodeGenerationCommand] Failed to insert code at cursor');
+    }
   }
 
   /**

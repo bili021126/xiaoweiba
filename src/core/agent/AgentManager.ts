@@ -38,6 +38,9 @@ export class AgentManager {
     if (!registration) {
       throw new Error(`Agent不存在: ${agentId}`);
     }
+    //写一个求和函数，计算1到100的和
+
+
 
     // 如果注销的是当前活跃Agent，切换到下一个
     if (this.activeAgentId === agentId) {

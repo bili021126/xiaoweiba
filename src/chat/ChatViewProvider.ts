@@ -111,6 +111,20 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
 
     try {
+      // 检查是否为命令请求
+      if (options?.command) {
+        await this.executeCommandFromChat(options.command, text);
+        return;
+      }
+
+      // 智能意图识别：分析用户消息，自动执行对应命令
+      const detectedCommand = this.detectIntent(text);
+      if (detectedCommand) {
+        console.log(`[ChatViewProvider] Detected intent: ${detectedCommand}`);
+        await this.executeCommandFromChat(detectedCommand, text);
+        return;
+      }
+
       // 添加用户消息到会�?
       const userMessage = {
         id: `msg_${Date.now()}_user`,
@@ -245,6 +259,70 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       }
 
       assistantMessage.content = `错误: ${error instanceof Error ? error.message : String(error)}`;
+    }
+  }
+
+  /**
+   * 智能意图识别
+   */
+  private detectIntent(message: string): string | null {
+    const lowerMessage = message.toLowerCase();
+    
+    // 代码解释相关关键词
+    if (lowerMessage.includes('解释') || lowerMessage.includes('explain') || 
+        lowerMessage.includes('什么意思') || lowerMessage.includes('这段代码')) {
+      return 'explainCode';
+    }
+    
+    // 提交信息生成相关关键词
+    if (lowerMessage.includes('提交') || lowerMessage.includes('commit') || 
+        lowerMessage.includes('git提交') || lowerMessage.includes('生成提交')) {
+      return 'generateCommit';
+    }
+    
+    // 命名检查相关关键词
+    if (lowerMessage.includes('命名') || lowerMessage.includes('naming') || 
+        lowerMessage.includes('变量名') || lowerMessage.includes('方法名')) {
+      return 'checkNaming';
+    }
+    
+    // 代码生成相关关键词
+    if (lowerMessage.includes('生成') || lowerMessage.includes('create') || 
+        lowerMessage.includes('写一个') || lowerMessage.includes('实现一个') ||
+        lowerMessage.includes('帮我写')) {
+      return 'generateCode';
+    }
+    
+    return null;
+  }
+
+  /**
+   * 从聊天界面执行命令
+   */
+  private async executeCommandFromChat(command: string, context?: string): Promise<void> {
+    console.log(`[ChatViewProvider] Executing command from chat: ${command}`);
+    
+    try {
+      // 根据命令类型执行对应操作
+      switch (command) {
+        case 'explainCode':
+          await vscode.commands.executeCommand('xiaoweiba.explainCode');
+          break;
+        case 'generateCommit':
+          await vscode.commands.executeCommand('xiaoweiba.generateCommit');
+          break;
+        case 'checkNaming':
+          await vscode.commands.executeCommand('xiaoweiba.checkNaming');
+          break;
+        case 'generateCode':
+          await vscode.commands.executeCommand('xiaoweiba.generateCode');
+          break;
+        default:
+          vscode.window.showWarningMessage(`⚠️ 未知命令: ${command}`);
+      }
+    } catch (error) {
+      console.error('[ChatViewProvider] Command execution failed:', error);
+      vscode.window.showErrorMessage(`命令执行失败: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 

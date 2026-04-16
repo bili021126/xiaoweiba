@@ -3,7 +3,7 @@
 
 **版本**: 1.0  
 **最后更新**: 2026-04-17  
-**当前阶段**: 阶段0→1过渡（UI优化+记忆策略增强+FTS5降级）
+**当前阶段**: 阶段0→1过渡（UI优化+记忆策略增强+FTS5降级+人工测试）
 
 ---
 
@@ -198,6 +198,116 @@ LIMIT 6 OFFSET 0
 |------|------|------|
 | FTS5 | 全文索引、速度快、支持复杂查询 | 需要编译时启用 |
 | LIKE | 无需额外配置、兼容性好 | 全表扫描、大数据量慢 |
+
+---
+
+## 7. 依赖清理与打包优化（2026-04-17）
+
+### 依赖优化
+
+移除未使用的依赖，精简package.json：
+
+| 操作 | 说明 |
+|------|------|
+| 移除 `@xenova/transformers` | 向量检索功能未实现 |
+| 移除 `dotenv` | 代码中未使用 |
+| 添加 `node >= 18.0.0` | 明确引擎版本要求 |
+| 添加 `license: MIT` | 完善元数据 |
+
+### 记忆衰减参数修复
+
+修复config.yaml和ConfigManager中的decayLambda不一致问题：
+
+```yaml
+# config.yaml
+memory:
+  decayLambda: 0.1  # 从0.01改为0.1，半衰期约7天
+```
+
+**影响**：确保记忆衰减符合设计预期（λ=0.1时半衰期7天）。
+
+### 打包配置
+
+保持.vscodeignore标准配置，依赖通过vsce --dependencies自动处理：
+
+```bash
+npx vsce package --dependencies
+```
+
+---
+
+## 8. 人工测试进展（2026-04-17）
+
+### 测试完成情况
+
+| 类别 | 用例数 | 已通过 | 待测试 | 完成率 |
+|------|--------|--------|--------|--------|
+| 安装与激活 | 4 | 3 | 1 | 75% |
+| 配置管理 | 5 | 4 | 0 | 80% |
+| 核心功能 | 10 | 6 | 3 | 60% |
+| 记忆系统 | 8 | 2 | 5 | 25% |
+| 聊天界面 | 7 | 2 | 5 | 29% |
+| 其他功能 | 23 | 0 | 23 | 0% |
+| **总计** | **57** | **17** | **37** | **29.8%** |
+
+### 已验证功能
+
+✅ **安装激活**：插件正常加载，无模块错误  
+✅ **API配置**：DeepSeek API Key配置和连接测试正常  
+✅ **代码解释**：F01功能正常工作，记忆记录成功  
+✅ **提交生成**：F02功能稳定，多次验证通过  
+✅ **命名检查**：F03功能可用（格式需优化）  
+✅ **记忆检索**：时间指代查询和实体查询正常  
+✅ **聊天UI**：消息滚动和代码渲染正常  
+
+### 已知问题
+
+| 问题 | 严重程度 | 状态 |
+|------|---------|------|
+| 命令数量不足（6/10） | P1 | 📋 计划中 |
+| 命名检查格式异常 | P2 | 📋 计划中 |
+| 代码生成交互不友好 | P1 | 📋 计划中 |
+| 文件路径上下文缺失 | P1 | 📋 计划中 |
+| 对话无法执行命令 | P0 | 📋 计划中 |
+
+### Bug修复
+
+**TC-017修复**：代码插入失败问题
+
+```typescript
+// 修复前：未检查返回值
+await editor.edit(editBuilder => {
+  editBuilder.insert(position, code + '\n');
+});
+
+// 修复后：检查返回值并提示
+const success = await editor.edit(editBuilder => {
+  editBuilder.insert(position, code + '\n');
+});
+if (success) {
+  vscode.window.showInformationMessage('✅ 代码已插入');
+} else {
+  vscode.window.showErrorMessage('❌ 代码插入失败，请重试');
+}
+```
+
+**ChatViewProvider增强**：添加命令执行支持
+
+```typescript
+// 新增executeCommandFromChat方法
+private async executeCommandFromChat(command: string, context?: string): Promise<void> {
+  switch (command) {
+    case 'explainCode':
+      await vscode.commands.executeCommand('xiaoweiba.explainCode');
+      break;
+    // ... 其他命令
+  }
+}
+```
+
+---
+
+## 9. 后续规划
 
 **结论**：开发环境使用LIKE完全可用，生产环境启用FTS5获得最佳性能。
 
