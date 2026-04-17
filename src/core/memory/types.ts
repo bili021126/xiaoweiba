@@ -48,3 +48,63 @@ export interface ExpertState {
   currentExpert: string;
   feedbackHistory: FeedbackRecord[];
 }
+
+// ========== EpisodicMemory 类型定义 ==========
+
+/**
+ * 任务类型枚举
+ */
+export type TaskType =
+  | 'CODE_EXPLAIN'
+  | 'CODE_GENERATE'
+  | 'TEST_GENERATE'
+  | 'SQL_OPTIMIZE'
+  | 'NAMING_CHECK'
+  | 'COMMIT_GENERATE'
+  | 'SKILL_EXECUTE'
+  | 'WORKFLOW_EXECUTE'
+  | 'CHAT_COMMAND';
+
+/**
+ * 任务结果枚举
+ */
+export type TaskOutcome = 'SUCCESS' | 'FAILED' | 'PARTIAL' | 'CANCELLED';
+
+/**
+ * 记忆层级枚举
+ */
+export type MemoryTier = 'SHORT_TERM' | 'LONG_TERM';
+
+/**
+ * 情景记忆记录
+ */
+export interface EpisodicMemoryRecord {
+  id: string;
+  projectFingerprint: string;
+  timestamp: number;
+  taskType: TaskType;
+  summary: string;
+  entities: string[];
+  decision?: string;
+  outcome: TaskOutcome;
+  finalWeight: number;
+  modelId: string;
+  durationMs: number;
+  metadata?: Record<string, unknown>;
+  vector?: Buffer; // 向量数据（从数据库加载）
+  memoryTier?: MemoryTier; // 记忆层级
+}
+
+/**
+ * 记忆查询选项
+ */
+export interface MemoryQueryOptions {
+  projectFingerprint?: string;
+  taskType?: TaskType;
+  limit?: number;
+  offset?: number;
+  sortBy?: 'timestamp' | 'finalWeight';
+  sortOrder?: 'ASC' | 'DESC';
+  sinceTimestamp?: number;
+  memoryTier?: MemoryTier; // 按层级过滤
+}

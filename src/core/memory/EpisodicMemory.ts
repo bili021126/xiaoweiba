@@ -6,53 +6,12 @@ import { ConfigManager } from '../../storage/ConfigManager';
 import { ErrorCode, createError } from '../../utils/ErrorCodes';
 import { IntentAnalyzer } from './IntentAnalyzer';
 import { ExpertSelector } from './ExpertSelector';
-import { RetrievalWeights } from './types';
-import { MemoryTierManager, MemoryTier } from './MemoryTierManager';
+import { RetrievalWeights, TaskType, TaskOutcome, EpisodicMemoryRecord, MemoryQueryOptions, MemoryTier } from './types';
+import { MemoryTierManager } from './MemoryTierManager';
 import { MemoryDeduplicator } from './MemoryDeduplicator';
 
-export type TaskType =
-  | 'CODE_EXPLAIN'
-  | 'CODE_GENERATE'
-  | 'TEST_GENERATE'
-  | 'SQL_OPTIMIZE'
-  | 'NAMING_CHECK'
-  | 'COMMIT_GENERATE'
-  | 'SKILL_EXECUTE'
-  | 'WORKFLOW_EXECUTE'
-  | 'CHAT_COMMAND';
-
-export type TaskOutcome = 'SUCCESS' | 'FAILED' | 'PARTIAL' | 'CANCELLED';
-
 // 重新导出类型，保持向后兼容
-export { MemoryTier } from './MemoryTierManager';
-
-export interface EpisodicMemoryRecord {
-  id: string;
-  projectFingerprint: string;
-  timestamp: number;
-  taskType: TaskType;
-  summary: string;
-  entities: string[];
-  decision?: string;
-  outcome: TaskOutcome;
-  finalWeight: number;
-  modelId: string;
-  durationMs: number;
-  metadata?: Record<string, unknown>;
-  vector?: Buffer; // 向量数据（从数据库加载）
-  memoryTier?: MemoryTier; // 记忆层级
-}
-
-export interface MemoryQueryOptions {
-  projectFingerprint?: string;
-  taskType?: TaskType;
-  limit?: number;
-  offset?: number;
-  sortBy?: 'timestamp' | 'finalWeight';
-  sortOrder?: 'ASC' | 'DESC';
-  sinceTimestamp?: number;
-  memoryTier?: MemoryTier; // 按层级过滤
-}
+export type { TaskType, TaskOutcome, EpisodicMemoryRecord, MemoryQueryOptions, MemoryTier } from './types';
 
 /**
  * 内存索引结构（用于混合检索）

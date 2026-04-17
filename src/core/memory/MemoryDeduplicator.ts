@@ -1,4 +1,4 @@
-import { EpisodicMemoryRecord } from './EpisodicMemory';
+import { EpisodicMemoryRecord } from './types';
 
 /**
  * 记忆去重器
