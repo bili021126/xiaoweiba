@@ -10,6 +10,23 @@
 import { injectable } from 'tsyringe';
 
 /**
+ * 事件优先级
+ */
+export enum EventPriority {
+  /** P0 - 最高优先级：记忆系统核心事件 */
+  CRITICAL = 0,
+  
+  /** P1 - 高优先级：审计日志、安全事件 */
+  HIGH = 1,
+  
+  /** P2 - 普通优先级：模块动作完成 */
+  NORMAL = 2,
+  
+  /** P3 - 低优先级：调试、统计 */
+  LOW = 3
+}
+
+/**
  * 记忆事件类型定义
  */
 export enum MemoryEventType {
@@ -53,6 +70,7 @@ export interface MemoryEvent {
   timestamp: number;
   payload: EventPayload;
   source?: string; // 事件来源模块
+  priority?: EventPriority; // 事件优先级（默认NORMAL）
 }
 
 /**
@@ -85,6 +103,29 @@ export class EventBus {
   private subscribers: Map<string, EventHandler[]> = new Map();
   private eventHistory: MemoryEvent[] = [];
   private readonly maxHistorySize: number = 1000; // 保留最近1000个事件用于调试
+
+  /**
+   * 获取事件的默认优先级
+   */
+  private getDefaultPriority(eventType: MemoryEventType | string): EventPriority {
+    // 记忆系统核心事件 → P0
+    if (eventType.startsWith('memory.')) {
+      return EventPriority.CRITICAL;
+    }
+    
+    // 审计/安全事件 → P1
+    if (eventType.includes('audit') || eventType.includes('security')) {
+      return EventPriority.HIGH;
+    }
+    
+    // 模块动作 → P2
+    if (eventType.startsWith('module.')) {
+      return EventPriority.NORMAL;
+    }
+    
+    // 其他 → P3
+    return EventPriority.LOW;
+  }
 
   /**
    * 订阅事件
@@ -124,6 +165,11 @@ export class EventBus {
       event.timestamp = Date.now();
     }
     
+    // 设置默认优先级（如果未提供）
+    if (event.priority === undefined) {
+      event.priority = this.getDefaultPriority(event.type);
+    }
+    
     // 记录到历史
     this.eventHistory.push(event);
     if (this.eventHistory.length > this.maxHistorySize) {
@@ -138,19 +184,25 @@ export class EventBus {
       return;
     }
     
-    console.log(`[EventBus] Publishing ${event.type} to ${handlers.length} handler(s)`);
+    console.log(`[EventBus] Publishing ${event.type} (P${event.priority}) to ${handlers.length} handler(s)`);
     
-    // 并行执行所有处理器（允许异步）
-    const promises = handlers.map(async (handler) => {
-      try {
+    // 使用 Promise.allSettled 保证错误隔离
+    const results = await Promise.allSettled(
+      handlers.map(async (handler) => {
         await handler(event);
-      } catch (error) {
-        console.error(`[EventBus] Handler error for ${event.type}:`, error);
-        // 不抛出错误，避免影响其他处理器
-      }
-    });
+      })
+    );
     
-    await Promise.all(promises);
+    // 记录失败的 handler（不抛出错误）
+    const failures = results.filter(r => r.status === 'rejected');
+    if (failures.length > 0) {
+      console.error(`[EventBus] ${failures.length}/${results.length} handlers failed for ${event.type}`);
+      failures.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          console.error(`[EventBus] Handler #${index} error:`, result.reason);
+        }
+      });
+    }
     
     const duration = Date.now() - startTime;
     console.debug(`[EventBus] Event ${event.type} handled in ${duration}ms`);
