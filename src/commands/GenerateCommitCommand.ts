@@ -175,8 +175,22 @@ ${truncatedDiff}
 
     // 清理返回结果，去除可能的 markdown 代码块标记
     let commitMessage = result.data.trim();
-    commitMessage = commitMessage.replace(/^```commit\s*/m, '').replace(/```\s*$/m, '');
-    commitMessage = commitMessage.replace(/^```\s*/m, '').replace(/```\s*$/m, '');
+    
+    // 移除所有可能的 Markdown 代码块标记（更鲁棒的解析）
+    commitMessage = commitMessage
+      .replace(/^```[a-z]*\s*/i, '')  // 开头的代码块标记
+      .replace(/```\s*$/i, '')         // 结尾的代码块标记
+      .trim();
+    
+    // 如果包含 Conventional Commits 格式行，提取第一行非空
+    const lines = commitMessage.split('\n').filter(l => l.trim());
+    const conventionalLine = lines.find(l => /^(feat|fix|docs|style|refactor|test|chore)(\(.+\))?:/.test(l));
+    
+    if (conventionalLine) {
+      commitMessage = conventionalLine;
+    } else if (lines.length > 0) {
+      commitMessage = lines[0];
+    }
     
     commitMessage = commitMessage.trim();
     
@@ -234,23 +248,36 @@ ${truncatedDiff}
     // 复制到剪贴板
     await vscode.env.clipboard.writeText(commitMessage);
 
-    // 如果有未暂存的变更，询问是否自动暂存
-    const { stdout: unstagedFiles } = await execAsync('git diff --name-only', { cwd: workspacePath });
-    
-    if (unstagedFiles.trim()) {
-      const shouldStage = await vscode.window.showWarningMessage(
-        '检测到未暂存的文件，是否自动暂存所有变更？',
-        { modal: true },
-        '是',
-        '否'
-      );
+    // 1. 检查是否在 Git 仓库
+    try {
+      await execAsync('git rev-parse --git-dir', { cwd: workspacePath });
+    } catch {
+      vscode.window.showErrorMessage('当前工作区不是 Git 仓库');
+      return;
+    }
 
-      if (shouldStage === '是') {
+    // 2. 检查是否有变更（包括未暂存）
+    const { stdout: status } = await execAsync('git status --porcelain', { cwd: workspacePath });
+    if (!status.trim()) {
+      vscode.window.showInformationMessage('没有需要提交的变更');
+      return;
+    }
+
+    // 3. 自动暂存所有变更（询问用户）
+    const unstaged = status.split('\n').filter(l => l.match(/^[ MARC]/) && !l.startsWith('M  ') && !l.startsWith('A  '));
+    if (unstaged.length > 0) {
+      const choice = await vscode.window.showWarningMessage(
+        `有 ${unstaged.length} 个未暂存的文件，是否暂存并提交？`,
+        '是', '否'
+      );
+      if (choice === '是') {
         await execAsync('git add .', { cwd: workspacePath });
+      } else {
+        return;
       }
     }
 
-    // 执行提交
+    // 4. 执行提交
     try {
       await execAsync(`git commit -m "${commitMessage.replace(/"/g, '\\"')}"`, { cwd: workspacePath });
       vscode.window.showInformationMessage('提交成功！');

@@ -80,6 +80,14 @@ export class SessionManager {
       throw new Error(`会话不存在: ${sessionId}`);
     }
 
+    // 切换前对旧会话生成摘要（如果消息数>=5）
+    const oldSession = this.getCurrentSession();
+    if (oldSession && oldSession.messages.length >= 5) {
+      this.summarizeSessionLocal(oldSession).catch(err => {
+        console.warn('[SessionManager] 会话摘要生成失败:', err);
+      });
+    }
+
     this.currentSessionId = sessionId;
     this.persistSessions();
   }
@@ -90,6 +98,14 @@ export class SessionManager {
   deleteSession(sessionId: string): void {
     if (!this.sessions.has(sessionId)) {
       throw new Error(`会话不存在: ${sessionId}`);
+    }
+
+    // 删除前生成摘要（如果消息数>=5）
+    const session = this.sessions.get(sessionId);
+    if (session && session.messages.length >= 5) {
+      this.summarizeSessionLocal(session).catch(err => {
+        console.warn('[SessionManager] 会话摘要生成失败:', err);
+      });
     }
 
     this.sessions.delete(sessionId);
@@ -175,7 +191,8 @@ export class SessionManager {
   }
 
   /**
-   * 生成会话摘要并存储到情景记忆
+   * 生成会话摘要并存储到情景记忆（使用LLM）
+   * @deprecated 已改用summarizeSessionLocal实现零API成本
    */
   private async summarizeSession(session: ChatSession): Promise<void> {
     if (!this.llmTool || !this.episodicMemory) {
@@ -238,6 +255,65 @@ ${conversationText}
     const summary = summaryMatch ? summaryMatch[1].trim() : text.substring(0, 50);
     const entitiesStr = entitiesMatch ? entitiesMatch[1].trim() : '';
     const entities = entitiesStr.split(/[,，]/).map(e => e.trim()).filter(e => e.length > 0);
+
+    return { summary, entities };
+  }
+
+  /**
+   * 使用本地规则生成会话摘要（零API成本）
+   */
+  private async summarizeSessionLocal(session: ChatSession): Promise<void> {
+    if (!this.episodicMemory) {
+      return; // EpisodicMemory未初始化，跳过
+    }
+
+    if (session.messages.length < 5) {
+      return; // 消息太少，不生成摘要
+    }
+
+    try {
+      const { summary, entities } = this.generateLocalSummary(session);
+
+      // 记录到情景记忆
+      await this.episodicMemory.record({
+        taskType: 'CHAT' as any,
+        summary,
+        entities,
+        outcome: 'SUCCESS',
+        modelId: 'local-rule', // 标记为本地规则生成
+        durationMs: 0,
+        metadata: { sessionId: session.id }
+      });
+
+      console.log('[SessionManager] 本地规则摘要生成成功:', summary);
+    } catch (error) {
+      console.error('[SessionManager] 本地规则摘要生成失败:', error);
+    }
+  }
+
+  /**
+   * 使用本地规则生成会话摘要
+   */
+  private generateLocalSummary(session: ChatSession): { summary: string; entities: string[] } {
+    const userMessages = session.messages
+      .filter(m => m.role === 'user')
+      .map(m => m.content);
+
+    if (userMessages.length === 0) {
+      return { summary: '空会话', entities: [] };
+    }
+
+    // 规则：取第一条用户消息的前30字 + 最后一条用户消息的关键词
+    const first = userMessages[0]?.slice(0, 30) || '';
+    const last = userMessages[userMessages.length - 1]?.slice(0, 20) || '';
+
+    // 提取关键实体（简单正则匹配技术名词）
+    const allText = userMessages.join(' ');
+    const techTerms = allText.match(/\b(function|class|interface|type|const|let|import|export|async|await|Promise|Array|Object|string|number|boolean|void|null|undefined)\b/gi) || [];
+    const uniqueTerms = [...new Set(techTerms)].slice(0, 5);
+
+    const summary = `${first} ... ${last}`.slice(0, 80);
+    const entities = uniqueTerms;
 
     return { summary, entities };
   }
