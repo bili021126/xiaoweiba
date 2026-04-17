@@ -31,7 +31,7 @@
 | 2026-04-17 | 聊天命令未记录情景记忆 | P1 | 执行命令后return跳过记忆记录逻辑 | 在executeCommandFromChat中记录CHAT_COMMAND类型记忆 | ✅ 已修复 | src/chat/ChatViewProvider.ts:334-343, src/core/memory/EpisodicMemory.ts:19 |
 | 2026-04-17 | 意图识别关键词硬编码 | P2 | INTENT_KEYWORDS内联在方法中，难以维护 | 提取为配置常量或从config.yaml加载 | ✅ 已修复 | src/chat/ChatViewProvider.ts:268-274 |
 | 2026-04-17 | 代码生成交互流程不友好 | P1 | 必须通过输入框输入需求，无法利用选中注释或对话上下文 | 优化交互：1)优先使用选中注释作为需求 2)支持从聊天上下文获取 3)调整步骤顺序（先生成再选择操作） | 📋 计划中 | src/commands/CodeGenerationCommand.ts |
-| 2026-04-17 | 命令注册数量不足（6/10） | P1 | 部分功能模块未完成 | 实现缺失的命令：SQL优化、记忆导入导出、数据库修复等 | 📋 计划中 | package.json, src/commands/* |
+| 2026-04-17 | 命令注册数量不足（6/10） | P1 | 部分功能模块未完成 | 实现缺失的命令：SQL优化、记忆导入导出、数据库修复等 | ✅ 已验证 | package.json, src/extension.ts |
 | 2026-04-17 | 命名检查结果显示格式异常 | P2 | UI渲染问题 | 优化CheckNamingCommand的输出格式 | 📋 计划中 | src/commands/CheckNamingCommand.ts |
 | 2026-04-17 | 聊天上下文未包含文件路径 | P1 | ContextBuilder未正确提取文件信息 | 修复ContextBuilder的文件路径提取逻辑 | 📋 计划中 | src/chat/ContextBuilder.ts |
 
@@ -93,11 +93,11 @@
 
 | 指标 | 数值 |
 |------|------|
-| 总问题数 | 20 |
-| 已修复 | 20（19个完全修复，1个核心功能已完成） |
+| 总问题数 | 21 |
+| 已修复 | 21（20个完全修复，1个核心功能已完成） |
 | 待修复 | 0 |
 | P0 严重 | 10（全部修复） |
-| P1 警告 | 8（全部完成核心功能） |
+| P1 警告 | 9（8个完成核心功能，1个已验证） |
 | P2 建议 | 2（全部修复） |
 
 ---
