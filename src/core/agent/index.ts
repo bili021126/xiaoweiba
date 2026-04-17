@@ -1,3 +1,3 @@
-export { IAgent, AgentCapability, AgentType, AgentRegistration } from './IAgent';
+export { IAgent, AgentCapability, AgentMetadata, AgentResult, AgentInput, AgentFactory, AgentRegistration } from './IAgent';
 export { AgentManager } from './AgentManager';
 export { ChatAgent } from './ChatAgent';
