@@ -84,16 +84,25 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       }
     });
 
-    // 异步加载会话数据（不阻塞视图显示�?
+    // 异步加载会话数据（不阻塞视图显示）
+    const initTimeout = setTimeout(() => {
+      console.warn('[ChatViewProvider] Initialization timeout, forcing hide loading');
+      if (this.view) {
+        this.view.webview.postMessage({ type: 'hideLoading' });
+      }
+    }, 5000); // 5秒超时
+
     Promise.all([
       this.loadCurrentSession(),
       this.updateSessionList()
     ]).then(() => {
+      clearTimeout(initTimeout);
       console.log('[ChatViewProvider] Data loaded, hiding loading indicator');
       if (this.view) {
         this.view.webview.postMessage({ type: 'hideLoading' });
       }
     }).catch(err => {
+      clearTimeout(initTimeout);
       console.error('[ChatViewProvider] Initialization failed:', err);
       if (this.view) {
         this.view.webview.postMessage({ type: 'hideLoading' });

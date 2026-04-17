@@ -3,7 +3,7 @@ import { container } from 'tsyringe';
 import * as vscode from 'vscode';
 import { ExplainCodeCommand } from '../../../src/commands/ExplainCodeCommand';
 import { LLMTool } from '../../../src/tools/LLMTool';
-import { EpisodicMemory } from '../../../src/core/memory/EpisodicMemory';
+import { MemoryService } from '../../../src/core/memory/MemoryService';
 import { PreferenceMemory } from '../../../src/core/memory/PreferenceMemory';
 import { AuditLogger } from '../../../src/core/security/AuditLogger';
 
@@ -43,7 +43,7 @@ jest.mock('vscode', () => ({
 describe('ExplainCodeCommand', () => {
   let command: ExplainCodeCommand;
   let mockLLMTool: any;
-  let mockEpisodicMemory: any;
+  let mockMemoryService: any;
   let mockPreferenceMemory: any;
   let mockAuditLogger: any;
 
@@ -56,8 +56,10 @@ describe('ExplainCodeCommand', () => {
       call: jest.fn()
     };
 
-    mockEpisodicMemory = {
-      record: jest.fn().mockResolvedValue('ep_test_123')
+    mockMemoryService = {
+      recordMemory: jest.fn().mockResolvedValue('ep_test_123'),
+      searchMemories: jest.fn().mockResolvedValue([]),
+      getRecentMemories: jest.fn().mockResolvedValue([])
     };
 
     mockPreferenceMemory = {
@@ -71,12 +73,11 @@ describe('ExplainCodeCommand', () => {
 
     // 注册mock到容器
     container.registerInstance(LLMTool, mockLLMTool);
-    container.registerInstance(EpisodicMemory, mockEpisodicMemory);
     container.registerInstance(PreferenceMemory, mockPreferenceMemory);
     container.registerInstance(AuditLogger, mockAuditLogger);
 
     // 创建命令实例
-    command = new ExplainCodeCommand();
+    command = new ExplainCodeCommand(mockMemoryService, mockLLMTool);
 
     // 重置VS Code mock
     (vscode.window.activeTextEditor as any) = null;
@@ -150,7 +151,7 @@ describe('ExplainCodeCommand', () => {
       // Assert
       expect(mockLLMTool.call).toHaveBeenCalled();
       expect(vscode.window.createWebviewPanel).toHaveBeenCalled();
-      expect(mockEpisodicMemory.record).toHaveBeenCalled();
+      expect(mockMemoryService.recordMemory).toHaveBeenCalled();
       expect(mockAuditLogger.log).toHaveBeenCalledWith(
         'explain_code',
         'success',
@@ -287,15 +288,14 @@ describe('ExplainCodeCommand', () => {
       await command.execute();
 
       // Assert
-      expect(mockEpisodicMemory.record).toHaveBeenCalledWith(
+      expect(mockMemoryService.recordMemory).toHaveBeenCalledWith(
         expect.objectContaining({
           taskType: 'CODE_EXPLAIN',
           summary: expect.stringContaining('test.ts'),
           entities: ['ts'],
           outcome: 'SUCCESS',
           modelId: 'deepseek',
-          durationMs: expect.any(Number),
-          decision: expect.stringContaining('变量声明')
+          durationMs: expect.any(Number)
         })
       );
     });
@@ -319,7 +319,7 @@ describe('ExplainCodeCommand', () => {
         data: '解释'
       });
 
-      mockEpisodicMemory.record.mockRejectedValue(new Error('数据库错误'));
+      mockMemoryService.recordMemory.mockRejectedValue(new Error('数据库错误'));
 
       // Act & Assert - 不应抛出异常
       await expect(command.execute()).resolves.not.toThrow();
@@ -434,7 +434,7 @@ describe('ExplainCodeCommand', () => {
         data: '解释'
       });
 
-      mockEpisodicMemory.record.mockRejectedValue(new Error('数据库错误'));
+      mockMemoryService.recordMemory.mockRejectedValue(new Error('数据库错误'));
 
       await expect(command.execute()).resolves.not.toThrow();
     });

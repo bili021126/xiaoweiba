@@ -1,4 +1,20 @@
-import "reflect-metadata";
+// 确保reflect-metadata在最前面加载
+try {
+  require("reflect-metadata");
+  console.log('[Extension] reflect-metadata loaded successfully');
+} catch (err) {
+  console.error('[Extension] Failed to load reflect-metadata:', err);
+  // 尝试从扩展目录加载
+  const path = require('path');
+  const extensionPath = __dirname;
+  const reflectPath = path.join(extensionPath, '..', 'node_modules', 'reflect-metadata');
+  try {
+    require(reflectPath);
+    console.log('[Extension] reflect-metadata loaded from:', reflectPath);
+  } catch (err2) {
+    console.error('[Extension] Also failed to load from:', reflectPath, err2);
+  }
+}
 
 // 生产环境不使用.env文件，改用VS Code SecretStorage API
 // 开发环境的API密钥应通过VS Code设置或环境变量注入

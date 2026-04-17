@@ -3,7 +3,7 @@ import { container } from 'tsyringe';
 import * as vscode from 'vscode';
 import { CodeGenerationCommand } from '../../../src/commands/CodeGenerationCommand';
 import { LLMTool } from '../../../src/tools/LLMTool';
-import { EpisodicMemory } from '../../../src/core/memory/EpisodicMemory';
+import { MemoryService } from '../../../src/core/memory/MemoryService';
 import { AuditLogger } from '../../../src/core/security/AuditLogger';
 
 // Mock LLMResponseCache
@@ -60,7 +60,7 @@ jest.mock('vscode', () => ({
 describe('CodeGenerationCommand', () => {
   let command: CodeGenerationCommand;
   let mockLLMTool: any;
-  let mockEpisodicMemory: any;
+  let mockMemoryService: any;
   let mockAuditLogger: any;
 
   beforeEach(() => {
@@ -72,8 +72,10 @@ describe('CodeGenerationCommand', () => {
       call: jest.fn()
     };
 
-    mockEpisodicMemory = {
-      record: jest.fn().mockResolvedValue('ep_test_123')
+    mockMemoryService = {
+      recordMemory: jest.fn().mockResolvedValue('ep_test_123'),
+      searchMemories: jest.fn().mockResolvedValue([]),
+      getRecentMemories: jest.fn().mockResolvedValue([])
     };
 
     mockAuditLogger = {
@@ -83,11 +85,10 @@ describe('CodeGenerationCommand', () => {
 
     // 注册mock到容器
     container.registerInstance(LLMTool, mockLLMTool);
-    container.registerInstance(EpisodicMemory, mockEpisodicMemory);
     container.registerInstance(AuditLogger, mockAuditLogger);
 
     // 创建命令实例
-    command = new CodeGenerationCommand(mockEpisodicMemory, mockLLMTool);
+    command = new CodeGenerationCommand(mockMemoryService, mockLLMTool);
   });
 
   afterEach(() => {
@@ -179,7 +180,7 @@ describe('CodeGenerationCommand', () => {
       // Assert
       expect(mockLLMTool.call).toHaveBeenCalled();
       expect(vscode.env.clipboard.writeText).toHaveBeenCalled();
-      expect(mockEpisodicMemory.record).toHaveBeenCalled();
+      expect(mockMemoryService.recordMemory).toHaveBeenCalled();
       expect(mockAuditLogger.log).toHaveBeenCalledWith(
         'code_generation',
         'success',
@@ -334,14 +335,13 @@ describe('CodeGenerationCommand', () => {
       await command.execute();
 
       // Assert
-      expect(mockEpisodicMemory.record).toHaveBeenCalledWith({
+      expect(mockMemoryService.recordMemory).toHaveBeenCalledWith({
         taskType: 'CODE_GENERATE',
         summary: expect.stringContaining('生成代码'),
         entities: expect.arrayContaining(['code']),
         outcome: 'SUCCESS',
         modelId: 'deepseek',
-        durationMs: expect.any(Number),
-        decision: expect.any(String)
+        durationMs: expect.any(Number)
       });
     });
 
@@ -368,7 +368,7 @@ describe('CodeGenerationCommand', () => {
         data: '```typescript\nconst x = 42;\n```'
       });
 
-      mockEpisodicMemory.record.mockRejectedValue(new Error('数据库错误'));
+      mockMemoryService.recordMemory.mockRejectedValue(new Error('数据库错误'));
 
       // Act & Assert - 不应抛出异常
       await expect(command.execute()).resolves.not.toThrow();
