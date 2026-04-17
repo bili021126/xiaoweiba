@@ -7,6 +7,8 @@ import { ErrorCode, createError } from '../../utils/ErrorCodes';
 import { IntentAnalyzer } from './IntentAnalyzer';
 import { ExpertSelector } from './ExpertSelector';
 import { RetrievalWeights } from './types';
+import { MemoryTierManager, MemoryTier } from './MemoryTierManager';
+import { MemoryDeduplicator } from './MemoryDeduplicator';
 
 export type TaskType =
   | 'CODE_EXPLAIN'
@@ -21,7 +23,8 @@ export type TaskType =
 
 export type TaskOutcome = 'SUCCESS' | 'FAILED' | 'PARTIAL' | 'CANCELLED';
 
-export type MemoryTier = 'SHORT_TERM' | 'LONG_TERM';
+// 重新导出类型，保持向后兼容
+export { MemoryTier } from './MemoryTierManager';
 
 export interface EpisodicMemoryRecord {
   id: string;
@@ -93,6 +96,10 @@ export class EpisodicMemory {
   private intentAnalyzer: IntentAnalyzer;
   private expertSelector: ExpertSelector;
 
+  // ========== 解耦模块 ==========
+  private tierManager: MemoryTierManager;
+  private deduplicator: MemoryDeduplicator;
+
   // ========== 初始化控制 ==========
   private initPromise: Promise<void> | null = null;
 
@@ -109,6 +116,10 @@ export class EpisodicMemory {
     // 初始化意图感知模块
     this.intentAnalyzer = new IntentAnalyzer();
     this.expertSelector = new ExpertSelector();
+    
+    // 初始化解耦模块
+    this.tierManager = new MemoryTierManager();
+    this.deduplicator = new MemoryDeduplicator();
     
     // 注意：不在构造函数中启动异步操作，由initialize()显式控制
   }
@@ -278,20 +289,29 @@ export class EpisodicMemory {
       // 1. 时间指代检测
       if (this.isTemporalQuery(query)) {
         console.log('[EpisodicMemory] Temporal query detected, returning recent memories');
-        return this.getRecentMemoriesFromDB(options.limit || 3);
+        const recentMemories = await this.getRecentMemoriesFromDB(options.limit || 3);
+        return this.deduplicator.deduplicate(recentMemories);
       }
 
       // 2. 使用语义检索（混合评分）
       const limit = Math.min(options.limit || 5, 20);
       const memories = await this.searchSemantic(query, limit);
       
+      // 3. 去重
+      const deduplicatedMemories = this.deduplicator.deduplicate(memories);
+      
       const duration = Date.now() - startTime;
       await this.auditLogger.log('memory_search', 'success', duration, {
-        parameters: { query, count: memories.length, method: 'hybrid' }
+        parameters: { 
+          query, 
+          count: deduplicatedMemories.length,
+          originalCount: memories.length,
+          method: 'hybrid' 
+        }
       });
 
-      console.log(`[EpisodicMemory] Hybrid search found ${memories.length} memories in ${duration}ms`);
-      return memories;
+      console.log(`[EpisodicMemory] Hybrid search found ${deduplicatedMemories.length} memories (from ${memories.length}) in ${duration}ms`);
+      return deduplicatedMemories;
     } catch (error) {
       const duration = Date.now() - startTime;
       await this.auditLogger.logError('memory_search', error as Error, duration);
@@ -968,8 +988,7 @@ export class EpisodicMemory {
    * @returns SHORT_TERM（7天内）或 LONG_TERM（7天以上）
    */
   private determineMemoryTier(timestamp: number): MemoryTier {
-    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    return timestamp >= sevenDaysAgo ? 'SHORT_TERM' : 'LONG_TERM';
+    return this.tierManager.determineTier(timestamp);
   }
 
   /**
