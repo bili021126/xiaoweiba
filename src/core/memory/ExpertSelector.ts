@@ -15,6 +15,16 @@ export class ExpertSelector {
   private context?: vscode.ExtensionContext;
   private weightUpdateTimer?: NodeJS.Timeout;
   private readonly STORAGE_KEY = 'xiaoweiba.retrievalWeights';
+  
+  // 深化点3: 权重归一化跟踪
+  private lastNormalizationTime: number = Date.now();
+  private readonly NORMALIZATION_INTERVAL = 24 * 3600 * 1000; // 24小时
+  
+  // 深化点5: 自适应学习率
+  private adaptiveLearningRates: { k: number; t: number; e: number; v: number } = {
+    k: 0.1, t: 0.1, e: 0.1, v: 0.1
+  };
+  private lastFeedbackDirection: { k: number; t: number; e: number; v: number } | null = null;
 
   /**
    * 设置ExtensionContext（用于持久化权重）
@@ -61,14 +71,13 @@ export class ExpertSelector {
    */
   private async updateFactorWeights(): Promise<void> {
     if (!this.context || this.feedbackHistory.length === 0) return;
-
+  
     try {
-      // 从workspaceState读取当前权重
+      // 从 workspaceState读取当前权重
       const currentWeights = this.context.workspaceState.get<RetrievalWeights>(this.STORAGE_KEY) || DEFAULT_WEIGHTS;
-      const lr = 0.1; // 学习率
       let total = 0;
       const newWeights: Partial<RetrievalWeights> = {};
-
+  
       // 计算平均点击权重作为“实际贡献”
       const avgClicked: RetrievalWeights = { k: 0, t: 0, e: 0, v: 0 };
       for (const fb of this.feedbackHistory.slice(-10)) { // 使用最近10条
@@ -82,23 +91,55 @@ export class ExpertSelector {
       avgClicked.t /= count;
       avgClicked.e /= count;
       avgClicked.v /= count;
-
-      // 梯度更新
+  
+      // 深化点5: 自适应学习率调整
+      const currentDirection = { k: avgClicked.k - 0.25, t: avgClicked.t - 0.25, e: avgClicked.e - 0.25, v: avgClicked.v - 0.25 };
+      if (this.lastFeedbackDirection) {
+        for (const factor of ['k', 't', 'e', 'v'] as const) {
+          const sameDirection = (currentDirection[factor] * this.lastFeedbackDirection![factor]) > 0;
+          if (sameDirection) {
+            // 方向一致，降低学习率（防止过冲）
+            this.adaptiveLearningRates[factor] *= 0.8;
+          } else {
+            // 方向变化，恢复学习率（加速收敛）
+            this.adaptiveLearningRates[factor] = 0.1;
+          }
+          this.adaptiveLearningRates[factor] = Math.max(0.01, Math.min(0.2, this.adaptiveLearningRates[factor]));
+        }
+      }
+      this.lastFeedbackDirection = currentDirection;
+  
+      // 梯度更新（使用自适应学习率）
       for (const factor of ['k', 't', 'e', 'v'] as const) {
-        let newWeight = currentWeights[factor] + lr * (avgClicked[factor] - 0.25); // 期望均匀贡献0.25
+        let newWeight = currentWeights[factor] + this.adaptiveLearningRates[factor] * (avgClicked[factor] - 0.25);
         newWeight = Math.max(0.05, Math.min(0.7, newWeight)); // 限制范围
         newWeights[factor] = newWeight;
         total += newWeight;
       }
-
-      // 归一化确保总和为1
-      for (const factor of ['k', 't', 'e', 'v'] as const) {
-        newWeights[factor]! /= total;
+  
+      // 深化点3: 带平滑因子的归一化
+      const now = Date.now();
+      const timeSinceLastNorm = now - this.lastNormalizationTime;
+      const needsRenormalization = timeSinceLastNorm > this.NORMALIZATION_INTERVAL;
+        
+      if (needsRenormalization) {
+        // 定期归一化，加入平滑因子防止权重僵化
+        const smoothingFactor = 0.1; // 10%平滑
+        for (const factor of ['k', 't', 'e', 'v'] as const) {
+          newWeights[factor]! = (1 - smoothingFactor) * (newWeights[factor]! / total) + smoothingFactor * 0.25;
+        }
+        this.lastNormalizationTime = now;
+        console.log('[ExpertSelector] Periodic renormalization with smoothing');
+      } else {
+        // 常规归一化
+        for (const factor of ['k', 't', 'e', 'v'] as const) {
+          newWeights[factor]! /= total;
+        }
       }
-
+  
       // 保存到workspaceState
       await this.context.workspaceState.update(this.STORAGE_KEY, newWeights);
-      console.log('[ExpertSelector] Weights updated:', newWeights);
+      console.log('[ExpertSelector] Weights updated:', newWeights, '(learning rates:', this.adaptiveLearningRates, ')');
     } catch (error) {
       console.error('[ExpertSelector] Failed to update weights:', error);
     }

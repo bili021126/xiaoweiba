@@ -745,8 +745,9 @@ export class EpisodicMemory {
       // 归一化（简单除以查询词数）
       const normTfidf = Math.min(tfidf / queryTerms.length, 1);
 
-      // 2. 时间衰减得分
-      const ageDays = (now - memory.timestamp) / (1000 * 3600 * 24);
+      // 2. 时间衰减得分（深化点4: 使用lastAccessedAt）
+      const lastAccessTime = memory.lastAccessedAt || memory.timestamp;
+      const ageDays = (now - lastAccessTime) / (1000 * 3600 * 24);
       const timeScore = Math.exp(-ageDays * this.decayLambda); // λ=0.1，半衰期约7天
 
       // 3. 实体匹配加分

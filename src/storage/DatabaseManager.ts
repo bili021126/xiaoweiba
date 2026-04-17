@@ -183,7 +183,8 @@ export class DatabaseManager {
         model_id TEXT NOT NULL,
         latency_ms INTEGER,
         vector BLOB,
-        memory_tier TEXT DEFAULT 'LONG_TERM'
+        memory_tier TEXT DEFAULT 'LONG_TERM',
+        last_accessed_at INTEGER  -- 深化点4: 最后访问时间
       )
     `);
 

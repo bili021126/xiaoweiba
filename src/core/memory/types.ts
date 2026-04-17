@@ -93,6 +93,7 @@ export interface EpisodicMemoryRecord {
   metadata?: Record<string, unknown>;
   vector?: Buffer; // 向量数据（从数据库加载）
   memoryTier?: MemoryTier; // 记忆层级
+  lastAccessedAt?: number; // 深化点4: 最后访问时间
 }
 
 /**
