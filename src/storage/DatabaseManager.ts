@@ -106,17 +106,6 @@ export class DatabaseManager {
       // 创建索引
       this.createIndexes();
 
-      // 尝试创建 FTS5 全文搜索功能（如果sql.js支持）
-      try {
-        this.createFtsTable();
-        this.createFtsTriggers();
-        console.log('[DatabaseManager] FTS5 full-text search enabled');
-      } catch (ftsError) {
-        console.warn('[DatabaseManager] FTS5 not available, full-text search disabled:', 
-          ftsError instanceof Error ? ftsError.message : String(ftsError));
-        console.warn('[DatabaseManager] This is expected in development mode. FTS5 will be enabled in production build.');
-      }
-
       // 保存数据库
       this.saveDatabase();
 
@@ -245,24 +234,6 @@ export class DatabaseManager {
   }
 
   /**
-   * 创建 FTS5 全文搜索虚拟表
-   */
-  private createFtsTable(): void {
-    const db = this.getDatabase();
-    
-    // 情景记忆 FTS5 全文搜索虚拟表
-    db.run(`
-      CREATE VIRTUAL TABLE IF NOT EXISTS episodic_memory_fts USING fts5(
-        summary,
-        entities,
-        decision,
-        content='episodic_memory',
-        content_rowid='rowid'
-      )
-    `);
-  }
-
-  /**
    * 创建索引
    */
   private createIndexes(): void {
@@ -281,42 +252,6 @@ export class DatabaseManager {
     db.run(`CREATE INDEX IF NOT EXISTS idx_procedural_project ON procedural_memory(project_fingerprint)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_task_status ON task_state(status)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_task_project ON task_state(project_fingerprint)`);
-  }
-
-  /**
-   * 创建 FTS5 触发器（同步主表与 FTS 虚拟表）
-   */
-  private createFtsTriggers(): void {
-    const db = this.getDatabase();
-
-    // INSERT 触发器
-    db.run(`
-      CREATE TRIGGER IF NOT EXISTS episodic_memory_ai AFTER INSERT ON episodic_memory
-      BEGIN
-        INSERT INTO episodic_memory_fts(rowid, summary, entities, decision)
-        VALUES (NEW.rowid, NEW.summary, NEW.entities, NEW.decision);
-      END
-    `);
-
-    // UPDATE 触发器
-    db.run(`
-      CREATE TRIGGER IF NOT EXISTS episodic_memory_au AFTER UPDATE ON episodic_memory
-      BEGIN
-        UPDATE episodic_memory_fts
-        SET summary = NEW.summary,
-            entities = NEW.entities,
-            decision = NEW.decision
-        WHERE rowid = NEW.rowid;
-      END
-    `);
-
-    // DELETE 触发器
-    db.run(`
-      CREATE TRIGGER IF NOT EXISTS episodic_memory_ad AFTER DELETE ON episodic_memory
-      BEGIN
-        DELETE FROM episodic_memory_fts WHERE rowid = OLD.rowid;
-      END
-    `);
   }
 
   /**

@@ -280,38 +280,7 @@ export class EpisodicMemory {
   }
 
   /**
-   * 使用 FTS5 全文搜索（保留作为备用）
-   */
-  private async searchWithFTS5(
-    db: any,
-    projectFingerprint: string,
-    query: string,
-    limit: number,
-    offset: number
-  ): Promise<EpisodicMemoryRecord[]> {
-    const sql = `
-      SELECT em.* FROM episodic_memory em
-      JOIN episodic_memory_fts fts ON em.rowid = fts.rowid
-      WHERE em.project_fingerprint = ? AND episodic_memory_fts MATCH ?
-      ORDER BY rank
-      LIMIT ? OFFSET ?
-    `;
-
-    const stmt = db.prepare(sql);
-    stmt.bind([projectFingerprint, query, limit, offset]);
-    
-    const memories: EpisodicMemoryRecord[] = [];
-    while (stmt.step()) {
-      const row = stmt.getAsObject();
-      memories.push(this.objectToMemory(row));
-    }
-    stmt.free();
-
-    return memories;
-  }
-
-  /**
-   * 使用 LIKE 查询（FTS5 降级方案）
+   * 使用 LIKE 查询（关键词匹配）
    */
   private async searchWithLike(
     db: any,
@@ -350,14 +319,14 @@ export class EpisodicMemory {
   }
 
   /**
-   * 清理 FTS5 搜索查询（防止注入和语法错误）
+   * 清理搜索查询（防止注入和语法错误）
    */
-  private sanitizeFtsQuery(query: string): string {
+  private sanitizeSearchQuery(query: string): string {
     if (!query || query.trim().length === 0) {
       return '';
     }
 
-    // 移除 FTS5 特殊字符（保留字母、数字、中文、空格）
+    // 移除特殊字符（保留字母、数字、中文、空格）
     let sanitized = query
       .replace(/[^\w\s\u4e00-\u9fa5]/g, ' ') // 保留单词字符、空格、中文
       .replace(/\s+/g, ' ') // 合并多个空格
