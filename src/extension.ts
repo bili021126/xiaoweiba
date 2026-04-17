@@ -9,7 +9,8 @@ import { DatabaseManager } from './storage/DatabaseManager';
 import { AuditLogger } from './core/security/AuditLogger';
 import { getUserFriendlyMessage } from './utils/ErrorCodes';
 import { ExplainCodeCommand } from './commands/ExplainCodeCommand';
-import { GenerateCommitCommand } from './commands/GenerateCommitCommand';
+import { GenerateCommitCommandV2 as GenerateCommitCommand } from './commands/GenerateCommitCommand';
+import { CommitStyleLearner } from './core/memory/CommitStyleLearner';
 import { ExportMemoryCommand } from './commands/ExportMemoryCommand';
 import { ImportMemoryCommand } from './commands/ImportMemoryCommand';
 import { ConfigureApiKeyCommand } from './commands/ConfigureApiKeyCommand';
@@ -205,7 +206,8 @@ async function initializeContainer(context: vscode.ExtensionContext): Promise<vo
 function registerCommands(context: vscode.ExtensionContext): void {
   // 阶段 1 核心命令（传入已初始化的单例）
   const explainCodeHandler = new ExplainCodeCommand(episodicMemory, llmTool);
-  const generateCommitHandler = new GenerateCommitCommand(episodicMemory, llmTool);
+  const commitStyleLearner = container.resolve(CommitStyleLearner);
+  const generateCommitHandler = new GenerateCommitCommand(episodicMemory, llmTool, commitStyleLearner);
   const exportMemoryHandler = new ExportMemoryCommand();
   const importMemoryHandler = new ImportMemoryCommand();
   const configureApiKeyHandler = new ConfigureApiKeyCommand();

@@ -1,26 +1,48 @@
+/**
+ * 提交信息生成命令 - 记忆增强版本（Phase 1）
+ * 
+ * 改进点：
+ * 1. 利用历史提交记忆增强Prompt
+ * 2. 学习用户提交风格偏好
+ * 3. 提供"查看历史提交"UI功能
+ */
+
 import * as vscode from 'vscode';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { container } from 'tsyringe';
 import { LLMTool } from '../tools/LLMTool';
 import { EpisodicMemory } from '../core/memory/EpisodicMemory';
+import { CommitStyleLearner, CommitStylePreference } from '../core/memory/CommitStyleLearner';
 import { AuditLogger } from '../core/security/AuditLogger';
 import { getUserFriendlyMessage } from '../utils/ErrorCodes';
+import { EpisodicMemoryRecord } from '../core/memory/types';
 
 const execAsync = promisify(exec);
 
-/**
- * 提交信息生成命令处理器
- */
-export class GenerateCommitCommand {
+export class GenerateCommitCommandV2 {
   private auditLogger: AuditLogger;
   private episodicMemory: EpisodicMemory;
+  private commitStyleLearner: CommitStyleLearner;
   private llmTool: LLMTool;
 
-  constructor(episodicMemory?: EpisodicMemory, llmTool?: LLMTool) {
+  // 配置常量
+  private readonly MAX_FILES_TO_SEARCH = 5;
+  private readonly MAX_MEMORIES_TO_RETURN = 5;
+  private readonly MAX_MEMORIES_PER_FILE = 3;
+  private readonly MAX_DIFF_LENGTH = 8000;
+  private readonly LLM_TEMPERATURE = 0.3;
+  private readonly LLM_MAX_TOKENS = 500;
+
+  constructor(
+    episodicMemory?: EpisodicMemory,
+    llmTool?: LLMTool,
+    commitStyleLearner?: CommitStyleLearner
+  ) {
     this.auditLogger = container.resolve(AuditLogger);
     this.episodicMemory = episodicMemory || container.resolve(EpisodicMemory);
     this.llmTool = llmTool || container.resolve(LLMTool);
+    this.commitStyleLearner = commitStyleLearner || container.resolve(CommitStyleLearner);
   }
 
   /**
@@ -42,7 +64,7 @@ export class GenerateCommitCommand {
       // 2. 获取 Git diff
       await vscode.window.withProgress({
         location: vscode.ProgressLocation.Notification,
-        title: '🚀 生成提交信息',
+        title: '🚀 智能生成提交信息',
         cancellable: false
       }, async (progress) => {
         progress.report({ message: '📊 分析代码变更...', increment: 10 });
@@ -54,36 +76,50 @@ export class GenerateCommitCommand {
           return;
         }
 
-        progress.report({ message: '🤖 调用 AI 生成提交信息...', increment: 30 });
+        progress.report({ message: '🧠 检索历史记忆...', increment: 20 });
 
-        // 3. 调用 LLM 生成提交信息
-        const commitMessage = await this.generateCommitMessage(diff);
+        // 3. 学习用户提交风格
+        const preference = await this.commitStyleLearner.learnFromHistory();
         
-        progress.report({ message: '✨ 生成完成，准备提交...', increment: 50 });
+        // 4. 检索相关文件的历史提交
+        const changedFiles = await this.getChangedFiles(workspacePath);
+        const relevantMemories = await this.retrieveRelevantMemories(changedFiles);
 
-        // 4. 展示生成结果并提供操作选项
+        progress.report({ message: '🤖 调用 AI 生成提交信息...', increment: 40 });
+
+        // 5. 使用增强的Prompt生成提交信息
+        const commitMessage = await this.generateCommitMessageWithMemory(
+          diff,
+          preference,
+          relevantMemories
+        );
+        
+        progress.report({ message: '✨ 生成完成，准备提交...', increment: 60 });
+
+        // 6. 展示生成结果并提供操作选项
         await this.showCommitMessageOptions(commitMessage, diff, workspacePath);
 
         progress.report({ message: '💾 记录情景记忆...', increment: 80 });
 
-        // 5. 记录情景记忆
+        // 7. 记录情景记忆
         const durationMs = Date.now() - startTime;
-        console.log('[GenerateCommitCommand] About to record memory, duration:', durationMs);
+        console.log('[GenerateCommitCommandV2] About to record memory, duration:', durationMs);
         try {
           await this.recordMemory(commitMessage, diff, durationMs);
-          console.log('[GenerateCommitCommand] Memory recording completed');
+          console.log('[GenerateCommitCommandV2] Memory recording completed');
           progress.report({ message: '✅ 全部完成！', increment: 100 });
         } catch (memoryError) {
-          console.error('[GenerateCommitCommand] Memory recording failed:', memoryError);
+          console.error('[GenerateCommitCommandV2] Memory recording failed:', memoryError);
           progress.report({ message: '⚠️ 记忆记录失败，但提交已成功', increment: 100 });
         }
       });
 
-      // 6. 记录审计日志
+      // 8. 记录审计日志
       const durationMs = Date.now() - startTime;
-      await this.auditLogger.log('generate_commit', 'success', durationMs, {
+      await this.auditLogger.log('generate_commit_v2', 'success', durationMs, {
         parameters: {
-          hasChanges: true
+          hasChanges: true,
+          memoriesUsed: true
         }
       });
 
@@ -92,7 +128,7 @@ export class GenerateCommitCommand {
       const errorMessage = getUserFriendlyMessage(error);
       vscode.window.showErrorMessage(`生成提交信息失败: ${errorMessage}`);
       
-      await this.auditLogger.logError('generate_commit', error as Error, durationMs);
+      await this.auditLogger.logError('generate_commit_v2', error as Error, durationMs);
     }
   }
 
@@ -137,52 +173,131 @@ export class GenerateCommitCommand {
   }
 
   /**
-   * 使用 LLM 生成提交信息
+   * 获取变更的文件列表
    */
-  private async generateCommitMessage(diff: string): Promise<string> {
-    // 限制 diff 长度，避免超出 token 限制
-    const maxDiffLength = 8000;
-    const truncatedDiff = diff.length > maxDiffLength 
-      ? diff.substring(0, maxDiffLength) + '\n...(内容过长已截断)'
+  private async getChangedFiles(workspacePath: string): Promise<string[]> {
+    try {
+      const { stdout } = await execAsync(
+        'git status --porcelain',
+        { cwd: workspacePath }
+      );
+
+      // 解析git status输出，提取文件名
+      const files = stdout
+        .split('\n')
+        .filter(line => line.trim())
+        .map(line => {
+          // git status --porcelain 格式: "XY filename"
+          const parts = line.trim().split(/\s+/);
+          return parts.length >= 2 ? parts.slice(1).join(' ') : parts[0];
+        });
+
+      return files;
+    } catch (error) {
+      console.error('[GenerateCommitCommandV2] Failed to get changed files:', error);
+      return [];
+    }
+  }
+
+  /**
+   * 检索相关文件的历史提交记忆
+   */
+  private async retrieveRelevantMemories(files: string[]): Promise<EpisodicMemoryRecord[]> {
+    // 并行检索所有文件的记忆，提升性能
+    const searchPromises = files.slice(0, this.MAX_FILES_TO_SEARCH).map(async (file) => {
+      const fileName = file.split('/').pop()?.split('\\').pop() || '';
+      if (!fileName) return [];
+
+      return await this.episodicMemory.search(fileName, {
+        taskType: 'COMMIT_GENERATE',
+        limit: this.MAX_MEMORIES_PER_FILE
+      });
+    });
+
+    const results = await Promise.all(searchPromises);
+    const memories = results.flat();
+
+    // 去重并按时间排序
+    const uniqueMemories = memories.filter(
+      (m, index, self) => index === self.findIndex((t) => t.id === m.id)
+    ).sort((a, b) => b.timestamp - a.timestamp);
+
+    return uniqueMemories.slice(0, this.MAX_MEMORIES_TO_RETURN);
+  }
+
+  /**
+   * 使用记忆增强的Prompt生成提交信息
+   */
+  private async generateCommitMessageWithMemory(
+    diff: string,
+    preference: CommitStylePreference,
+    relevantMemories: EpisodicMemoryRecord[]
+  ): Promise<string> {
+    // 限制 diff 长度
+    const truncatedDiff = diff.length > this.MAX_DIFF_LENGTH 
+      ? diff.substring(0, this.MAX_DIFF_LENGTH) + '\n...(内容过长已截断)'
       : diff;
 
-    const prompt = `请根据以下 Git diff 生成简洁、规范的提交信息（commit message）。
+    // 格式化历史记忆
+    const historyText = relevantMemories.length > 0
+      ? relevantMemories.map((m, i) => {
+          const firstLine = m.decision?.split('\n')[0] || '';
+          const date = new Date(m.timestamp).toLocaleDateString('zh-CN');
+          return `${i + 1}. ${firstLine} (${date})`;
+        }).join('\n')
+      : '（无相关历史记录）';
 
-要求：
-1. 使用中文
-2. 遵循 Conventional Commits 规范（feat/fix/docs/style/refactor/test/chore 等类型）
-3. 第一行是标题（不超过 50 字符）
-4. 空一行后是详细描述（可选，每条 bullet point 不超过 72 字符）
-5. 只返回提交信息本身，不要其他解释
+    // 格式化偏好
+    const preferenceText = this.commitStyleLearner.formatPreferenceForPrompt(preference);
 
-Git Diff：
+    // 构建增强Prompt
+    const prompt = `你是一位经验丰富的开发者，擅长编写规范的 Git 提交信息。
+
+**用户提交风格偏好**：
+${preferenceText}
+
+**该文件的历史提交记录**：
+${historyText}
+
+**当前变更**：
 \`\`\`diff
 ${truncatedDiff}
-\`\`\``;
+\`\`\`
+
+**要求**：
+1. 保持与历史提交一致的风格
+2. 遵循 Conventional Commits 规范（feat/fix/docs/style/refactor/test/chore）
+3. 如果之前类似变更使用了特定术语，请沿用
+4. 第一行是标题（不超过 50 字符）
+5. 空一行后是详细描述（可选，每条 bullet point 不超过 72 字符）
+6. 只返回提交信息本身，不要其他解释
+
+请生成提交信息：`;
 
     const result = await this.llmTool.call({
       messages: [
-        { role: 'system', content: '你是一位经验丰富的开发者，擅长编写规范的 Git 提交信息。你会根据代码变更生成简洁、准确、符合 Conventional Commits 规范的提交信息。' },
+        { 
+          role: 'system', 
+          content: '你是一位经验丰富的开发者，擅长编写规范的 Git 提交信息。你会根据代码变更、历史提交记录和用户偏好，生成简洁、准确、符合团队风格的提交信息。' 
+        },
         { role: 'user', content: prompt }
       ],
-      temperature: 0.3,
-      maxTokens: 500
+      temperature: this.LLM_TEMPERATURE,
+      maxTokens: this.LLM_MAX_TOKENS
     });
 
     if (!result.success || !result.data) {
       throw new Error(result.error || 'LLM 调用失败');
     }
 
-    // 清理返回结果，去除可能的 markdown 代码块标记
+    // 清理返回结果
     let commitMessage = result.data.trim();
-    
-    // 移除所有可能的 Markdown 代码块标记（更鲁棒的解析）
     commitMessage = commitMessage
-      .replace(/^```[a-z]*\s*/i, '')  // 开头的代码块标记
-      .replace(/```\s*$/i, '')         // 结尾的代码块标记
+      .replace(/^```[a-z]*\s*/i, '')
+      .replace(/```\s*$/i, '')
       .trim();
     
-    // 如果包含 Conventional Commits 格式行，提取第一行非空
+    // 提取Conventional Commits格式的行
     const lines = commitMessage.split('\n').filter(l => l.trim());
     const conventionalLine = lines.find(l => /^(feat|fix|docs|style|refactor|test|chore)(\(.+\))?:/.test(l));
     
@@ -194,13 +309,11 @@ ${truncatedDiff}
     
     commitMessage = commitMessage.trim();
     
-    // 如果LLM返回空内容，使用默认提交消息
     if (!commitMessage) {
-      console.warn('[GenerateCommitCommand] LLM returned empty message, using fallback');
+      console.warn('[GenerateCommitCommandV2] LLM returned empty message, using fallback');
       commitMessage = 'chore: update files';
     }
-    
-    console.log('[GenerateCommitCommand] Generated commit message:', commitMessage.substring(0, 60));
+
     return commitMessage;
   }
 
@@ -212,123 +325,87 @@ ${truncatedDiff}
     diff: string,
     workspacePath: string
   ): Promise<void> {
-    const action = await vscode.window.showInformationMessage(
-      '提交信息已生成',
-      { modal: true, detail: commitMessage },
-      '复制并提交',
-      '仅复制',
-      '编辑后提交',
-      '重新生成'
+    const choice = await vscode.window.showQuickPick(
+      [
+        { label: '$(check) 使用此提交信息', description: commitMessage },
+        { label: '$(refresh) 重新生成', description: '基于相同变更重新生成' },
+        { label: '$(edit) 手动编辑', description: '在编辑器中修改' },
+        { label: '$(info) 查看历史提交', description: '查看相关文件的历史提交记录' },
+        { label: '$(close) 取消', description: '放弃本次操作' }
+      ],
+      { placeHolder: '选择操作' }
     );
 
-    switch (action) {
-      case '复制并提交':
-        await this.copyAndCommit(commitMessage, workspacePath);
-        break;
-      case '仅复制':
-        await vscode.env.clipboard.writeText(commitMessage);
-        vscode.window.showInformationMessage('提交信息已复制到剪贴板');
-        break;
-      case '编辑后提交':
-        await this.editAndCommit(commitMessage, workspacePath);
-        break;
-      case '重新生成':
-        await this.execute();
-        break;
-      default:
-        // 用户取消
-        break;
-    }
-  }
+    if (!choice) return;
 
-  /**
-   * 复制并提交
-   */
-  private async copyAndCommit(commitMessage: string, workspacePath: string): Promise<void> {
-    // 复制到剪贴板
-    await vscode.env.clipboard.writeText(commitMessage);
-
-    // 1. 检查是否在 Git 仓库
-    try {
-      await execAsync('git rev-parse --git-dir', { cwd: workspacePath });
-    } catch {
-      vscode.window.showErrorMessage('当前工作区不是 Git 仓库');
-      return;
-    }
-
-    // 2. 检查是否有变更（包括未暂存）
-    const { stdout: status } = await execAsync('git status --porcelain', { cwd: workspacePath });
-    if (!status.trim()) {
-      vscode.window.showInformationMessage('没有需要提交的变更');
-      return;
-    }
-
-    // 3. 自动暂存所有变更（询问用户）
-    const unstaged = status.split('\n').filter(l => l.match(/^[ MARC]/) && !l.startsWith('M  ') && !l.startsWith('A  '));
-    if (unstaged.length > 0) {
-      const choice = await vscode.window.showWarningMessage(
-        `有 ${unstaged.length} 个未暂存的文件，是否暂存并提交？`,
-        '是', '否'
-      );
-      if (choice === '是') {
-        await execAsync('git add .', { cwd: workspacePath });
-      } else {
-        return;
-      }
-    }
-
-    // 4. 执行提交
-    try {
-      await execAsync(`git commit -m "${commitMessage.replace(/"/g, '\\"')}"`, { cwd: workspacePath });
-      vscode.window.showInformationMessage('提交成功！');
+    switch (choice.label) {
+      case '$(check) 使用此提交信息':
+        await this.executeCommit(commitMessage, workspacePath);
+        break;
       
-      // 刷新 Git 视图
-      vscode.commands.executeCommand('git.refresh');
-    } catch (error) {
-      vscode.window.showErrorMessage(`提交失败: ${(error as Error).message}`);
+      case '$(refresh) 重新生成':
+        vscode.window.showInformationMessage('🔄 正在重新生成...');
+        setTimeout(() => this.execute(), 100);  // 异步执行，避免嵌套progress导致内存泄漏
+        break;
+      
+      case '$(edit) 手动编辑':
+        await this.editCommitMessage(commitMessage, workspacePath);
+        break;
+      
+      case '$(info) 查看历史提交':
+        await this.showHistoryPanel();
+        break;
     }
   }
 
   /**
-   * 编辑后提交
+   * 执行 Git 提交
    */
-  private async editAndCommit(initialMessage: string, workspacePath: string): Promise<void> {
-    // 创建临时文档供用户编辑
-    const document = await vscode.workspace.openTextDocument({
-      content: initialMessage,
-      language: 'plaintext'
-    });
+  private async executeCommit(commitMessage: string, workspacePath: string): Promise<void> {
+    try {
+      // 先暂存所有更改
+      await execAsync('git add .', { cwd: workspacePath });
+      
+      // 提交
+      await execAsync(
+        `git commit -m "${commitMessage.replace(/"/g, '\\"')}"`,
+        { cwd: workspacePath }
+      );
 
-    const editor = await vscode.window.showTextDocument(document);
+      vscode.window.showInformationMessage('✅ 提交成功');
+    } catch (error) {
+      const errorMessage = getUserFriendlyMessage(error);
+      vscode.window.showErrorMessage(`提交失败: ${errorMessage}`);
+      throw error;
+    }
+  }
 
-    // 等待用户保存并关闭
-    const saveListener = vscode.workspace.onDidSaveTextDocument(async (savedDoc) => {
-      if (savedDoc.uri === document.uri) {
-        saveListener.dispose();
-        
-        const editedMessage = savedDoc.getText().trim();
-        
-        if (!editedMessage) {
-          vscode.window.showWarningMessage('提交信息不能为空');
-          return;
+  /**
+   * 手动编辑提交信息
+   */
+  private async editCommitMessage(commitMessage: string, workspacePath: string): Promise<void> {
+    const editedMessage = await vscode.window.showInputBox({
+      value: commitMessage,
+      placeHolder: '输入提交信息',
+      prompt: '编辑提交信息',
+      validateInput: (value) => {
+        if (!value || value.trim().length === 0) {
+          return '提交信息不能为空';
         }
-
-        // 关闭编辑器
-        await vscode.window.showTextDocument(savedDoc, { preview: true });
-        await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
-
-        // 执行提交
-        try {
-          await execAsync(`git commit -m "${editedMessage.replace(/"/g, '\\"')}"`, { cwd: workspacePath });
-          vscode.window.showInformationMessage('提交成功！');
-          
-          // 刷新 Git 视图
-          vscode.commands.executeCommand('git.refresh');
-        } catch (error) {
-          vscode.window.showErrorMessage(`提交失败: ${(error as Error).message}`);
-        }
+        return null;
       }
     });
+
+    if (editedMessage) {
+      await this.executeCommit(editedMessage, workspacePath);
+    }
+  }
+
+  /**
+   * 显示历史提交面板
+   */
+  private async showHistoryPanel(): Promise<void> {
+    vscode.commands.executeCommand('xiaoweiba.showCommitHistory');
   }
 
   /**
@@ -339,32 +416,29 @@ ${truncatedDiff}
     diff: string,
     durationMs: number
   ): Promise<void> {
-    console.log('[GenerateCommitCommand] recordMemory() called');
     try {
-      // 提取变更的文件列表
-      const changedFiles = diff
-        .split('\n')
-        .filter(line => line.startsWith('diff --git'))
-        .map(line => line.match(/b\/(.+)$/)?.[1])
-        .filter(Boolean) as string[];
+      // 提取type和scope
+      const match = commitMessage.match(/^(feat|fix|docs|style|refactor|test|chore)(?:\(([^)]+)\))?:/);
+      const commitType = match?.[1] || 'chore';
+      const scope = match?.[2];
 
-      // 提取提交类型
-      const commitType = commitMessage.split(':')[0]?.split('(')[0] || 'unknown';
+      // 统计变更文件数
+      const filesChanged = diff.split('\n').filter(line => line.startsWith('diff --git')).length;
 
-      console.log('[GenerateCommitCommand] Calling episodicMemory.record...');
       await this.episodicMemory.record({
         taskType: 'COMMIT_GENERATE',
         summary: `生成${commitType}类型的提交信息`,
-        entities: changedFiles.length > 0 ? changedFiles.slice(0, 5) : ['unknown'],
+        entities: [],  // TODO: 从diff中提取文件列表
+        decision: commitMessage,
         outcome: 'SUCCESS',
-        modelId: 'deepseek',
-        durationMs,
-        decision: commitMessage.substring(0, 200) // 截取前200字符作为决策摘要
+        modelId: 'unknown',  // TODO: 从LLMTool获取实际modelId
+        durationMs
       });
-      console.log('[GenerateCommitCommand] episodicMemory.record() completed');
+
+      console.log('[GenerateCommitCommandV2] Memory recorded successfully');
     } catch (error) {
-      // 记忆记录失败不影响主流程，仅记录日志
-      console.warn('记忆记录失败:', error);
+      console.error('[GenerateCommitCommandV2] Failed to record memory:', error);
+      // 不抛出错误，避免影响主流程
     }
   }
 }
