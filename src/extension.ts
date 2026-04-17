@@ -206,15 +206,15 @@ async function initializeContainer(context: vscode.ExtensionContext): Promise<vo
  */
 function registerCommands(context: vscode.ExtensionContext): void {
   // 阶段 1 核心命令（传入已初始化的单例）
-  const explainCodeHandler = new ExplainCodeCommand(episodicMemory, llmTool);
-  const commitStyleLearner = container.resolve(CommitStyleLearner);
   const memoryService = new MemoryService(episodicMemory);
+  const explainCodeHandler = new ExplainCodeCommand(memoryService, llmTool);
+  const commitStyleLearner = container.resolve(CommitStyleLearner);
   const generateCommitHandler = new GenerateCommitCommand(memoryService, llmTool, commitStyleLearner);
-  const exportMemoryHandler = new ExportMemoryCommand();
-  const importMemoryHandler = new ImportMemoryCommand();
+  const exportMemoryHandler = new ExportMemoryCommand(memoryService);
+  const importMemoryHandler = new ImportMemoryCommand(memoryService);
   const configureApiKeyHandler = new ConfigureApiKeyCommand();
-  const checkNamingHandler = new CheckNamingCommand(episodicMemory, llmTool);
-  const codeGenerationHandler = new CodeGenerationCommand(episodicMemory, llmTool);
+  const checkNamingHandler = new CheckNamingCommand(memoryService, llmTool);
+  const codeGenerationHandler = new CodeGenerationCommand(memoryService, llmTool);
   
   const explainCodeCmd = vscode.commands.registerCommand(
     'xiaoweiba.explainCode',

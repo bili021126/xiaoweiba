@@ -7,23 +7,23 @@
 import * as vscode from 'vscode';
 import { container } from 'tsyringe';
 import { LLMTool } from '../tools/LLMTool';
-import { EpisodicMemory } from '../core/memory/EpisodicMemory';
+import { MemoryService } from '../core/memory/MemoryService';
 import { AuditLogger } from '../core/security/AuditLogger';
 import { getUserFriendlyMessage } from '../utils/ErrorCodes';
 import { LLMResponseCache } from '../core/cache/LLMResponseCache';
 
 export class CheckNamingCommand {
   private auditLogger: AuditLogger;
-  private episodicMemory: EpisodicMemory;
+  private memoryService: MemoryService;
   private llmTool: LLMTool;
   private cache: LLMResponseCache;
 
   constructor(
-    episodicMemory?: EpisodicMemory,
+    memoryService?: MemoryService,
     llmTool?: LLMTool
   ) {
     this.auditLogger = container.resolve(AuditLogger);
-    this.episodicMemory = episodicMemory || container.resolve(EpisodicMemory);
+    this.memoryService = memoryService || new MemoryService();
     this.llmTool = llmTool || container.resolve(LLMTool);
     this.cache = new LLMResponseCache();
   }
@@ -329,14 +329,13 @@ export class CheckNamingCommand {
       const parsedResult = JSON.parse(result);
       const isValid = parsedResult.isValid;
       
-      await this.episodicMemory.record({
+      await this.memoryService.recordMemory({
         taskType: 'NAMING_CHECK',
         summary: `检查命名 "${name}" - ${isValid ? '通过' : '未通过'}`,
         entities: [name],
-        outcome: isValid ? 'SUCCESS' : 'FAILED',
+        outcome: isValid ? 'SUCCESS' : 'FAILURE',
         modelId: 'deepseek',
-        durationMs: 0,
-        decision: result.substring(0, 200)
+        durationMs: 0
       });
     } catch (error) {
       console.warn('[CheckNamingCommand] Memory recording failed:', error);

@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import { promisify } from 'util';
 import { container } from 'tsyringe';
-import { EpisodicMemory } from '../core/memory/EpisodicMemory';
+import { MemoryService } from '../core/memory/MemoryService';
 import { AuditLogger } from '../core/security/AuditLogger';
 import { getUserFriendlyMessage } from '../utils/ErrorCodes';
 
@@ -25,11 +25,11 @@ interface ImportedMemoryData {
  * 记忆导入命令处理器
  */
 export class ImportMemoryCommand {
-  private episodicMemory: EpisodicMemory;
+  private memoryService: MemoryService;
   private auditLogger: AuditLogger;
 
-  constructor() {
-    this.episodicMemory = container.resolve(EpisodicMemory);
+  constructor(memoryService?: MemoryService) {
+    this.memoryService = memoryService || new MemoryService();
     this.auditLogger = container.resolve(AuditLogger);
   }
 
@@ -213,14 +213,13 @@ export class ImportMemoryCommand {
 
         // 导入记忆
         console.log('[ImportMemoryCommand] Importing memory...');
-        await this.episodicMemory.record({
+        await this.memoryService.recordMemory({
           taskType: memory.taskType,
           summary: memory.summary,
           entities: memory.entities || [],
           outcome: memory.outcome,
           modelId: memory.modelId,
-          durationMs: memory.durationMs || 0,
-          decision: memory.decision
+          durationMs: memory.durationMs || 0
         });
 
         result.successCount++;
@@ -282,27 +281,12 @@ export class ImportMemoryCommand {
     try {
       // 优先通过ID检查（如果导出的记录有ID）
       if (memory.id) {
-        const db = this.episodicMemory['dbManager'].getDatabase();
-        
-        // 使用sql.js的真正参数化查询
-        const stmt = db.prepare('SELECT COUNT(*) as count FROM episodic_memory WHERE id = ?');
-        stmt.bind([memory.id]);
-        
-        let exists = false;
-        if (stmt.step()) {
-          const result = stmt.getAsObject();
-          exists = (result.count as number) > 0;
-        }
-        stmt.free();
-        
-        if (exists) {
-          console.log('[ImportMemoryCommand] Memory with same ID exists:', memory.id);
-          return true;
-        }
+        // 简化处理：直接尝试导入，由recordMemory处理重复
+        return false;
       }
 
       // 其次通过摘要和时间范围搜索相似记忆
-      const similarMemories = await this.episodicMemory.search(memory.summary, { limit: 5 });
+      const similarMemories = await this.memoryService.searchMemories(memory.summary, undefined, 5);
       
       // 如果找到完全匹配的摘要和任务类型，且时间戳相近（±1秒），认为已存在
       const isDuplicate = similarMemories.some((m: any) => 

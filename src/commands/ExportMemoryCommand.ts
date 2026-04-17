@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { promisify } from 'util';
 import { container } from 'tsyringe';
-import { EpisodicMemory } from '../core/memory/EpisodicMemory';
+import { MemoryService } from '../core/memory/MemoryService';
 import { AuditLogger } from '../core/security/AuditLogger';
 import { getUserFriendlyMessage } from '../utils/ErrorCodes';
 import * as crypto from 'crypto';
@@ -29,11 +29,11 @@ interface ExportedMemoryData {
  * 记忆导出命令处理器
  */
 export class ExportMemoryCommand {
-  private episodicMemory: EpisodicMemory;
+  private memoryService: MemoryService;
   private auditLogger: AuditLogger;
 
-  constructor() {
-    this.episodicMemory = container.resolve(EpisodicMemory);
+  constructor(memoryService?: MemoryService) {
+    this.memoryService = memoryService || new MemoryService();
     this.auditLogger = container.resolve(AuditLogger);
   }
 
@@ -52,7 +52,7 @@ export class ExportMemoryCommand {
       }, async (progress) => {
         progress.report({ message: '获取记忆统计...' });
 
-        const stats = await this.episodicMemory.getStats();
+        const stats = await this.memoryService.getStats();
         
         if (stats.totalCount === 0) {
           vscode.window.showInformationMessage('当前没有可导出的记忆');
@@ -139,7 +139,7 @@ export class ExportMemoryCommand {
 
     while (true) {
       // 使用retrieve方法获取记忆（不带过滤条件）
-      const batch = await this.episodicMemory.retrieve({});
+      const batch = await this.memoryService.getRecentMemories(100);
       
       if (!batch || batch.length === 0) {
         break;

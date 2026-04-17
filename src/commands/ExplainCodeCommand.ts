@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { container } from 'tsyringe';
 import { LLMTool } from '../tools/LLMTool';
-import { EpisodicMemory } from '../core/memory/EpisodicMemory';
+import { MemoryService } from '../core/memory/MemoryService';
 import { PreferenceMemory } from '../core/memory/PreferenceMemory';
 import { AuditLogger } from '../core/security/AuditLogger';
 import { getUserFriendlyMessage } from '../utils/ErrorCodes';
@@ -14,25 +14,24 @@ import { generateCard, generateCodeBlock, generateBadge, generateWebviewTemplate
  */
 export class ExplainCodeCommand {
   private auditLogger: AuditLogger;
-  private episodicMemory: EpisodicMemory;
+  private memoryService: MemoryService;
   private preferenceMemory: PreferenceMemory;
   private llmTool: LLMTool;
   private cache: LLMResponseCache;
 
-  constructor(episodicMemory?: EpisodicMemory, llmTool?: LLMTool) {
+  constructor(memoryService?: MemoryService, llmTool?: LLMTool) {
     console.log('[ExplainCodeCommand] Constructor called');
-    console.log('[ExplainCodeCommand] episodicMemory param:', episodicMemory ? 'provided' : 'undefined');
+    console.log('[ExplainCodeCommand] memoryService param:', memoryService ? 'provided' : 'undefined');
     console.log('[ExplainCodeCommand] llmTool param:', llmTool ? 'provided' : 'undefined');
     
     this.auditLogger = container.resolve(AuditLogger);
-    // 如果传入了实例则使用，否则从容器解析（兼容测试）
-    this.episodicMemory = episodicMemory || container.resolve(EpisodicMemory);
+    // 如果传入了实例则使用，否则创建新实例（兼容测试）
+    this.memoryService = memoryService || new MemoryService();
     this.preferenceMemory = container.resolve(PreferenceMemory);
     this.llmTool = llmTool || container.resolve(LLMTool);
     this.cache = new LLMResponseCache();
     
-    console.log('[ExplainCodeCommand] episodicMemory instance:', this.episodicMemory ? 'initialized' : 'null');
-    console.log('[ExplainCodeCommand] dbManager:', this.episodicMemory['dbManager'] ? 'exists' : 'null');
+    console.log('[ExplainCodeCommand] memoryService instance:', this.memoryService ? 'initialized' : 'null');
   }
 
   /**
@@ -265,14 +264,13 @@ ${code}
     durationMs: number
   ): Promise<void> {
     try {
-      await this.episodicMemory.record({
+      await this.memoryService.recordMemory({
         taskType: 'CODE_EXPLAIN',
         summary: `解释 ${fileName.split('/').pop()} 中的代码`,
         entities: [fileName.split('.').pop() || 'unknown'],
         outcome: 'SUCCESS',
         modelId: 'deepseek',
-        durationMs,
-        decision: explanation.substring(0, 200) // 截取前200字符作为决策摘要
+        durationMs
       });
     } catch (error) {
       // 记忆记录失败不影响主流程，仅记录日志

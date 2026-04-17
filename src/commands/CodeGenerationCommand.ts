@@ -7,20 +7,20 @@
 import * as vscode from 'vscode';
 import { container } from 'tsyringe';
 import { LLMTool } from '../tools/LLMTool';
-import { EpisodicMemory } from '../core/memory/EpisodicMemory';
+import { MemoryService } from '../core/memory/MemoryService';
 import { AuditLogger } from '../core/security/AuditLogger';
 import { getUserFriendlyMessage } from '../utils/ErrorCodes';
 import { LLMResponseCache } from '../core/cache/LLMResponseCache';
 
 export class CodeGenerationCommand {
   private auditLogger: AuditLogger;
-  private episodicMemory: EpisodicMemory;
+  private memoryService: MemoryService;
   private llmTool: LLMTool;
   private cache: LLMResponseCache;
 
-  constructor(episodicMemory?: EpisodicMemory, llmTool?: LLMTool) {
+  constructor(memoryService?: MemoryService, llmTool?: LLMTool) {
     this.auditLogger = container.resolve(AuditLogger);
-    this.episodicMemory = episodicMemory || container.resolve(EpisodicMemory);
+    this.memoryService = memoryService || new MemoryService();
     this.llmTool = llmTool || container.resolve(LLMTool);
     this.cache = new LLMResponseCache();
   }
@@ -316,14 +316,13 @@ export class CodeGenerationCommand {
     durationMs: number
   ): Promise<void> {
     try {
-      await this.episodicMemory.record({
+      await this.memoryService.recordMemory({
         taskType: 'CODE_GENERATE',
         summary: `生成代码: ${requirement.substring(0, 50)}`,
         entities: ['code', requirement.substring(0, 20)],
         outcome: 'SUCCESS',
         modelId: 'deepseek',
-        durationMs,
-        decision: code.substring(0, 200)
+        durationMs
       });
     } catch (error) {
       console.warn('[CodeGenerationCommand] Memory recording failed:', error);
