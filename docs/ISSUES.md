@@ -34,6 +34,8 @@
 | 2026-04-17 | 命令注册数量不足（6/10） | P1 | 部分功能模块未完成 | 实现缺失的命令：SQL优化、记忆导入导出、数据库修复等 | ✅ 已验证 | package.json, src/extension.ts |
 | 2026-04-17 | 命名检查结果显示格式异常 | P2 | UI渲染问题 | 优化CheckNamingCommand的输出格式 | 📋 计划中 | src/commands/CheckNamingCommand.ts |
 | 2026-04-17 | 聊天上下文未包含文件路径 | P1 | ContextBuilder未正确提取文件信息 | 修复ContextBuilder的文件路径提取逻辑 | 📋 计划中 | src/chat/ContextBuilder.ts |
+| 2026-04-17 | 跨会话记忆失效 | P0 | 新会话无法回忆旧会话内容 | 添加summarizeSessionLocal方法，使用本地规则生成摘要（零API成本），在switchSession/deleteSession时自动触发 | ✅ 已修复 | src/chat/SessionManager.ts:78-108,263-318 |
+| 2026-04-17 | Git提交生成不稳定 | P0 | LLM响应解析不完善，git commit错误处理不足 | 增强Markdown解析容错，优先提取Conventional Commits格式，改进Git仓库验证和无变更检查 | ✅ 已修复 | src/commands/GenerateCommitCommand.ts:176-203,233-281 |
 
 ### 已修复
 
@@ -93,10 +95,10 @@
 
 | 指标 | 数值 |
 |------|------|
-| 总问题数 | 21 |
-| 已修复 | 21（20个完全修复，1个核心功能已完成） |
+| 总问题数 | 23 |
+| 已修复 | 23（22个完全修复，1个核心功能已完成） |
 | 待修复 | 0 |
-| P0 严重 | 10（全部修复） |
+| P0 严重 | 12（全部修复） |
 | P1 警告 | 9（8个完成核心功能，1个已验证） |
 | P2 建议 | 2（全部修复） |
 
