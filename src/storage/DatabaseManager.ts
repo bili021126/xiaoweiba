@@ -185,7 +185,8 @@ export class DatabaseManager {
         final_weight REAL NOT NULL,
         model_id TEXT NOT NULL,
         latency_ms INTEGER,
-        vector BLOB
+        vector BLOB,
+        memory_tier TEXT DEFAULT 'LONG_TERM'
       )
     `);
 
@@ -263,6 +264,7 @@ export class DatabaseManager {
     db.run(`CREATE INDEX IF NOT EXISTS idx_episodic_timestamp ON episodic_memory(timestamp)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_episodic_task_type ON episodic_memory(task_type)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_episodic_outcome ON episodic_memory(outcome)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_episodic_memory_tier ON episodic_memory(memory_tier)`); // 新增：记忆层级索引
     db.run(`CREATE INDEX IF NOT EXISTS idx_preference_domain ON preference_memory(domain)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_preference_project ON preference_memory(project_fingerprint)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_preference_pattern_hash ON preference_memory(pattern_hash)`);
@@ -627,5 +629,41 @@ export class DatabaseManager {
     const db = this.getDatabase();
     db.run(sql, params || []);
     return { changes: db.getRowsModified() };
+  }
+
+  /**
+   * 迁移：为现有数据添加memory_tier字段
+   */
+  migrateAddMemoryTier(): void {
+    try {
+      const db = this.getDatabase();
+      
+      // 检查是否已存在memory_tier列
+      const columnsResult = db.exec("PRAGMA table_info(episodic_memory)");
+      if (columnsResult.length === 0) return;
+      
+      const hasMemoryTier = columnsResult[0].values.some((row: any[]) => row[1] === 'memory_tier');
+      if (hasMemoryTier) {
+        console.log('[DatabaseManager] memory_tier column already exists, skip migration');
+        return;
+      }
+      
+      console.log('[DatabaseManager] Adding memory_tier column...');
+      
+      // SQLite不支持直接添加带默认值的列到已有数据的表，需要重建表
+      db.run(`ALTER TABLE episodic_memory ADD COLUMN memory_tier TEXT DEFAULT 'LONG_TERM'`);
+      
+      // 根据时间自动分类：7天内的为SHORT_TERM，其他为LONG_TERM
+      const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      db.run(`UPDATE episodic_memory SET memory_tier = 'SHORT_TERM' WHERE timestamp >= ?`, [sevenDaysAgo]);
+      
+      const updatedCount = db.getRowsModified();
+      console.log(`[DatabaseManager] Migrated ${updatedCount} memories to SHORT_TERM tier`);
+      
+      this.saveDatabase();
+    } catch (error) {
+      console.error('[DatabaseManager] Migration failed:', error);
+      throw error;
+    }
   }
 }

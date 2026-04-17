@@ -21,6 +21,8 @@ export type TaskType =
 
 export type TaskOutcome = 'SUCCESS' | 'FAILED' | 'PARTIAL' | 'CANCELLED';
 
+export type MemoryTier = 'SHORT_TERM' | 'LONG_TERM';
+
 export interface EpisodicMemoryRecord {
   id: string;
   projectFingerprint: string;
@@ -35,6 +37,7 @@ export interface EpisodicMemoryRecord {
   durationMs: number;
   metadata?: Record<string, unknown>;
   vector?: Buffer; // 向量数据（从数据库加载）
+  memoryTier?: MemoryTier; // 记忆层级
 }
 
 export interface MemoryQueryOptions {
@@ -45,6 +48,7 @@ export interface MemoryQueryOptions {
   sortBy?: 'timestamp' | 'finalWeight';
   sortOrder?: 'ASC' | 'DESC';
   sinceTimestamp?: number;
+  memoryTier?: MemoryTier; // 按层级过滤
 }
 
 /**
@@ -141,11 +145,14 @@ export class EpisodicMemory {
       // 计算初始权重
       const finalWeight = this.calculateInitialWeight(memory.outcome);
 
+      // 自动判断记忆层级：7天内的为SHORT_TERM，其他为LONG_TERM
+      const memoryTier = this.determineMemoryTier(timestamp);
+
       db.run(
         `INSERT INTO episodic_memory (
           id, project_fingerprint, timestamp, task_type, summary,
-          entities, decision, outcome, final_weight, model_id, latency_ms
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          entities, decision, outcome, final_weight, model_id, latency_ms, memory_tier
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id,
           projectFingerprint,
@@ -157,16 +164,17 @@ export class EpisodicMemory {
           memory.outcome,
           finalWeight,
           memory.modelId,
-          memory.durationMs || null
+          memory.durationMs || null,
+          memoryTier
         ]
       );
 
       const duration = Date.now() - startTime;
       await this.auditLogger.log('memory_record', 'success', duration, {
-        parameters: { id, taskType: memory.taskType }
+        parameters: { id, taskType: memory.taskType, memoryTier }
       });
 
-      console.log(`[EpisodicMemory] Memory recorded successfully: ${id} (${memory.taskType})`);
+      console.log(`[EpisodicMemory] Memory recorded successfully: ${id} (${memory.taskType}, ${memoryTier})`);
       
       // 增量更新内存索引
       const newMemory: EpisodicMemoryRecord = {
@@ -174,7 +182,8 @@ export class EpisodicMemory {
         projectFingerprint,
         timestamp,
         ...memory,
-        finalWeight
+        finalWeight,
+        memoryTier
       };
       this.addToIndex(newMemory);
       
@@ -220,6 +229,11 @@ export class EpisodicMemory {
         params.push(options.sinceTimestamp);
       }
 
+      if (options.memoryTier) {
+        sql += ` AND memory_tier = ?`;
+        params.push(options.memoryTier);
+      }
+
       sql += ` ORDER BY ${sortBy} ${sortOrder}`; // 白名单验证，安全
       sql += ` LIMIT ? OFFSET ?`;
       params.push(limit, offset);
@@ -237,7 +251,7 @@ export class EpisodicMemory {
 
       const duration = Date.now() - startTime;
       await this.auditLogger.log('memory_retrieve', 'success', duration, {
-        parameters: { count: memories.length, taskType: options.taskType }
+        parameters: { count: memories.length, taskType: options.taskType, memoryTier: options.memoryTier }
       });
 
       return memories;
@@ -421,12 +435,13 @@ export class EpisodicMemory {
     byTaskType: Record<string, number>;
     byOutcome: Record<string, number>;
     averageWeight: number;
+    byTier: Record<string, number>; // 按层级统计
   }> {
     const db = this.dbManager.getDatabase();
     const projectFingerprint = await this.projectFingerprint.getCurrentProjectFingerprint();
 
     if (!projectFingerprint) {
-      return { totalCount: 0, byTaskType: {}, byOutcome: {}, averageWeight: 0 };
+      return { totalCount: 0, byTaskType: {}, byOutcome: {}, averageWeight: 0, byTier: {} };
     }
 
     // 使用真正的参数化查询
@@ -466,7 +481,19 @@ export class EpisodicMemory {
     const averageWeight = avgWeightStmt.step() ? (avgWeightStmt.getAsObject().avg_weight as number) || 0 : 0;
     avgWeightStmt.free();
 
-    return { totalCount, byTaskType, byOutcome, averageWeight };
+    // 新增：按层级统计
+    const byTierStmt = db.prepare(
+      'SELECT memory_tier, COUNT(*) as count FROM episodic_memory WHERE project_fingerprint = ? GROUP BY memory_tier'
+    );
+    byTierStmt.bind([projectFingerprint]);
+    const byTier: Record<string, number> = {};
+    while (byTierStmt.step()) {
+      const row = byTierStmt.getAsObject();
+      byTier[row.memory_tier as string] = row.count as number;
+    }
+    byTierStmt.free();
+
+    return { totalCount, byTaskType, byOutcome, averageWeight, byTier };
   }
 
   /**
@@ -503,7 +530,8 @@ export class EpisodicMemory {
       finalWeight: row.final_weight as number,
       modelId: row.model_id as string,
       durationMs: (row.latency_ms as number) || 0,
-      metadata: undefined
+      metadata: undefined,
+      memoryTier: (row.memory_tier as MemoryTier) || 'LONG_TERM'
     };
   }
 
@@ -932,5 +960,46 @@ export class EpisodicMemory {
     this.indexReady = false;
     this.initPromise = null;
     console.log('[EpisodicMemory] Disposed');
+  }
+
+  /**
+   * 判断记忆层级（基于时间）
+   * @param timestamp 记忆创建时间戳
+   * @returns SHORT_TERM（7天内）或 LONG_TERM（7天以上）
+   */
+  private determineMemoryTier(timestamp: number): MemoryTier {
+    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    return timestamp >= sevenDaysAgo ? 'SHORT_TERM' : 'LONG_TERM';
+  }
+
+  /**
+   * 迁移短期记忆为长期记忆（超过7天的自动降级）
+   * @returns 迁移的记忆数量
+   */
+  async migrateShortToLongTerm(): Promise<number> {
+    try {
+      const db = this.dbManager.getDatabase();
+      const projectFingerprint = await this.projectFingerprint.getCurrentProjectFingerprint();
+      
+      if (!projectFingerprint) {
+        console.warn('[EpisodicMemory] No project fingerprint, skip migration');
+        return 0;
+      }
+
+      // 将7天前的SHORT_TERM记忆更新为LONG_TERM
+      const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      db.run(
+        `UPDATE episodic_memory SET memory_tier = 'LONG_TERM' WHERE project_fingerprint = ? AND memory_tier = 'SHORT_TERM' AND timestamp < ?`,
+        [projectFingerprint, sevenDaysAgo]
+      );
+
+      const migratedCount = db.getRowsModified();
+      console.log(`[EpisodicMemory] Migrated ${migratedCount} memories from SHORT_TERM to LONG_TERM`);
+      
+      return migratedCount;
+    } catch (error) {
+      console.error('[EpisodicMemory] Migration failed:', error);
+      throw error;
+    }
   }
 }

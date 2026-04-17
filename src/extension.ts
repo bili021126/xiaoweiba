@@ -55,6 +55,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     await databaseManager.initialize();
     console.log('[Extension] Database initialized successfully');
     
+    // 执行数据库迁移（短期/长期记忆分区）
+    try {
+      databaseManager.migrateAddMemoryTier();
+      console.log('[Extension] Memory tier migration completed');
+    } catch (error) {
+      console.warn('[Extension] Memory tier migration failed:', error);
+    }
+    
     // 关键：将已初始化的DatabaseManager注册为单例，覆盖容器中的实例
     container.registerInstance(DatabaseManager, databaseManager);
     console.log('[Extension] DatabaseManager registered as singleton');
