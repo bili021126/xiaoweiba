@@ -92,8 +92,22 @@ export class ExpertSelector {
    * 记录一次点击反馈
    * @param intent 查询时的意图向量
    * @param clickedWeights 用户实际点击结果的权重配置
+   * @param query 原始查询文本（用于去重）
+   * @param dwellTimeMs 停留时间（毫秒）
    */
-  recordFeedback(intent: IntentVector, clickedWeights: RetrievalWeights): void {
+  recordFeedback(
+    intent: IntentVector,
+    clickedWeights: RetrievalWeights,
+    query?: string,
+    dwellTimeMs?: number
+  ): void {
+    // 限制2: 反馈有效性验证
+    const validation = this.validateFeedback(query, dwellTimeMs);
+    if (!validation.isValid) {
+      console.debug(`[ExpertSelector] Feedback rejected: ${validation.reason}`);
+      return;
+    }
+
     this.feedbackHistory.push({
       intent,
       clickedWeights,
@@ -105,8 +119,77 @@ export class ExpertSelector {
       this.feedbackHistory = this.feedbackHistory.slice(-this.MAX_HISTORY);
     }
 
+    // 全局护栏: 准入控制 - 最小反馈量
+    if (this.feedbackHistory.length < this.MIN_FEEDBACK_THRESHOLD) {
+      console.debug(`[ExpertSelector] Accumulating feedback: ${this.feedbackHistory.length}/${this.MIN_FEEDBACK_THRESHOLD}`);
+      return;
+    }
+
+    // 全局护栏: 准入控制 - 意图分布均衡检查
+    if (!this.checkIntentDistribution()) {
+      console.warn('[ExpertSelector] Intent distribution imbalanced, skipping update');
+      return;
+    }
+
     // 防抖：积累反馈后延迟更新权重
     this.scheduleWeightUpdate();
+  }
+
+  /**
+   * 验证反馈有效性
+   */
+  private validateFeedback(query?: string, dwellTimeMs?: number): FeedbackValidation {
+    // 停留时间校验
+    if (dwellTimeMs !== undefined && dwellTimeMs < this.MIN_DWELL_TIME_MS) {
+      return { isValid: false, reason: `Dwell time too short: ${dwellTimeMs}ms < ${this.MIN_DWELL_TIME_MS}ms` };
+    }
+
+    // 30分钟去重
+    if (query) {
+      const lastClick = this.lastClickTime.get(query);
+      const now = Date.now();
+      if (lastClick && (now - lastClick) < this.CLICK_DEBOUNCE_MS) {
+        return { isValid: false, reason: 'Duplicate click within 30 minutes' };
+      }
+      this.lastClickTime.set(query, now);
+    }
+
+    return { isValid: true };
+  }
+
+  /**
+   * 检查意图分布均衡性
+   */
+  private checkIntentDistribution(): boolean {
+    if (this.feedbackHistory.length < 10) return true; // 样本太少不检查
+
+    // 统计最近20条反馈的意图主导类型
+    const recentFeedback = this.feedbackHistory.slice(-20);
+    const dominantCounts: Record<string, number> = { temporal: 0, entity: 0, semantic: 0, balanced: 0 };
+
+    for (const fb of recentFeedback) {
+      const maxVal = Math.max(fb.intent.temporal, fb.intent.entity, fb.intent.semantic);
+      if (maxVal === fb.intent.temporal && fb.intent.temporal > 0.5) {
+        dominantCounts.temporal++;
+      } else if (maxVal === fb.intent.entity && fb.intent.entity > 0.5) {
+        dominantCounts.entity++;
+      } else if (maxVal === fb.intent.semantic && fb.intent.semantic > 0.5) {
+        dominantCounts.semantic++;
+      } else {
+        dominantCounts.balanced++;
+      }
+    }
+
+    // 检查是否有单一意图占比超过80%
+    const total = recentFeedback.length;
+    for (const count of Object.values(dominantCounts)) {
+      if (count / total > this.INTENT_DOMINANCE_THRESHOLD) {
+        console.warn(`[ExpertSelector] Intent dominance detected: ${count}/${total} (${(count/total*100).toFixed(1)}%)`);
+        return false;
+      }
+    }
+
+    return true;
   }
 
   /**
@@ -128,6 +211,9 @@ export class ExpertSelector {
     if (!this.context || this.feedbackHistory.length === 0) return;
   
     try {
+      // 全局护栏: 回滚与熔断 - 保存快照
+      await this.saveSnapshot();
+
       // 从 workspaceState读取当前权重
       const currentWeights = this.context.workspaceState.get<RetrievalWeights>(this.STORAGE_KEY) || DEFAULT_WEIGHTS;
       let total = 0;
@@ -164,10 +250,18 @@ export class ExpertSelector {
       }
       this.lastFeedbackDirection = currentDirection;
   
+      // 限制3: 学习率衰减（每10次反馈*0.9）
+      this.totalFeedbackCount++;
+      if (this.totalFeedbackCount % this.LR_DECAY_INTERVAL === 0) {
+        this.currentLearningRate *= this.LR_DECAY_FACTOR;
+        console.log(`[ExpertSelector] Learning rate decayed to ${this.currentLearningRate.toFixed(4)}`);
+      }
+
       // 梯度更新（使用自适应学习率）
       for (const factor of ['k', 't', 'e', 'v'] as const) {
         let newWeight = currentWeights[factor] + this.adaptiveLearningRates[factor] * (avgClicked[factor] - 0.25);
-        newWeight = Math.max(0.05, Math.min(0.7, newWeight)); // 限制范围
+        // 限制1: 权重边界硬截断
+        newWeight = Math.max(this.MIN_WEIGHT, Math.min(this.MAX_WEIGHT, newWeight));
         newWeights[factor] = newWeight;
         total += newWeight;
       }
@@ -191,13 +285,128 @@ export class ExpertSelector {
           newWeights[factor]! /= total;
         }
       }
-  
+
+      // 全局护栏: 运行时监控 - 权重漂移检查
+      this.checkWeightDrift(newWeights as RetrievalWeights);
+
       // 保存到workspaceState
       await this.context.workspaceState.update(this.STORAGE_KEY, newWeights);
       console.log('[ExpertSelector] Weights updated:', newWeights, '(learning rates:', this.adaptiveLearningRates, ')');
+
+      // 重置异常计数
+      this.consecutiveAnomalies = 0;
     } catch (error) {
       console.error('[ExpertSelector] Failed to update weights:', error);
+      // 全局护栏: 回滚与熔断 - 连续异常检测
+      this.consecutiveAnomalies++;
+      if (this.consecutiveAnomalies >= this.MAX_CONSECUTIVE_ANOMALIES) {
+        console.warn('[ExpertSelector] Consecutive anomalies detected, rolling back...');
+        await this.rollbackToLastStable();
+      }
     }
+  }
+
+  /**
+   * 保存权重快照（用于回滚）
+   */
+  private async saveSnapshot(): Promise<void> {
+    if (!this.context) return;
+
+    try {
+      const currentWeights = this.context.workspaceState.get<RetrievalWeights>(this.STORAGE_KEY) || DEFAULT_WEIGHTS;
+      const snapshots = this.context.workspaceState.get<WeightSnapshot[]>(this.SNAPSHOTS_KEY) || [];
+
+      // 添加新快照
+      snapshots.push({
+        weights: { ...currentWeights },
+        timestamp: Date.now(),
+        feedbackCount: this.feedbackHistory.length
+      });
+
+      // 保留最近5个快照
+      if (snapshots.length > this.MAX_SNAPSHOTS) {
+        snapshots.shift();
+      }
+
+      await this.context.workspaceState.update(this.SNAPSHOTS_KEY, snapshots);
+      console.log(`[ExpertSelector] Snapshot saved (${snapshots.length} total)`);
+    } catch (error) {
+      console.error('[ExpertSelector] Failed to save snapshot:', error);
+    }
+  }
+
+  /**
+   * 检查权重漂移
+   */
+  private checkWeightDrift(newWeights: RetrievalWeights): void {
+    if (!this.lastWeightCheck) {
+      this.lastWeightCheck = { ...newWeights };
+      this.lastWeightCheckTime = Date.now();
+      return;
+    }
+
+    const now = Date.now();
+    const hoursSinceLastCheck = (now - this.lastWeightCheckTime) / (3600 * 1000);
+
+    // 24小时内检查
+    if (hoursSinceLastCheck < 24) return;
+
+    // 检查任意因子变化是否超过阈值
+    let maxDrift = 0;
+    for (const factor of ['k', 't', 'e', 'v'] as const) {
+      const drift = Math.abs(newWeights[factor] - this.lastWeightCheck![factor]);
+      maxDrift = Math.max(maxDrift, drift);
+    }
+
+    if (maxDrift > this.WEIGHT_DRIFT_THRESHOLD) {
+      console.warn(`[ExpertSelector] Weight drift detected: ${maxDrift.toFixed(3)} in 24h`);
+    }
+
+    // 更新检查点
+    this.lastWeightCheck = { ...newWeights };
+    this.lastWeightCheckTime = now;
+  }
+
+  /**
+   * 回滚到上一个稳定快照
+   */
+  private async rollbackToLastStable(): Promise<void> {
+    if (!this.context) return;
+
+    try {
+      const snapshots = this.context.workspaceState.get<WeightSnapshot[]>(this.SNAPSHOTS_KEY) || [];
+      if (snapshots.length === 0) {
+        console.warn('[ExpertSelector] No snapshots available for rollback');
+        return;
+      }
+
+      // 使用倒数第二个快照（最后一个是异常前的）
+      const stableSnapshot = snapshots[snapshots.length - 2] || snapshots[0];
+      await this.context.workspaceState.update(this.STORAGE_KEY, stableSnapshot.weights);
+
+      console.log('[ExpertSelector] Rolled back to snapshot:', stableSnapshot);
+
+      // 重置状态
+      this.consecutiveAnomalies = 0;
+      this.feedbackHistory = [];
+    } catch (error) {
+      console.error('[ExpertSelector] Rollback failed:', error);
+    }
+  }
+
+  /**
+   * 手动重置专家权重（提供命令调用）
+   */
+  async resetToDefault(): Promise<void> {
+    if (!this.context) return;
+
+    await this.context.workspaceState.update(this.STORAGE_KEY, DEFAULT_WEIGHTS);
+    this.feedbackHistory = [];
+    this.currentLearningRate = this.baseLearningRate;
+    this.totalFeedbackCount = 0;
+    this.consecutiveAnomalies = 0;
+
+    console.log('[ExpertSelector] Reset to default weights');
   }
 
   /**
