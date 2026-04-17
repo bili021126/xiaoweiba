@@ -17,6 +17,8 @@ import { CheckNamingCommand } from './commands/CheckNamingCommand';
 import { CodeGenerationCommand } from './commands/CodeGenerationCommand';
 import { EpisodicMemory } from './core/memory/EpisodicMemory';
 import { PreferenceMemory } from './core/memory/PreferenceMemory';
+import { MemorySystem } from './core/memory/MemorySystem';
+import { EventBus } from './core/eventbus/EventBus';
 import { LLMTool } from './tools/LLMTool';
 import { ChatViewProvider } from './chat/ChatViewProvider';
 import { AICompletionProvider } from './completion/AICompletionProvider';
@@ -26,6 +28,8 @@ let databaseManager: DatabaseManager;
 let auditLogger: AuditLogger;
 let episodicMemory: EpisodicMemory;
 let preferenceMemory: PreferenceMemory;
+let memorySystem: MemorySystem;
+let eventBus: EventBus;
 let llmTool: LLMTool;
 let chatViewProvider: ChatViewProvider;
 let aiCompletionProvider: AICompletionProvider;
@@ -68,11 +72,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     console.log('[Extension] DatabaseManager registered as singleton');
     console.log('[Extension] Step 3 complete');
 
-    console.log('[Extension] Step 4: Initializing EpisodicMemory and LLMTool...');
+    console.log('[Extension] Step 4: Initializing core services...');
     // 预解析核心服务（确保单例）
     episodicMemory = container.resolve(EpisodicMemory);
     preferenceMemory = container.resolve(PreferenceMemory);
+    eventBus = container.resolve(EventBus);
+    memorySystem = container.resolve(MemorySystem);
     llmTool = container.resolve(LLMTool);
+    
+    // 初始化记忆系统
+    await memorySystem.initialize();
     console.log('[Extension] Core services initialized');
     console.log('[Extension] Step 4 complete');
 
@@ -141,6 +150,12 @@ export async function deactivate(): Promise<void> {
     }
     if (episodicMemory) {
       await episodicMemory.dispose();
+    }
+    if (memorySystem) {
+      await memorySystem.dispose();
+    }
+    if (eventBus) {
+      eventBus.dispose();
     }
     if (preferenceMemory) {
       // PreferenceMemory暂无dispose，预留
@@ -341,6 +356,16 @@ function registerCommands(context: vscode.ExtensionContext): void {
     }, 500);
   });
 
+  // 4. 文件打开时主动推荐相关记忆（记忆驱动核心）
+  const onDidOpenTextDocument = vscode.workspace.onDidOpenTextDocument(async (document) => {
+    // 仅对代码文件进行推荐
+    const codeLanguages = ['typescript', 'javascript', 'python', 'java', 'go', 'rust', 'cpp', 'c'];
+    if (!codeLanguages.includes(document.languageId)) return;
+    
+    console.log(`[Memory-Driven] File opened: ${document.fileName}`);
+    await memorySystem.proactiveRecommend(document.fileName);
+  });
+
   // 添加到订阅
   context.subscriptions.push(
     explainCodeCmd,
@@ -356,6 +381,8 @@ function registerCommands(context: vscode.ExtensionContext): void {
     // 智能唤醒监听器
     onDidSaveTextDocument,
     onDidChangeActiveTextEditor,
-    onDidChangeTextEditorSelection
+    onDidChangeTextEditorSelection,
+    // 记忆驱动：文件打开主动推荐
+    onDidOpenTextDocument
   );
 }
