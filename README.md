@@ -300,6 +300,7 @@ MIT License
 - 修复ChatViewProvider资源泄漏（添加dispose调用）
 - 修复聊天界面执行命令后转圈Bug（添加commandExecuted消息通知）
 - 添加聊天命令审计日志和情景记忆记录
+- **P0核心修复**：跨会话记忆（本地规则摘要，零API成本）+ Git提交生成（增强容错）
 
 #### 🔧 优化
 - 移除未使用依赖（@xenova/transformers, dotenv）
