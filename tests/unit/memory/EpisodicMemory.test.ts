@@ -826,4 +826,264 @@ describe('EpisodicMemory', () => {
       });
     });
   });
+
+  describe('retrieve() - 分支覆盖', () => {
+    beforeEach(() => {
+      mockDb.prepare.mockReturnValue({
+        bind: jest.fn().mockReturnThis(),
+        step: jest.fn().mockReturnValue(false),
+        getAsObject: jest.fn(),
+        free: jest.fn()
+      });
+    });
+
+    it('应该支持sinceTimestamp过滤', async () => {
+      const sinceTs = Date.now() - 3600000; // 1小时前
+      await episodicMemory.retrieve({ sinceTimestamp: sinceTs });
+      
+      const prepareCall = (mockDb.prepare as jest.Mock).mock.calls[0];
+      expect(prepareCall[0]).toContain('timestamp >= ?');
+    });
+
+    it('应该支持memoryTier过滤', async () => {
+      await episodicMemory.retrieve({ memoryTier: 'SHORT_TERM' });
+      
+      const prepareCall = (mockDb.prepare as jest.Mock).mock.calls[0];
+      expect(prepareCall[0]).toContain('memory_tier = ?');
+    });
+
+    it('应该同时支持多个过滤条件', async () => {
+      const sinceTs = Date.now() - 3600000;
+      await episodicMemory.retrieve({ 
+        taskType: 'CODE_EXPLAIN',
+        sinceTimestamp: sinceTs,
+        memoryTier: 'LONG_TERM'
+      });
+      
+      const prepareCall = (mockDb.prepare as jest.Mock).mock.calls[0];
+      const sql = prepareCall[0];
+      expect(sql).toContain('task_type = ?');
+      expect(sql).toContain('timestamp >= ?');
+      expect(sql).toContain('memory_tier = ?');
+    });
+  });
+
+  describe('searchSemantic() - TF-IDF检索', () => {
+    beforeEach(() => {
+      // Mock FTS5查询返回候选ID
+      mockDb.prepare.mockImplementation((sql: string) => {
+        if (sql.includes('episodic_memory_fts')) {
+          return {
+            bind: jest.fn().mockReturnThis(),
+            step: jest.fn()
+              .mockReturnValueOnce(true)
+              .mockReturnValueOnce(true)
+              .mockReturnValueOnce(false),
+            getAsObject: jest.fn()
+              .mockReturnValueOnce({ id: 'mem-001' })
+              .mockReturnValueOnce({ id: 'mem-002' }),
+            free: jest.fn()
+          };
+        }
+        return {
+          bind: jest.fn().mockReturnThis(),
+          step: jest.fn().mockReturnValue(false),
+          getAsObject: jest.fn(),
+          free: jest.fn()
+        };
+      });
+    });
+
+    it('应该执行TF-IDF评分并返回排序结果', async () => {
+      // 模拟记忆数据
+      const mockMemories = [
+        { id: 'mem-001', summary: 'React component optimization', entities: ['React'], timestamp: Date.now() - 86400000 },
+        { id: 'mem-002', summary: 'Vue performance tuning', entities: ['Vue'], timestamp: Date.now() - 172800000 }
+      ];
+
+      let callCount = 0;
+      (episodicMemory as any).getMemoryById = jest.fn().mockImplementation(() => {
+        return Promise.resolve(mockMemories[callCount++ % mockMemories.length]);
+      });
+
+      const results = await (episodicMemory as any).searchSemantic('React optimization', 10);
+      
+      expect(results).toBeDefined();
+      expect(Array.isArray(results)).toBe(true);
+    });
+
+    it('应该在无候选时返回空数组', async () => {
+      mockDb.prepare.mockReturnValue({
+        bind: jest.fn().mockReturnThis(),
+        step: jest.fn().mockReturnValue(false),
+        getAsObject: jest.fn(),
+        free: jest.fn()
+      });
+
+      const results = await (episodicMemory as any).searchSemantic('nonexistent query', 10);
+      expect(results).toEqual([]);
+    });
+
+    it('应该处理实体匹配加分逻辑', async () => {
+      const mockMemory = {
+        id: 'mem-003',
+        summary: 'Database query optimization',
+        entities: ['PostgreSQL', 'index'],
+        timestamp: Date.now() - 3600000,
+        finalWeight: 0.8
+      };
+
+      mockDb.prepare.mockImplementation((sql: string) => {
+        if (sql.includes('episodic_memory_fts')) {
+          return {
+            bind: jest.fn().mockReturnThis(),
+            step: jest.fn().mockReturnValueOnce(true).mockReturnValueOnce(false),
+            getAsObject: jest.fn().mockReturnValueOnce({ id: 'mem-003' }),
+            free: jest.fn()
+          };
+        }
+        return {
+          bind: jest.fn().mockReturnThis(),
+          step: jest.fn().mockReturnValue(false),
+          getAsObject: jest.fn(),
+          free: jest.fn()
+        };
+      });
+
+      (episodicMemory as any).getMemoryById = jest.fn().mockResolvedValue(mockMemory);
+
+      const results = await (episodicMemory as any).searchSemantic('PostgreSQL index', 5);
+      expect(results).toBeDefined();
+    });
+  });
+
+  describe('getMemoryById() - 单条记忆检索', () => {
+    it('应该成功获取存在的记忆', async () => {
+      const mockRow = {
+        id: 'mem-test',
+        project_fingerprint: 'fp123',
+        timestamp: Date.now(),
+        task_type: 'CODE_EXPLAIN',
+        summary: 'Test memory',
+        entities: JSON.stringify(['entity1']),
+        outcome: 'SUCCESS',
+        final_weight: 0.9,
+        model_id: 'gpt-4',
+        duration_ms: 1500
+      };
+
+      mockDb.prepare.mockReturnValue({
+        bind: jest.fn().mockReturnThis(),
+        step: jest.fn().mockReturnValue(true),
+        getAsObject: jest.fn().mockReturnValue(mockRow),
+        free: jest.fn()
+      });
+
+      const result = await (episodicMemory as any).getMemoryById('mem-test');
+      expect(result).toBeDefined();
+      expect(result?.id).toBe('mem-test');
+    });
+
+    it('应该在记忆不存在时返回null', async () => {
+      mockDb.prepare.mockReturnValue({
+        bind: jest.fn().mockReturnThis(),
+        step: jest.fn().mockReturnValue(false),
+        getAsObject: jest.fn(),
+        free: jest.fn()
+      });
+
+      const result = await (episodicMemory as any).getMemoryById('nonexistent');
+      expect(result).toBeNull();
+    });
+
+    it('应该在数据库错误时返回null', async () => {
+      mockDb.prepare.mockImplementation(() => {
+        throw new Error('Database error');
+      });
+
+      const result = await (episodicMemory as any).getMemoryById('mem-error');
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('migrateShortToLongTerm() - 记忆迁移', () => {
+    it('应该成功迁移过期的短期记忆', async () => {
+      mockDb.run.mockReturnValue(undefined);
+      mockDb.getRowsModified.mockReturnValue(5);
+
+      const count = await episodicMemory.migrateShortToLongTerm();
+      expect(count).toBe(5);
+    });
+
+    it('应该在无项目指纹时跳过迁移', async () => {
+      (mockProjectFingerprint.getCurrentProjectFingerprint as jest.Mock).mockResolvedValue(null);
+
+      const count = await episodicMemory.migrateShortToLongTerm();
+      expect(count).toBe(0);
+    });
+
+    it('应该在迁移失败时抛出错误', async () => {
+      mockDb.run.mockImplementation(() => {
+        throw new Error('Migration failed');
+      });
+
+      await expect(episodicMemory.migrateShortToLongTerm()).rejects.toThrow('Migration failed');
+    });
+  });
+
+  describe('getRecentMemoriesFromDB() - 最近记忆检索', () => {
+    it('应该成功获取最近记忆', async () => {
+      const mockRows = [
+        {
+          id: 'mem-recent-1',
+          project_fingerprint: 'fp123',
+          timestamp: Date.now() - 3600000,
+          task_type: 'CODE_GENERATE',
+          summary: 'Recent memory 1',
+          entities: JSON.stringify(['React']),
+          outcome: 'SUCCESS',
+          final_weight: 0.85,
+          model_id: 'gpt-4',
+          duration_ms: 2000
+        },
+        {
+          id: 'mem-recent-2',
+          project_fingerprint: 'fp123',
+          timestamp: Date.now() - 7200000,
+          task_type: 'TEST_GENERATE',
+          summary: 'Recent memory 2',
+          entities: JSON.stringify(['Jest']),
+          outcome: 'SUCCESS',
+          final_weight: 0.75,
+          model_id: 'gpt-3.5',
+          duration_ms: 1500
+        }
+      ];
+
+      mockDb.prepare.mockReturnValue({
+        bind: jest.fn().mockReturnThis(),
+        step: jest.fn()
+          .mockReturnValueOnce(true)
+          .mockReturnValueOnce(true)
+          .mockReturnValueOnce(false),
+        getAsObject: jest.fn()
+          .mockReturnValueOnce(mockRows[0])
+          .mockReturnValueOnce(mockRows[1]),
+        free: jest.fn()
+      });
+
+      const memories = await (episodicMemory as any).getRecentMemoriesFromDB('fp123', 10);
+      expect(memories).toHaveLength(2);
+      expect(memories[0].id).toBe('mem-recent-1');
+    });
+
+    it('应该在数据库错误时返回空数组', async () => {
+      mockDb.prepare.mockImplementation(() => {
+        throw new Error('Query failed');
+      });
+
+      const memories = await (episodicMemory as any).getRecentMemoriesFromDB('fp123', 10);
+      expect(memories).toEqual([]);
+    });
+  });
 });

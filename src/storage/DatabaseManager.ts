@@ -95,6 +95,14 @@ export class DatabaseManager {
       // 创建表结构
       this.createTables();
 
+      // 执行迁移（添加memory_tier列）
+      try {
+        this.migrateAddMemoryTier();
+      } catch (migrationError) {
+        console.warn('[DatabaseManager] Migration skipped:', 
+          migrationError instanceof Error ? migrationError.message : String(migrationError));
+      }
+
       // 创建索引
       this.createIndexes();
 
