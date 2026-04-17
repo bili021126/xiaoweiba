@@ -5,11 +5,12 @@ import { IndexManager } from './IndexManager';
 /**
  * 搜索引擎 - 负责记忆的检索和排序
  * 
- * 职责：
- * - TF-IDF关键词检索
- * - 语义相似度检索（向量）
- * - 混合检索与评分
- * - 自适应权重计算
+ * 核心能力：
+ * - TF-IDF关键词检索（纯内存倒排索引）
+ * - 时间衰减加权（近因性优先）
+ * - 实体匹配加分（函数名、类名等）
+ * - 自适应权重计算（基于IntentAnalyzer）
+ * - 混合评分与排序
  */
 @injectable()
 export class SearchEngine {
@@ -70,6 +71,7 @@ export class SearchEngine {
       scores.push({ id, score: finalScore });
     }
 
+    // 按分数降序排序
     scores.sort((a, b) => b.score - a.score);
     const topIds = scores.slice(0, limit).map(s => s.id);
     if (topIds.length === 0) return [];
@@ -84,36 +86,58 @@ export class SearchEngine {
   }
 
   /**
-   * 计算自适应权重
+   * 计算自适应权重（增强版）
+   * 
+   * 根据查询意图动态调整检索策略：
+   * - 代码相关查询 → 提高关键词和实体权重
+   * - 时间敏感查询 → 提高时间衰减权重
+   * - 实体明确查询 → 提高实体匹配权重
+   * - 模糊语义查询 → 均衡权重
    */
   getAdaptiveWeights(query: string): RetrievalWeights {
     const queryLower = query.toLowerCase();
     
     // 检测查询意图
-    const isCodeRelated = /\b(function|class|method|variable|code|implement)\b/i.test(queryLower);
-    const isTimeSensitive = /\b(recent|latest|new|today|yesterday)\b/i.test(queryLower);
-    const hasEntities = /\b([A-Z][a-zA-Z]+)\b/.test(query); // 检测驼峰命名实体
+    const isCodeRelated = /\b(function|class|method|variable|code|implement|重构|优化|解释)\b/i.test(queryLower);
+    const isTimeSensitive = /\b(recent|latest|new|today|yesterday|刚才|上次|最近)\b/i.test(queryLower);
+    const hasEntities = /\b([A-Z][a-zA-Z]+|[\u4e00-\u9fa5]{2,}(?:函数|方法|类|表))\b/.test(query); // 驼峰命名或中文+类型词
+    const isQuestion = /\b(怎么|为什么|什么|如何|哪里|哪个|how|why|what)\b/i.test(queryLower);
     
-    let k = 0.4; // 关键词权重
-    let t = 0.3; // 时间权重
-    let e = 0.2; // 实体权重
-    let v = 0.1; // 向量权重（预留）
+    let k = 0.30; // 关键词权重
+    let t = 0.25; // 时间权重
+    let e = 0.25; // 实体权重
+    let v = 0.20; // 预留向量权重
 
-    if (isCodeRelated) {
-      k = 0.5;
-      e = 0.25;
-      t = 0.15;
-      v = 0.1;
-    } else if (isTimeSensitive) {
-      t = 0.5;
-      k = 0.25;
-      e = 0.15;
-      v = 0.1;
-    } else if (hasEntities) {
+    if (isCodeRelated && hasEntities) {
+      // 代码+实体：强依赖关键词和实体
+      k = 0.45;
       e = 0.35;
-      k = 0.35;
-      t = 0.2;
-      v = 0.1;
+      t = 0.10;
+      v = 0.10;
+    } else if (isCodeRelated) {
+      // 纯代码：侧重关键词
+      k = 0.50;
+      e = 0.20;
+      t = 0.20;
+      v = 0.10;
+    } else if (isTimeSensitive) {
+      // 时间敏感：侧重近期记忆
+      t = 0.55;
+      k = 0.20;
+      e = 0.15;
+      v = 0.10;
+    } else if (hasEntities) {
+      // 实体明确：侧重精确匹配
+      e = 0.45;
+      k = 0.30;
+      t = 0.15;
+      v = 0.10;
+    } else if (isQuestion) {
+      // 问句：均衡权重，侧重语义
+      k = 0.25;
+      t = 0.25;
+      e = 0.25;
+      v = 0.25;
     }
 
     return { k, t, e, v };
