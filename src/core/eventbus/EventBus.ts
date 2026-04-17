@@ -1,271 +1,156 @@
 /**
  * 事件总线 - 记忆系统的神经系统
  * 
- * 职责：
- * 1. 发布-订阅模式的核心实现
- * 2. 所有模块间通信的唯一通道
- * 3. 确保记忆系统对所有行为的可见性
+ * 核心原则：
+ * 1. 内核事件类型封闭，载荷强约束
+ * 2. 插件事件符合 plugin.<id>.<event> 格式
+ * 3. 请求-响应模式仅内核可注册处理器
+ * 4. 异步错误隔离 + 优先级队列
  */
 
 import { injectable } from 'tsyringe';
+import { 
+  CoreEventType, 
+  PluginEventType, 
+  AnyEventType, 
+  BaseEvent, 
+  CoreEventPayloadMap, 
+  RequestHandler, 
+  EventHandler 
+} from './types';
 
-/**
- * 事件优先级
- */
-export enum EventPriority {
-  /** P0 - 最高优先级：记忆系统核心事件 */
-  CRITICAL = 0,
-  
-  /** P1 - 高优先级：审计日志、安全事件 */
-  HIGH = 1,
-  
-  /** P2 - 普通优先级：模块动作完成 */
-  NORMAL = 2,
-  
-  /** P3 - 低优先级：调试、统计 */
-  LOW = 3
-}
+export { CoreEventType };
 
-/**
- * 记忆事件类型定义
- */
-export enum MemoryEventType {
-  /** 情景记忆新增 */
-  EPISODIC_ADDED = 'memory.episodic.added',
-  
-  /** 偏好记忆更新 */
-  PREFERENCE_UPDATED = 'memory.preference.updated',
-  
-  /** 语义记忆新增 */
-  SEMANTIC_ADDED = 'memory.semantic.added',
-  
-  /** 记忆检索完成 */
-  RETRIEVED = 'memory.retrieved',
-  
-  /** 记忆衰减触发 */
-  DECAYED = 'memory.decayed',
-  
-  /** 主动推荐（记忆系统发起） */
-  RECOMMEND = 'memory.recommend',
-  
-  /** 技能建议（重复操作检测） */
-  SKILL_SUGGESTED = 'memory.skill.suggested',
-  
-  /** 模块动作完成（功能模块上报） */
-  ACTION_COMPLETED = 'module.action.completed'
-}
-
-/**
- * 事件负载基础接口
- */
-export interface EventPayload {
-  [key: string]: any;
-}
-
-/**
- * 标准事件结构
- */
-export interface MemoryEvent {
-  type: MemoryEventType;
-  timestamp: number;
-  payload: EventPayload;
-  source?: string; // 事件来源模块
-  priority?: EventPriority; // 事件优先级（默认NORMAL）
-}
-
-/**
- * 事件处理器类型
- */
-export type EventHandler = (event: MemoryEvent) => void | Promise<void>;
-
-/**
- * 事件总线类
- * 
- * 使用示例：
- * ```typescript
- * const bus = new EventBus();
- * 
- * // 订阅事件
- * bus.subscribe(MemoryEventType.EPISODIC_ADDED, (event) => {
- *   console.log('New memory:', event.payload.memoryId);
- * });
- * 
- * // 发布事件
- * bus.publish({
- *   type: MemoryEventType.EPISODIC_ADDED,
- *   timestamp: Date.now(),
- *   payload: { memoryId: 'ep_123', taskType: 'CODE_EXPLAIN' }
- * });
- * ```
- */
 @injectable()
 export class EventBus {
-  private subscribers: Map<string, EventHandler[]> = new Map();
-  private eventHistory: MemoryEvent[] = [];
-  private readonly maxHistorySize: number = 1000; // 保留最近1000个事件用于调试
+  private subscribers = new Map<AnyEventType, Set<EventHandler>>();
+  private requestHandlers = new Map<CoreEventType, RequestHandler<any>>();
+  private priorityQueue: Array<{ event: BaseEvent<AnyEventType>; priority: number }> = [];
+  private isFlushing = false;
 
-  /**
-   * 获取事件的默认优先级
-   */
-  private getDefaultPriority(eventType: MemoryEventType | string): EventPriority {
-    // 记忆系统核心事件 → P0
-    if (eventType.startsWith('memory.')) {
-      return EventPriority.CRITICAL;
+  // ========== 内核专用：注册请求处理器（封闭） ==========
+  registerRequestHandler<T extends CoreEventType>(
+    type: T,
+    handler: RequestHandler<T>
+  ): void {
+    if (this.requestHandlers.has(type)) {
+      console.warn(`[EventBus] Request handler for ${type} already registered, overwriting.`);
     }
-    
-    // 审计/安全事件 → P1
-    if (eventType.includes('audit') || eventType.includes('security')) {
-      return EventPriority.HIGH;
-    }
-    
-    // 模块动作 → P2
-    if (eventType.startsWith('module.')) {
-      return EventPriority.NORMAL;
-    }
-    
-    // 其他 → P3
-    return EventPriority.LOW;
+    this.requestHandlers.set(type, handler);
   }
 
-  /**
-   * 订阅事件
-   * @param eventType 事件类型
-   * @param handler 事件处理器
-   * @returns 取消订阅函数
-   */
-  subscribe(eventType: MemoryEventType | string, handler: EventHandler): () => void {
-    if (!this.subscribers.has(eventType)) {
-      this.subscribers.set(eventType, []);
+  // ========== 功能模块调用：请求内核数据 ==========
+  async request<T extends CoreEventType>(
+    type: T,
+    payload: CoreEventPayloadMap[T]
+  ): Promise<unknown> {
+    const handler = this.requestHandlers.get(type);
+    if (!handler) {
+      throw new Error(`[EventBus] No request handler registered for ${type}`);
     }
-    
-    const handlers = this.subscribers.get(eventType)!;
-    handlers.push(handler);
-    
-    console.log(`[EventBus] Subscribed to ${eventType}, total handlers: ${handlers.length}`);
-    
-    // 返回取消订阅函数
-    return () => {
-      const index = handlers.indexOf(handler);
-      if (index > -1) {
-        handlers.splice(index, 1);
-        console.log(`[EventBus] Unsubscribed from ${eventType}`);
-      }
+    try {
+      return await handler(payload);
+    } catch (error) {
+      console.error(`[EventBus] Request handler for ${type} failed:`, error);
+      throw error;
+    }
+  }
+
+  // ========== 发布事件（带优先级） ==========
+  publish<T extends AnyEventType>(
+    type: T,
+    payload: T extends CoreEventType ? CoreEventPayloadMap[T] : unknown,
+    options?: { source?: string; priority?: number }
+  ): void {
+    const event: BaseEvent<T> = {
+      type,
+      payload,
+      timestamp: Date.now(),
+      source: options?.source,
     };
+
+    // 内核事件允许 Schema 校验
+    if (this.isCoreEvent(type)) {
+      this.validateCoreEvent(event as BaseEvent<CoreEventType>);
+    } else {
+      this.validatePluginEvent(event as BaseEvent<PluginEventType>);
+    }
+
+    const priority = options?.priority ?? (this.isCoreEvent(type) ? 10 : 5);
+    this.priorityQueue.push({ event, priority });
+    this.priorityQueue.sort((a, b) => b.priority - a.priority);
+    this.flush();
   }
 
-  /**
-   * 发布事件
-   * @param event 事件对象
-   */
-  async publish(event: MemoryEvent): Promise<void> {
-    const startTime = Date.now();
-    
-    // 添加时间戳（如果未提供）
-    if (!event.timestamp) {
-      event.timestamp = Date.now();
+  // ========== 订阅事件 ==========
+  subscribe<T extends AnyEventType>(
+    type: T,
+    handler: EventHandler<T>
+  ): () => void {
+    if (!this.subscribers.has(type)) {
+      this.subscribers.set(type, new Set());
     }
-    
-    // 设置默认优先级（如果未提供）
-    if (event.priority === undefined) {
-      event.priority = this.getDefaultPriority(event.type);
-    }
-    
-    // 记录到历史
-    this.eventHistory.push(event);
-    if (this.eventHistory.length > this.maxHistorySize) {
-      this.eventHistory.shift(); // 移除最旧的事件
-    }
-    
-    // 获取所有订阅者
-    const handlers = this.subscribers.get(event.type) || [];
-    
-    if (handlers.length === 0) {
-      console.debug(`[EventBus] No subscribers for event: ${event.type}`);
-      return;
-    }
-    
-    console.log(`[EventBus] Publishing ${event.type} (P${event.priority}) to ${handlers.length} handler(s)`);
-    
-    // 使用 Promise.allSettled 保证错误隔离
-    const results = await Promise.allSettled(
-      handlers.map(async (handler) => {
-        await handler(event);
-      })
-    );
-    
-    // 记录失败的 handler（不抛出错误）
-    const failures = results.filter(r => r.status === 'rejected');
-    if (failures.length > 0) {
-      console.error(`[EventBus] ${failures.length}/${results.length} handlers failed for ${event.type}`);
-      failures.forEach((result, index) => {
-        if (result.status === 'rejected') {
-          console.error(`[EventBus] Handler #${index} error:`, result.reason);
+    this.subscribers.get(type)!.add(handler as EventHandler);
+    return () => this.unsubscribe(type, handler);
+  }
+
+  unsubscribe<T extends AnyEventType>(type: T, handler: EventHandler<T>): void {
+    this.subscribers.get(type)?.delete(handler as EventHandler);
+  }
+
+  once<T extends AnyEventType>(
+    type: T,
+    handler: EventHandler<T>
+  ): () => void {
+    const wrapper: EventHandler<T> = (event) => {
+      handler(event);
+      this.unsubscribe(type, wrapper);
+    };
+    return this.subscribe(type, wrapper);
+  }
+
+  // ========== 内部方法 ==========
+  private async flush(): Promise<void> {
+    if (this.isFlushing || this.priorityQueue.length === 0) return;
+    this.isFlushing = true;
+
+    while (this.priorityQueue.length > 0) {
+      const { event } = this.priorityQueue.shift()!;
+      const handlers = this.subscribers.get(event.type);
+      if (!handlers) continue;
+
+      const promises = Array.from(handlers).map(async (handler) => {
+        try {
+          await handler(event);
+        } catch (error) {
+          console.error(`[EventBus] Handler for ${event.type} failed:`, error);
         }
       });
+      await Promise.allSettled(promises);
     }
-    
-    const duration = Date.now() - startTime;
-    console.debug(`[EventBus] Event ${event.type} handled in ${duration}ms`);
+
+    this.isFlushing = false;
   }
 
-  /**
-   * 一次性订阅（只处理一次后自动取消）
-   * @param eventType 事件类型
-   * @param handler 事件处理器
-   */
-  once(eventType: MemoryEventType | string, handler: EventHandler): void {
-    const unsubscribe = this.subscribe(eventType, async (event) => {
-      await handler(event);
-      unsubscribe(); // 自动取消订阅
-    });
+  private isCoreEvent(type: AnyEventType): type is CoreEventType {
+    return Object.values(CoreEventType).includes(type as CoreEventType);
   }
 
-  /**
-   * 获取事件历史（用于调试）
-   * @param eventType 可选的事件类型过滤
-   * @param limit 返回数量限制
-   */
-  getHistory(eventType?: MemoryEventType | string, limit: number = 50): MemoryEvent[] {
-    let history = this.eventHistory;
-    
-    if (eventType) {
-      history = history.filter(e => e.type === eventType);
+  private validateCoreEvent(event: BaseEvent<CoreEventType>): void {
+    if (!event.type) throw new Error('[EventBus] Core event must have type');
+  }
+
+  private validatePluginEvent(event: BaseEvent<PluginEventType>): void {
+    const pluginEventPrefix = /^plugin\.\w+\.\w+$/;
+    if (!pluginEventPrefix.test(event.type)) {
+      throw new Error(`[EventBus] Plugin event type must match "plugin.<pluginId>.<event>", got ${event.type}`);
     }
-    
-    return history.slice(-limit).reverse(); // 最新的在前
   }
 
-  /**
-   * 清空事件历史
-   */
-  clearHistory(): void {
-    this.eventHistory = [];
-  }
-
-  /**
-   * 获取订阅统计信息
-   */
-  getStats(): { totalSubscribers: number; eventsByType: Record<string, number> } {
-    const eventsByType: Record<string, number> = {};
-    let totalSubscribers = 0;
-    
-    for (const [type, handlers] of this.subscribers.entries()) {
-      eventsByType[type] = handlers.length;
-      totalSubscribers += handlers.length;
-    }
-    
-    return {
-      totalSubscribers,
-      eventsByType
-    };
-  }
-
-  /**
-   * 清理资源
-   */
+  // ========== 清理 ==========
   dispose(): void {
     this.subscribers.clear();
-    this.eventHistory = [];
-    console.log('[EventBus] Disposed');
+    this.requestHandlers.clear();
+    this.priorityQueue = [];
   }
 }

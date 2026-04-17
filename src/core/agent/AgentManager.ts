@@ -9,7 +9,7 @@
 
 import { injectable } from 'tsyringe';
 import { IAgent, AgentRegistration, AgentCapability, AgentMetadata } from './IAgent';
-import { EventBus, MemoryEventType } from '../eventbus/EventBus';
+import { EventBus, CoreEventType } from '../eventbus/EventBus';
 
 @injectable()
 export class AgentManager {
@@ -34,16 +34,10 @@ export class AgentManager {
         this.agents.set(id, agent);
         
         // 发布注册事件
-        await this.eventBus.publish({
-          type: MemoryEventType.SKILL_SUGGESTED, // 复用此事件类型，表示Agent注册
-          timestamp: Date.now(),
-          payload: {
-            eventType: 'agent.register',
-            agentId: id,
-            capabilities: agent.getCapabilities()
-          },
-          source: 'AgentManager'
-        });
+        this.eventBus.publish('plugin.agent.register', {
+          agentId: id,
+          capabilities: agent.getCapabilities()
+        }, { source: 'AgentManager' });
       }
     }
     

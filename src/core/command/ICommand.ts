@@ -7,7 +7,7 @@
  * 3. 通过事件订阅获取记忆上下文
  */
 
-import { EventBus, MemoryEventType, MemoryEvent } from '../eventbus/EventBus';
+import { EventBus, CoreEventType } from '../eventbus/EventBus';
 
 /**
  * Command执行结果
@@ -96,10 +96,10 @@ export abstract class BaseCommand implements ICommand {
     
     try {
       // 1. 发布命令开始事件
-      await this.publishEvent(MemoryEventType.ACTION_COMPLETED, {
+      await this.publishEvent(CoreEventType.TASK_COMPLETED, {
         actionId: this.commandId,
-        phase: 'started',
-        input: this.sanitizeInput(input)
+        result: { phase: 'started' },
+        durationMs: 0
       });
       
       // 2. 检索记忆上下文（通过事件请求）
@@ -113,13 +113,10 @@ export abstract class BaseCommand implements ICommand {
       result.durationMs = durationMs;
       
       // 5. 发布完成事件
-      await this.publishEvent(MemoryEventType.ACTION_COMPLETED, {
+      await this.publishEvent(CoreEventType.TASK_COMPLETED, {
         actionId: this.commandId,
-        phase: 'completed',
-        success: result.success,
-        durationMs,
-        result: result.success ? result.data : undefined,
-        error: result.error
+        result: result.success ? result.data : { error: result.error },
+        durationMs
       });
       
       return result;
@@ -127,10 +124,9 @@ export abstract class BaseCommand implements ICommand {
       const durationMs = Date.now() - startTime;
       
       // 发布错误事件
-      await this.publishEvent(MemoryEventType.ACTION_COMPLETED, {
+      await this.publishEvent(CoreEventType.TASK_COMPLETED, {
         actionId: this.commandId,
-        phase: 'failed',
-        error: error instanceof Error ? error.message : String(error),
+        result: { error: error instanceof Error ? error.message : String(error) },
         durationMs
       });
       
@@ -158,38 +154,23 @@ export abstract class BaseCommand implements ICommand {
    * 请求记忆上下文（通过事件总线）
    */
   private async requestMemoryContext(input: CommandInput): Promise<MemoryContext> {
-    return new Promise((resolve) => {
-      const context: MemoryContext = {};
-      
-      // 发布记忆检索请求
-      this.eventBus.publish({
-        type: MemoryEventType.RETRIEVED,
-        timestamp: Date.now(),
-        payload: {
-          actionId: this.commandId,
-          input: this.sanitizeInput(input)
-        },
-        source: this.commandId
-      }).then(() => {
-        // TODO: 实际应该等待MemorySystem响应并填充context
-        // 当前简化实现，直接返回空context
-        resolve(context);
+    try {
+      const context = await this.eventBus.request(CoreEventType.MEMORY_CONTEXT_REQUEST, {
+        actionId: this.commandId,
+        input: this.sanitizeInput(input)
       });
-      
-      return context;
-    });
+      return (context as MemoryContext) || {};
+    } catch (error) {
+      console.warn(`[BaseCommand] Failed to request memory context:`, error);
+      return {};
+    }
   }
   
   /**
    * 发布事件
    */
-  protected async publishEvent(type: MemoryEventType, payload: any): Promise<void> {
-    await this.eventBus.publish({
-      type,
-      timestamp: Date.now(),
-      payload,
-      source: this.commandId
-    });
+  protected async publishEvent(type: CoreEventType, payload: any): Promise<void> {
+    this.eventBus.publish(type, payload, { source: this.commandId });
   }
   
   /**

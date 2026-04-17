@@ -9,7 +9,7 @@
  */
 
 import { injectable, inject } from 'tsyringe';
-import { EventBus, MemoryEventType, MemoryEvent } from '../eventbus/EventBus';
+import { EventBus, CoreEventType } from '../eventbus/EventBus';
 import { EpisodicMemory } from './EpisodicMemory';
 import { PreferenceMemory } from './PreferenceMemory';
 import { AuditLogger } from '../security/AuditLogger';
@@ -89,7 +89,7 @@ export class MemorySystem {
     await this.episodicMemory.initialize();
     
     // 订阅模块动作完成事件（用于自动记录）
-    this.eventBus.subscribe(MemoryEventType.ACTION_COMPLETED, async (event) => {
+    this.eventBus.subscribe(CoreEventType.TASK_COMPLETED, async (event) => {
       await this.onActionCompleted(event);
     });
     
@@ -158,21 +158,11 @@ export class MemorySystem {
       const duration = Date.now() - startTime;
       
       // 5. 发布动作完成事件（触发自动记录到记忆）
-      await this.eventBus.publish({
-        type: MemoryEventType.ACTION_COMPLETED,
-        timestamp: Date.now(),
-        payload: {
-          actionId,
-          input,
-          result,
-          duration,
-          memoryContext: {
-            memoryCount: memoryContext.episodicMemories?.length || 0,
-            preferenceCount: memoryContext.preferenceRecommendations?.length || 0
-          }
-        },
-        source: 'MemorySystem'
-      });
+      this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
+        actionId,
+        result,
+        durationMs: duration
+      }, { source: 'MemorySystem' });
       
       return result;
     } catch (error) {
@@ -222,16 +212,10 @@ export class MemorySystem {
       
       // 发布检索完成事件
       if (context.episodicMemories && context.episodicMemories.length > 0) {
-        await this.eventBus.publish({
-          type: MemoryEventType.RETRIEVED,
-          timestamp: Date.now(),
-          payload: {
-            actionId,
-            memoryCount: context.episodicMemories.length,
-            duration: context.retrievalDuration
-          },
-          source: 'MemorySystem'
-        });
+        this.eventBus.publish(CoreEventType.MEMORY_RECOMMEND, {
+          filePath: '',
+          recommendations: context.episodicMemories
+        }, { source: 'MemorySystem' });
       }
       
     } catch (error) {
@@ -301,31 +285,26 @@ export class MemorySystem {
   /**
    * 处理动作完成事件（自动记录到记忆）
    */
-  private async onActionCompleted(event: MemoryEvent): Promise<void> {
-    const { actionId, input, result, duration } = event.payload;
+  private async onActionCompleted(event: any): Promise<void> {
+    const { actionId, result, durationMs } = event.payload;
     
     try {
       // 根据不同动作类型，记录不同类型的情景记忆
       if (actionId === 'explainCode') {
         await this.episodicMemory.record({
           taskType: 'CODE_EXPLAIN',
-          summary: `Explained code in ${input.filePath || 'unknown file'}`,
-          entities: this.extractEntities(input.selectedCode || ''),
+          summary: `Explained code`,
+          entities: [],
           outcome: result?.success ? 'SUCCESS' : 'FAILED',
           modelId: result?.modelId,
-          durationMs: duration
+          durationMs
         });
         
         // 发布情景记忆新增事件
-        await this.eventBus.publish({
-          type: MemoryEventType.EPISODIC_ADDED,
-          timestamp: Date.now(),
-          payload: {
-            actionId,
-            taskType: 'CODE_EXPLAIN'
-          },
-          source: 'MemorySystem'
-        });
+        this.eventBus.publish(CoreEventType.MEMORY_RECORDED, {
+          memoryId: '',
+          taskType: 'CODE_EXPLAIN'
+        }, { source: 'MemorySystem' });
       }
       
       // TODO: 其他动作类型的记录逻辑
@@ -382,20 +361,15 @@ export class MemorySystem {
       
       if (memories.length > 0) {
         // 发布推荐事件
-        await this.eventBus.publish({
-          type: MemoryEventType.RECOMMEND,
-          timestamp: Date.now(),
-          payload: {
-            filePath,
-            recommendations: memories.map(m => ({
-              title: m.summary,
-              timestamp: m.timestamp,
-              memoryId: m.id,
-              taskType: m.taskType
-            }))
-          },
-          source: 'MemorySystem'
-        });
+        this.eventBus.publish(CoreEventType.MEMORY_RECOMMEND, {
+          filePath,
+          recommendations: memories.map(m => ({
+            title: m.summary,
+            timestamp: m.timestamp,
+            memoryId: m.id,
+            taskType: m.taskType
+          }))
+        }, { source: 'MemorySystem' });
         
         console.log(`[MemorySystem] Recommended ${memories.length} memories for ${fileName}`);
       }
