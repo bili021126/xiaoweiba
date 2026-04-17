@@ -12,7 +12,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { container } from 'tsyringe';
 import { LLMTool } from '../tools/LLMTool';
-import { EpisodicMemory } from '../core/memory/EpisodicMemory';
+import { MemoryService } from '../core/memory/MemoryService';
 import { CommitStyleLearner, CommitStylePreference } from '../core/memory/CommitStyleLearner';
 import { AuditLogger } from '../core/security/AuditLogger';
 import { getUserFriendlyMessage } from '../utils/ErrorCodes';
@@ -22,7 +22,7 @@ const execAsync = promisify(exec);
 
 export class GenerateCommitCommandV2 {
   private auditLogger: AuditLogger;
-  private episodicMemory: EpisodicMemory;
+  private memoryService: MemoryService;
   private commitStyleLearner: CommitStyleLearner;
   private llmTool: LLMTool;
 
@@ -35,12 +35,12 @@ export class GenerateCommitCommandV2 {
   private readonly LLM_MAX_TOKENS = 500;
 
   constructor(
-    episodicMemory?: EpisodicMemory,
+    memoryService?: MemoryService,
     llmTool?: LLMTool,
     commitStyleLearner?: CommitStyleLearner
   ) {
     this.auditLogger = container.resolve(AuditLogger);
-    this.episodicMemory = episodicMemory || container.resolve(EpisodicMemory);
+    this.memoryService = memoryService || new MemoryService();
     this.llmTool = llmTool || container.resolve(LLMTool);
     this.commitStyleLearner = commitStyleLearner || container.resolve(CommitStyleLearner);
   }
@@ -208,10 +208,7 @@ export class GenerateCommitCommandV2 {
       const fileName = file.split('/').pop()?.split('\\').pop() || '';
       if (!fileName) return [];
 
-      return await this.episodicMemory.search(fileName, {
-        taskType: 'COMMIT_GENERATE',
-        limit: this.MAX_MEMORIES_PER_FILE
-      });
+      return await this.memoryService.searchByEntity(fileName, this.MAX_MEMORIES_PER_FILE);
     });
 
     const results = await Promise.all(searchPromises);
@@ -219,8 +216,9 @@ export class GenerateCommitCommandV2 {
 
     // 去重并按时间排序
     const uniqueMemories = memories.filter(
-      (m, index, self) => index === self.findIndex((t) => t.id === m.id)
-    ).sort((a, b) => b.timestamp - a.timestamp);
+      (m: EpisodicMemoryRecord, index: number, self: EpisodicMemoryRecord[]) => 
+        index === self.findIndex((t: EpisodicMemoryRecord) => t.id === m.id)
+    ).sort((a: EpisodicMemoryRecord, b: EpisodicMemoryRecord) => b.timestamp - a.timestamp);
 
     return uniqueMemories.slice(0, this.MAX_MEMORIES_TO_RETURN);
   }
@@ -425,11 +423,10 @@ ${truncatedDiff}
       // 统计变更文件数
       const filesChanged = diff.split('\n').filter(line => line.startsWith('diff --git')).length;
 
-      await this.episodicMemory.record({
+      await this.memoryService.recordMemory({
         taskType: 'COMMIT_GENERATE',
         summary: `生成${commitType}类型的提交信息`,
         entities: [],  // TODO: 从diff中提取文件列表
-        decision: commitMessage,
         outcome: 'SUCCESS',
         modelId: 'unknown',  // TODO: 从LLMTool获取实际modelId
         durationMs

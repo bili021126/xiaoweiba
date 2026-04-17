@@ -11,6 +11,7 @@ import { getUserFriendlyMessage } from './utils/ErrorCodes';
 import { ExplainCodeCommand } from './commands/ExplainCodeCommand';
 import { GenerateCommitCommandV2 as GenerateCommitCommand } from './commands/GenerateCommitCommand';
 import { CommitStyleLearner } from './core/memory/CommitStyleLearner';
+import { MemoryService } from './core/memory/MemoryService';
 import { ExportMemoryCommand } from './commands/ExportMemoryCommand';
 import { ImportMemoryCommand } from './commands/ImportMemoryCommand';
 import { ConfigureApiKeyCommand } from './commands/ConfigureApiKeyCommand';
@@ -207,7 +208,8 @@ function registerCommands(context: vscode.ExtensionContext): void {
   // 阶段 1 核心命令（传入已初始化的单例）
   const explainCodeHandler = new ExplainCodeCommand(episodicMemory, llmTool);
   const commitStyleLearner = container.resolve(CommitStyleLearner);
-  const generateCommitHandler = new GenerateCommitCommand(episodicMemory, llmTool, commitStyleLearner);
+  const memoryService = new MemoryService(episodicMemory);
+  const generateCommitHandler = new GenerateCommitCommand(memoryService, llmTool, commitStyleLearner);
   const exportMemoryHandler = new ExportMemoryCommand();
   const importMemoryHandler = new ImportMemoryCommand();
   const configureApiKeyHandler = new ConfigureApiKeyCommand();
