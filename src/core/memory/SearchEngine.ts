@@ -51,12 +51,16 @@ export class SearchEngine {
       const ageDays = (now - memory.timestamp) / (1000 * 3600 * 24);
       const timeScore = Math.exp(-ageDays * decayLambda); // λ=0.1，半衰期约7天
 
-      // 3. 实体匹配加分
+      // 3. 实体匹配加分（增强版：编辑距离）
       let entityBonus = 0;
       if (memory.entities && memory.entities.length) {
         for (const term of queryTerms) {
-          if (memory.entities.some(e => e.toLowerCase().includes(term))) {
-            entityBonus += 0.2;
+          const bestMatch = memory.entities.reduce((maxSim, entity) => {
+            const sim = this.calculateSimilarity(term.toLowerCase(), entity.toLowerCase());
+            return Math.max(maxSim, sim);
+          }, 0);
+          if (bestMatch > 0.6) {  // 相似度阈值
+            entityBonus += 0.2 * bestMatch;  // 部分加分
           }
         }
       }
@@ -141,6 +145,34 @@ export class SearchEngine {
     }
 
     return { k, t, e, v };
+  }
+
+  /**
+   * 计算字符串相似度（编辑距离归一化）
+   */
+  private calculateSimilarity(s1: string, s2: string): number {
+    if (s1 === s2) return 1.0;
+    if (s1.length === 0 || s2.length === 0) return 0.0;
+    
+    // 前缀匹配加分
+    const minLen = Math.min(s1.length, s2.length);
+    let prefixLen = 0;
+    while (prefixLen < minLen && s1[prefixLen] === s2[prefixLen]) {
+      prefixLen++;
+    }
+    if (prefixLen >= 3) {
+      return 0.7 + (prefixLen / Math.max(s1.length, s2.length)) * 0.3;
+    }
+    
+    // 包含关系
+    if (s1.includes(s2) || s2.includes(s1)) {
+      return 0.8;
+    }
+    
+    // 简单编辑距离估算（长度差惩罚）
+    const lenDiff = Math.abs(s1.length - s2.length);
+    const maxLen = Math.max(s1.length, s2.length);
+    return Math.max(0, 1 - lenDiff / maxLen);
   }
 
   /**
