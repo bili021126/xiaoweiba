@@ -584,6 +584,10 @@ describe('DatabaseManager - 数据库管理器', () => {
         if (fs.existsSync(tempDbPath)) {
           fs.unlinkSync(tempDbPath);
         }
+        // 恢复原始配置
+        if (originalDbPath) {
+          (mockConfigManager as any).currentConfig.database.path = originalDbPath;
+        }
       }
     });
   });

@@ -1,197 +1,218 @@
-import { IAgent, AgentRegistration } from './IAgent';
-
 /**
- * Agent管理器
+ * Agent管理器 - 管理所有注册的Agent
  * 
- * 负责Agent的注册、路由和生命周期管理
- * 当前为预留架构，未来可扩展多Agent协作
+ * 职责：
+ * 1. 注册/注销Agent
+ * 2. 根据能力查找合适的Agent
+ * 3. 管理Agent生命周期
  */
+
+import { injectable } from 'tsyringe';
+import { IAgent, AgentRegistration, AgentCapability, AgentMetadata } from './IAgent';
+import { EventBus, MemoryEventType } from '../eventbus/EventBus';
+
+@injectable()
 export class AgentManager {
-  private agents: Map<string, AgentRegistration> = new Map();
-  private activeAgentId: string | null = null;
+  private agents: Map<string, IAgent> = new Map();
+  private registrations: Map<string, AgentRegistration> = new Map();
+  private initialized: boolean = false;
+
+  constructor(private eventBus: EventBus) {}
+
+  /**
+   * 初始化Agent管理器
+   */
+  async initialize(): Promise<void> {
+    if (this.initialized) return;
+    
+    console.log('[AgentManager] Initializing...');
+    
+    // 发布所有已注册Agent的能力
+    for (const [id, registration] of this.registrations.entries()) {
+      if (registration.enabled !== false) {
+        const agent = await this.resolveAgent(registration);
+        this.agents.set(id, agent);
+        
+        // 发布注册事件
+        await this.eventBus.publish({
+          type: MemoryEventType.SKILL_SUGGESTED, // 复用此事件类型，表示Agent注册
+          timestamp: Date.now(),
+          payload: {
+            eventType: 'agent.register',
+            agentId: id,
+            capabilities: agent.getCapabilities()
+          },
+          source: 'AgentManager'
+        });
+      }
+    }
+    
+    this.initialized = true;
+    console.log(`[AgentManager] Initialized with ${this.agents.size} agents`);
+  }
 
   /**
    * 注册Agent
-   * @param registration Agent注册信息
+   * 
+   * @param id Agent唯一标识
+   * @param registration 注册信息
    */
-  register(registration: AgentRegistration): void {
-    const agent = registration.agent;
+  registerAgent(id: string, registration: AgentRegistration): void {
+    this.registrations.set(id, registration);
+    console.log(`[AgentManager] Registered agent: ${id}`);
+  }
 
-    if (this.agents.has(agent.id)) {
-      throw new Error(`Agent已存在: ${agent.id}`);
+  /**
+   * 获取Agent实例
+   * 
+   * @param id Agent ID
+   * @returns Agent实例，如果不存在返回undefined
+   */
+  getAgent(id: string): IAgent | undefined {
+    return this.agents.get(id);
+  }
+
+  /**
+   * 根据能力查找Agent
+   * 
+   * @param capabilityName 能力名称（如 'explain', 'generate'）
+   * @returns 匹配的Agent列表（按优先级排序）
+   */
+  findAgentsByCapability(capabilityName: string): IAgent[] {
+    const matchingAgents: Array<{ agent: IAgent; priority: number }> = [];
+    
+    for (const agent of this.agents.values()) {
+      const capabilities = agent.getCapabilities();
+      const matchingCap = capabilities.find(cap => cap.name === capabilityName);
+      
+      if (matchingCap) {
+        matchingAgents.push({
+          agent,
+          priority: matchingCap.priority || 0
+        });
+      }
     }
+    
+    // 按优先级降序排序
+    matchingAgents.sort((a, b) => b.priority - a.priority);
+    
+    return matchingAgents.map(item => item.agent);
+  }
 
-    this.agents.set(agent.id, registration);
+  /**
+   * 获取所有已注册的Agent
+   * 
+   * @returns Agent列表
+   */
+  getAllAgents(): IAgent[] {
+    return Array.from(this.agents.values());
+  }
 
-    // 如果设置为自动激活且当前无活跃Agent，则激活
-    if (registration.autoActivate && !this.activeAgentId) {
-      this.activeAgentId = agent.id;
+  /**
+   * 获取Agent元数据
+   * 
+   * @param id Agent ID
+   * @returns 元数据，如果不存在返回undefined
+   */
+  getAgentMetadata(id: string): AgentMetadata | undefined {
+    const agent = this.agents.get(id);
+    return agent?.metadata;
+  }
+
+  /**
+   * 检查Agent是否可用
+   * 
+   * @param id Agent ID
+   * @returns 是否可用
+   */
+  async isAgentAvailable(id: string): Promise<boolean> {
+    const agent = this.agents.get(id);
+    if (!agent) return false;
+    
+    try {
+      const available = await agent.isAvailable();
+      return available;
+    } catch (error) {
+      console.error(`[AgentManager] Error checking availability for ${id}:`, error);
+      return false;
     }
   }
 
   /**
    * 注销Agent
-   * @param agentId Agent ID
+   * 
+   * @param id Agent ID
    */
-  async unregister(agentId: string): Promise<void> {
-    const registration = this.agents.get(agentId);
-    if (!registration) {
-      throw new Error(`Agent不存在: ${agentId}`);
-    }
-    //写一个求和函数，计算1到100的和
-
-
-
-    // 如果注销的是当前活跃Agent，切换到下一个
-    if (this.activeAgentId === agentId) {
-      this.activeAgentId = null;
-      const nextAgent = this.getNextAvailableAgent();
-      if (nextAgent) {
-        this.activeAgentId = nextAgent.agent.id;
+  async unregisterAgent(id: string): Promise<void> {
+    const agent = this.agents.get(id);
+    if (agent) {
+      if (agent.dispose) {
+        await agent.dispose();
       }
+      this.agents.delete(id);
+      this.registrations.delete(id);
+      
+      console.log(`[AgentManager] Unregistered agent: ${id}`);
     }
-
-    await registration.agent.destroy();
-    this.agents.delete(agentId);
   }
 
   /**
-   * 获取Agent
-   * @param agentId Agent ID
+   * 清理所有Agent
    */
-  getAgent(agentId: string): IAgent | undefined {
-    return this.agents.get(agentId)?.agent;
-  }
-
-  /**
-   * 获取当前活跃Agent
-   */
-  getActiveAgent(): IAgent | null {
-    if (!this.activeAgentId) {
-      return null;
-    }
-    return this.agents.get(this.activeAgentId)?.agent || null;
-  }
-
-  /**
-   * 切换活跃Agent
-   * @param agentId Agent ID
-   */
-  switchAgent(agentId: string): void {
-    if (!this.agents.has(agentId)) {
-      throw new Error(`Agent不存在: ${agentId}`);
-    }
-
-    this.activeAgentId = agentId;
-  }
-
-  /**
-   * 根据能力查找Agent
-   * @param capabilityType 能力类型
-   * @returns 匹配的Agent列表（按优先级排序）
-   */
-  findByCapability(capabilityType: string): IAgent[] {
-    const matches: Array<{ agent: IAgent; priority: number }> = [];
-
-    for (const registration of this.agents.values()) {
-      const hasCapability = registration.agent.capabilities.some(
-        cap => cap.type === capabilityType
-      );
-
-      if (hasCapability && registration.agent.isAvailable()) {
-        matches.push({
-          agent: registration.agent,
-          priority: registration.priority
-        });
-      }
-    }
-
-    // 按优先级排序
-    matches.sort((a, b) => a.priority - b.priority);
-    return matches.map(m => m.agent);
-  }
-
-  /**
-   * 执行任务（自动路由到合适的Agent）
-   * @param taskType 任务类型
-   * @param input 任务输入
-   * @param context 执行上下文
-   */
-  async executeTask(taskType: string, input: any, context?: Record<string, any>): Promise<any> {
-    // 查找能处理该任务的Agent
-    const agents = this.findByCapability(taskType);
-
-    if (agents.length === 0) {
-      throw new Error(`没有可用的Agent处理任务类型: ${taskType}`);
-    }
-
-    // 使用第一个（优先级最高）的Agent
-    const selectedAgent = agents[0];
-    return await selectedAgent.execute(input, context);
-  }
-
-  /**
-   * 初始化所有Agent
-   */
-  async initializeAll(): Promise<void> {
-    for (const registration of this.agents.values()) {
+  async dispose(): Promise<void> {
+    console.log('[AgentManager] Disposing all agents...');
+    
+    for (const [id, agent] of this.agents.entries()) {
       try {
-        await registration.agent.initialize();
+        if (agent.dispose) {
+          await agent.dispose();
+        }
       } catch (error) {
-        console.error(`[AgentManager] Agent初始化失败: ${registration.agent.id}`, error);
+        console.error(`[AgentManager] Error disposing agent ${id}:`, error);
       }
     }
-  }
-
-  /**
-   * 销毁所有Agent
-   */
-  async destroyAll(): Promise<void> {
-    for (const registration of this.agents.values()) {
-      try {
-        await registration.agent.destroy();
-      } catch (error) {
-        console.error(`[AgentManager] Agent销毁失败: ${registration.agent.id}`, error);
-      }
-    }
+    
     this.agents.clear();
-    this.activeAgentId = null;
+    this.registrations.clear();
+    this.initialized = false;
+    
+    console.log('[AgentManager] Disposed');
   }
 
   /**
-   * 获取所有注册的Agent
+   * 解析Agent（支持工厂函数）
    */
-  getAllAgents(): IAgent[] {
-    return Array.from(this.agents.values()).map(reg => reg.agent);
+  private async resolveAgent(registration: AgentRegistration): Promise<IAgent> {
+    if (typeof registration.agent === 'function') {
+      return await registration.agent();
+    }
+    return registration.agent;
   }
 
   /**
    * 获取统计信息
    */
-  getStats(): { total: number; active: string | null; byType: Record<string, number> } {
-    const byType: Record<string, number> = {};
-
-    for (const registration of this.agents.values()) {
-      for (const capability of registration.agent.capabilities) {
-        byType[capability.type] = (byType[capability.type] || 0) + 1;
+  getStats(): {
+    totalAgents: number;
+    enabledAgents: number;
+    agentsByCapability: Record<string, number>;
+  } {
+    const agentsByCapability: Record<string, number> = {};
+    let enabledCount = 0;
+    
+    for (const agent of this.agents.values()) {
+      enabledCount++;
+      
+      const capabilities = agent.getCapabilities();
+      for (const cap of capabilities) {
+        agentsByCapability[cap.name] = (agentsByCapability[cap.name] || 0) + 1;
       }
     }
-
+    
     return {
-      total: this.agents.size,
-      active: this.activeAgentId,
-      byType
+      totalAgents: this.registrations.size,
+      enabledAgents: enabledCount,
+      agentsByCapability
     };
-  }
-
-  /**
-   * 获取下一个可用的Agent
-   */
-  private getNextAvailableAgent(): AgentRegistration | null {
-    const agents = Array.from(this.agents.entries())
-      .filter(([_, reg]) => reg.agent.isAvailable())
-      .sort((a, b) => a[1].priority - b[1].priority);
-
-    return agents.length > 0 ? agents[0][1] : null;
   }
 }
