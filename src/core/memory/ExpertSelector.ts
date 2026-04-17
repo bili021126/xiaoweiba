@@ -4,6 +4,23 @@ import * as vscode from 'vscode';
 const DEFAULT_WEIGHTS: RetrievalWeights = { k: 0.30, t: 0.20, e: 0.20, v: 0.30 };
 
 /**
+ * 反馈验证结果
+ */
+interface FeedbackValidation {
+  isValid: boolean;
+  reason?: string;
+}
+
+/**
+ * 权重快照（用于回滚）
+ */
+interface WeightSnapshot {
+  weights: RetrievalWeights;
+  timestamp: number;
+  feedbackCount: number;
+}
+
+/**
  * 专家权重选择器 - 根据用户历史反馈，动态选择最优的检索权重配置
  * 
  * 支持基于反馈的元学习，自动调整到最适合用户习惯的专家权重
@@ -15,6 +32,24 @@ export class ExpertSelector {
   private context?: vscode.ExtensionContext;
   private weightUpdateTimer?: NodeJS.Timeout;
   private readonly STORAGE_KEY = 'xiaoweiba.retrievalWeights';
+  private readonly SNAPSHOTS_KEY = 'xiaoweiba.weightSnapshots';
+  
+  // ========== 局部限制 ==========
+  // 限制1: 权重边界
+  private readonly MIN_WEIGHT = 0.05;
+  private readonly MAX_WEIGHT = 0.70;
+  
+  // 限制2: 反馈有效性跟踪
+  private lastClickTime: Map<string, number> = new Map(); // query -> timestamp
+  private readonly CLICK_DEBOUNCE_MS = 30 * 60 * 1000; // 30分钟去重
+  private readonly MIN_DWELL_TIME_MS = 2000; // 最小停留时间2秒
+  
+  // 限制3: 学习率衰减
+  private baseLearningRate = 0.1;
+  private currentLearningRate = 0.1;
+  private totalFeedbackCount = 0;
+  private readonly LR_DECAY_INTERVAL = 10; // 每10次反馈衰减
+  private readonly LR_DECAY_FACTOR = 0.9;
   
   // 深化点3: 权重归一化跟踪
   private lastNormalizationTime: number = Date.now();
@@ -25,6 +60,26 @@ export class ExpertSelector {
     k: 0.1, t: 0.1, e: 0.1, v: 0.1
   };
   private lastFeedbackDirection: { k: number; t: number; e: number; v: number } | null = null;
+  
+  // ========== 全局护栏 ==========
+  // 准入控制
+  private readonly MIN_FEEDBACK_THRESHOLD = 20; // 最小反馈量
+  private readonly INTENT_DOMINANCE_THRESHOLD = 0.8; // 意图分布均衡阈值
+  
+  // 运行时监控
+  private readonly WEIGHT_DRIFT_THRESHOLD = 0.2; // 24小时权重变化阈值
+  private lastWeightCheck: RetrievalWeights | null = null;
+  private lastWeightCheckTime: number = Date.now();
+  
+  // 点击率滑动窗口
+  private recentRetrievals: Array<{ clicked: boolean; timestamp: number }> = [];
+  private readonly RETRIEVAL_WINDOW_SIZE = 50;
+  private readonly CTR_DROP_THRESHOLD = 0.10; // 点击率下降10%
+  
+  // 回滚与熔断
+  private readonly MAX_SNAPSHOTS = 5;
+  private consecutiveAnomalies = 0;
+  private readonly MAX_CONSECUTIVE_ANOMALIES = 3;
 
   /**
    * 设置ExtensionContext（用于持久化权重）
