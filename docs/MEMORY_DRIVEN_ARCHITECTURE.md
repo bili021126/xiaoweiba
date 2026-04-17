@@ -1010,59 +1010,268 @@ interface ExecutionRecord {
 
 ### 8.1 技能系统（Skill System）
 
-技能是小尾巴的“可编程扩展”，允许用户定义自动化的工具调用序列。
+技能是小尾巴的**用户私人可编程扩展**，允许用户定义自动化的工具调用序列。
 
-#### 8.1.1 技能定义格式
+> **核心原则**：
+> - **用户私人**：技能文件存储在用户本地 `~/.xiaoweiba/skills/` 目录，完全属于用户个人，不上传、不共享、不采集
+> - **中文键值对**：技能文件的所有字段均支持**中文键名**，降低用户编写门槛，用户可用母语直觉定义技能
+> - **声明式无逻辑**：JSON步骤序列，无逻辑分支，可静态分析，防止恶意代码（ADR-003）
 
-技能以JSON格式定义，存储在 `~/.xiaoweiba/skills/user/` 目录：
+#### 8.1.1 技能文件格式
 
-```typescript
-interface SkillDefinition {
-  name: string;              // 技能名称
-  description: string;       // 技能描述
-  version: string;           // 版本号（语义化版本）
-  source: 'user' | 'auto';   // 来源：用户手写/自动生成
-  projectScoped: boolean;    // 是否项目级（true=仅当前项目可用）
-  dependencies?: string[];   // 依赖的其他技能
-  tools: ToolType[];         // 使用的工具列表
-  inputs?: SkillInput[];     // 输入参数定义
-  steps: SkillStep[];        // 执行步骤
-  tests?: SkillTest[];       // 测试用例（可选）
-  atomic?: boolean;          // 是否原子执行（要么全部成功，要么全部回滚）
-  createdAt: number;
-  updatedAt: number;
-}
+技能以JSON格式定义，存储在 `~/.xiaoweiba/skills/` 目录：
 
-interface SkillInput {
-  name: string;
-  type: 'string' | 'number' | 'boolean' | 'file' | 'code';
-  required: boolean;
-  description?: string;
-  defaultValue?: any;
-}
-
-interface SkillStep {
-  id: string;                // 步骤ID
-  tool: ToolType;            // 工具类型
-  params: Record<string, any>; // 工具参数（支持{{var}}模板）
-  outputAs?: string;         // 输出变量名（供后续步骤使用）
-  condition?: 'always' | 'onError' | 'onSuccess'; // 执行条件
-  timeout?: number;          // 超时时间（ms）
-}
-
-type ToolType = 
-  | 'read_file'           // 读取文件
-  | 'write_file'          // 写入文件
-  | 'call_llm'            // 调用LLM
-  | 'show_diff'           // 展示差异
-  | 'execute_sql'         // 执行SQL
-  | 'execute_command'     // 执行命令
-  | 'git_commit'          // Git提交
-  | 'search_memory'       // 检索记忆
-  | 'generate_test';      // 生成测试
+```
+~/.xiaoweiba/skills/
+├── user/              # 用户手写技能（F06）
+│   └── *.json         # 用户自己创建的技能文件
+├── auto/              # 自动沉淀技能（F15）
+│   └── *.json         # 由系统检测重复模式后自动生成的技能
+└── marketplace/       # 技能市场下载（远期规划）
+    └── *.json         # 从社区下载的技能
 ```
 
-#### 8.1.2 技能示例：代码重构技能
+#### 8.1.2 技能定义接口（TypeScript）
+
+```typescript
+/**
+ * 技能定义 - 完整接口
+ * 
+ * 技能文件同时支持英文键名和中文键名两种格式，
+ * 用户可自行选择使用哪种语言编写。
+ */
+interface SkillDefinition {
+  // ---- 基本信息 ----
+  name: string;              // 技能名称 / 名称
+  description: string;       // 技能描述 / 描述
+  version: string;           // 版本号（语义化版本，如 "1.0.0"）
+  author?: string;           // 作者 / 作者
+  
+  // ---- 来源与作用域 ----
+  source: 'user' | 'auto';   // 来源：'user'=用户手写 / 'auto'=自动沉淀
+  projectScoped: boolean;    // 是否项目级（true=仅当前项目可用，false=全局可用）
+  
+  // ---- 依赖与工具 ----
+  dependencies?: string[];   // 依赖的其他技能名称
+  tools: ToolType[];         // 使用的工具列表（用于权限声明和静态分析）
+  
+  // ---- 输入输出 ----
+  inputs?: SkillInput[];     // 输入参数定义
+  outputs?: SkillOutput[];   // 输出定义（可选，用于技能间传递）
+  
+  // ---- 执行步骤 ----
+  steps: SkillStep[];        // 执行步骤（核心）
+  
+  // ---- 测试与安全 ----
+  tests?: SkillTest[];       // 测试用例（可选）
+  atomic?: boolean;          // 原子执行（true=任一步骤失败则回滚全部）
+  
+  // ---- 试用期（F16）----
+  trialStatus?: SkillTrialStatus;  // 试用期状态（自动沉淀技能专用）
+  
+  // ---- 元数据 ----
+  createdAt: number;         // 创建时间（Unix ms）
+  updatedAt: number;         // 更新时间（Unix ms）
+}
+
+/**
+ * 技能输入参数
+ */
+interface SkillInput {
+  name: string;              // 参数名 / 名称
+  type: 'string' | 'number' | 'boolean' | 'file' | 'code';  // 参数类型
+  required: boolean;         // 是否必填 / 是否必填
+  description?: string;      // 参数说明 / 说明
+  defaultValue?: any;        // 默认值 / 默认值
+}
+
+/**
+ * 技能输出
+ */
+interface SkillOutput {
+  name: string;              // 输出名
+  type: 'string' | 'file' | 'code' | 'json';  // 输出类型
+  description?: string;      // 输出说明
+}
+
+/**
+ * 技能执行步骤
+ */
+interface SkillStep {
+  id: string;                // 步骤ID / 步骤编号
+  tool: ToolType;            // 工具类型 / 工具
+  params: Record<string, any>; // 工具参数（支持 {{var}} 模板变量）
+  outputAs?: string;         // 输出变量名（供后续步骤引用，如 {{outputAs}}）
+  condition?: 'always' | 'onError' | 'onSuccess';  // 执行条件 / 条件
+  timeout?: number;          // 超时时间（ms） / 超时
+}
+
+/**
+ * 工具类型枚举
+ */
+type ToolType = 
+  | 'read_file'           // 读取文件 / 读文件
+  | 'write_file'          // 写入文件 / 写文件
+  | 'call_llm'            // 调用LLM / 调大模型
+  | 'show_diff'           // 展示差异 / 看差异
+  | 'execute_sql'         // 执行SQL / 执行查询
+  | 'execute_command'     // 执行命令 / 执行命令
+  | 'git_commit'          // Git提交 / 提交
+  | 'search_memory'       // 检索记忆 / 查记忆
+  | 'generate_test';      // 生成测试 / 写测试
+
+/**
+ * 技能测试用例（F06）
+ */
+interface SkillTest {
+  name: string;              // 测试名 / 测试名
+  inputs: Record<string, any>;  // 测试输入 / 输入
+  expectedOutput?: {         // 期望输出（可选）
+    success: boolean;
+    dataContains?: Record<string, any>;  // 输出应包含的键值
+  };
+}
+
+/**
+ * 技能试用期状态（F16）
+ * 
+ * 自动沉淀的技能默认进入试用期：
+ * - 每次执行前询问用户是否使用
+ * - 连续 5 次采纳后自动应用（不再询问）
+ * - 用户可随时终止试用期
+ */
+interface SkillTrialStatus {
+  isTrial: boolean;          // 是否处于试用期
+  adoptCount: number;        // 连续采纳次数
+  rejectCount: number;       // 连续拒绝次数
+  threshold: number;         // 自动应用阈值（默认5）
+  startedAt: number;         // 试用期开始时间
+}
+
+/**
+ * 沉淀技能建议（F15）
+ * 
+ * 当系统检测到用户的重复操作模式时，
+ * 会生成技能建议并询问用户是否保存为技能。
+ */
+interface SkillSuggestion {
+  pattern: string;           // 检测到的操作模式
+  frequency: number;         // 重复次数
+  suggestedSkillName: string; // 建议的技能名称
+  confidence: number;        // 置信度（0-1）
+  suggestedAsSkill: boolean; // 是否已建议过（避免重复提示）
+  skillFilePath?: string;    // 生成后的技能文件路径
+}
+```
+
+#### 8.1.3 技能文件：中文键值对格式
+
+用户可选择使用**纯中文键名**编写技能文件，系统在加载时自动映射为标准英文字段：
+
+```json
+{
+  "名称": "重构函数",
+  "描述": "重构函数：提取方法、优化命名、添加注释",
+  "版本": "1.0.0",
+  "作者": "小明",
+  "来源": "user",
+  "项目限定": false,
+  "工具": ["read_file", "call_llm", "write_file", "show_diff"],
+  "输入": [
+    {
+      "名称": "文件路径",
+      "类型": "file",
+      "必填": true,
+      "说明": "要重构的文件路径"
+    },
+    {
+      "名称": "函数名",
+      "类型": "string",
+      "必填": true,
+      "说明": "要重构的函数名"
+    }
+  ],
+  "步骤": [
+    {
+      "编号": "step1",
+      "工具": "read_file",
+      "参数": {
+        "path": "{{文件路径}}"
+      },
+      "输出为": "文件内容"
+    },
+    {
+      "编号": "step2",
+      "工具": "call_llm",
+      "参数": {
+        "prompt": "请重构以下代码中的{{函数名}}函数，提取子方法、优化命名、添加注释：\n\n{{文件内容}}",
+        "temperature": 0.3,
+        "maxTokens": 2000
+      },
+      "输出为": "重构代码"
+    },
+    {
+      "编号": "step3",
+      "工具": "show_diff",
+      "参数": {
+        "original": "{{文件内容}}",
+        "modified": "{{重构代码}}"
+      },
+      "条件": "always"
+    },
+    {
+      "编号": "step4",
+      "工具": "write_file",
+      "参数": {
+        "path": "{{文件路径}}",
+        "content": "{{重构代码}}"
+      },
+      "条件": "onSuccess"
+    }
+  ],
+  "原子执行": true,
+  "创建时间": 1713340800000,
+  "更新时间": 1713340800000
+}
+```
+
+**中英文键名映射表**：
+
+| 英文键名 | 中文键名 | 说明 |
+|---------|---------|------|
+| `name` | `名称` | 技能名称 |
+| `description` | `描述` | 技能描述 |
+| `version` | `版本` | 版本号 |
+| `author` | `作者` | 作者 |
+| `source` | `来源` | 来源类型 |
+| `projectScoped` | `项目限定` | 是否项目级 |
+| `tools` | `工具` | 工具列表 |
+| `inputs` | `输入` | 输入参数 |
+| `outputs` | `输出` | 输出定义 |
+| `steps` | `步骤` | 执行步骤 |
+| `tests` | `测试` | 测试用例 |
+| `atomic` | `原子执行` | 原子模式 |
+| `id` | `编号` | 步骤编号 |
+| `tool` | `工具` | 步骤工具 |
+| `params` | `参数` | 步骤参数 |
+| `outputAs` | `输出为` | 输出变量名 |
+| `condition` | `条件` | 执行条件 |
+| `timeout` | `超时` | 超时时间 |
+| `required` | `必填` | 是否必填 |
+| `defaultValue` | `默认值` | 默认值 |
+| `createdAt` | `创建时间` | 创建时间 |
+| `updatedAt` | `更新时间` | 更新时间 |
+
+> **设计决策（ADR-006）**：支持中文键值对
+> - **背景**：小尾巴的目标用户是中国个人开发者，英文键名增加了编写门槛
+> - **决策**：技能文件同时支持英文和中文键名，加载时自动映射
+> - **优点**：降低门槛，用户可用母语直觉定义技能；模板变量也支持中文（如 `{{文件路径}}`）
+> - **风险**：增加解析器复杂度；中英混合可能导致混淆
+> - **缓解**：Schema校验时统一转为英文内部表示；编辑器提示两种格式
+
+#### 8.1.4 技能文件：英文标准格式
+
+同时保留英文标准格式，适合技术用户和社区共享：
 
 ```json
 {
@@ -1130,7 +1339,22 @@ type ToolType =
 }
 ```
 
-#### 8.1.3 技能执行引擎
+#### 8.1.5 用户隐私与私有性
+
+技能系统严格遵守**本地优先**和**用户私有**原则：
+
+| 原则 | 说明 | 实现 |
+|------|------|------|
+| **用户私有** | 技能文件完全属于用户个人 | 存储在 `~/.xiaoweiba/skills/`，不采集、不上传 |
+| **本地存储** | 所有技能数据只存在本地 | 不发送到任何远程服务器 |
+| **隐私脱敏** | 发送给LLM的内容自动脱敏 | 正则匹配密码、令牌等敏感信息 |
+| **权限最小** | 技能只能声明使用的工具 | 工具白名单校验，禁止危险操作 |
+| **原子回滚** | 技能执行失败时自动回滚 | `atomic: true` 时通过Git检查点恢复 |
+| **试用期** | 自动沉淀的技能需用户确认 | 连续5次采纳后才自动应用 |
+
+> 技能文件不包含任何用户身份信息，不联网验证，完全离线可用。
+
+#### 8.1.6 技能执行引擎
 
 ```typescript
 class SkillEngine {
@@ -1241,7 +1465,62 @@ class SkillEngine {
 }
 ```
 
-#### 8.1.4 技能发现与建议
+#### 8.1.7 沉淀技能建议（F15）与试用期（F16）
+
+**沉淀技能建议（F15）**：
+
+当系统检测到用户的重复操作模式（程序记忆累积分数超阈值），会弹窗建议保存为技能：
+
+```typescript
+class SkillSuggestionEngine {
+  /**
+   * 检测重复模式
+   */
+  async detectPatterns(): Promise<SkillSuggestion[]> {
+    // 从程序记忆中检索高频操作模式
+    const procedurals = await this.proceduralMemory.getHighScore({
+      minScore: 5,   // 累积分数阈值
+      limit: 10
+    });
+    
+    // 过滤已建议过的模式
+    const suggestions = procedurals
+      .filter(p => !p.suggestedAsSkill)
+      .map(p => ({
+        pattern: p.operationHash,
+        frequency: p.occurrenceCount,
+        suggestedSkillName: this.generateSkillName(p),
+        confidence: p.cumulativeScore / 10,
+        suggestedAsSkill: false
+      }));
+    
+    return suggestions;
+  }
+}
+```
+
+**技能试用期（F16）**：
+
+自动沉淀的技能默认进入试用期，确保用户满意后才自动应用：
+
+```
+新技能生成
+  ↓
+进入试用期（isTrial=true, adoptCount=0）
+  ↓
+每次使用前询问：“检测到匹配技能「重构函数」，是否使用？”
+  ├─ 用户采纳 → adoptCount++
+  │   └─ adoptCount >= 5 → 自动应用（isTrial=false）
+  └─ 用户拒绝 → rejectCount++
+      └─ rejectCount >= 3 → 终止试用期，标记为不推荐
+```
+
+| 试用期参数 | 默认值 | 说明 |
+|-----------|--------|------|
+| 采纳阈值 | 5次 | 连续采纳后自动应用 |
+| 拒绝阈值 | 3次 | 连续拒绝后终止试用 |
+| 试用状态 | 持久化 | 存储在技能文件的 `trialStatus` 字段 |
+| 用户终止 | 随时 | 用户可手动终止试用期 |
 
 **自动建议机制**：
 
