@@ -20,6 +20,7 @@ export class CodeGenerationCommand extends BaseCommand {
   private auditLogger: AuditLogger;
   private llmTool: LLMTool;
   private cache: LLMResponseCache;
+  private lastRequirement: string = '';  // ✅ 修复9：保存上次需求
 
   constructor(
     memorySystem: MemorySystem,
@@ -64,11 +65,11 @@ export class CodeGenerationCommand extends BaseCommand {
         }
       }
 
-      // 3. 弹出输入框获取用户需求（预填充注释内容）
+      // 3. 弹出输入框获取用户需求（预填充上次需求或注释内容）
       const requirement = await vscode.window.showInputBox({
         prompt: '请输入代码生成需求',
         placeHolder: '例如：创建一个函数，计算数组中所有偶数的和',
-        value: defaultRequirement, // 预填充注释内容
+        value: this.lastRequirement || defaultRequirement,  // ✅ 修复9：优先使用上次需求
         validateInput: (value) => {
           if (!value || value.trim().length === 0) {
             return '需求不能为空';
@@ -84,6 +85,8 @@ export class CodeGenerationCommand extends BaseCommand {
         vscode.window.showInformationMessage('已取消代码生成');
         return { success: false, error: 'User cancelled' };
       }
+      
+      this.lastRequirement = requirement;  // ✅ 修复9：保存本次需求
 
       // 4. 显示进度提示
       await vscode.window.withProgress({
