@@ -11,7 +11,7 @@ import { AuditLogger } from '../core/security/AuditLogger';
 import { getUserFriendlyMessage } from '../utils/ErrorCodes';
 import { BaseCommand, CommandInput, CommandResult } from '../core/memory/BaseCommand';
 import { MemorySystem, MemoryContext } from '../core/memory/MemorySystem';
-import { EventBus } from '../core/eventbus/EventBus';
+import { EventBus, CoreEventType } from '../core/eventbus/EventBus';
 
 export class OptimizeSQLCommand extends BaseCommand {
   private llmTool: LLMTool;
@@ -28,27 +28,9 @@ export class OptimizeSQLCommand extends BaseCommand {
   }
 
   /**
-   * 执行SQL优化命令（包装层）
+   * 执行SQL优化命令
    */
-  async execute(input: CommandInput): Promise<CommandResult> {
-    try {
-      await this.executeLegacy();
-      return { success: true };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error)
-      };
-    }
-  }
-
   protected async executeCore(input: CommandInput, context: MemoryContext): Promise<CommandResult> {
-    // 此方法由 BaseCommand.execute 调用，但当前使用 executeLegacy 包装层
-    // TODO: 未来可重构为真正的 executeCore 实现
-    return { success: true };
-  }
-
-  private async executeLegacy(): Promise<void> {
     const startTime = Date.now();
     
     try {
@@ -56,19 +38,19 @@ export class OptimizeSQLCommand extends BaseCommand {
       const editor = vscode.window.activeTextEditor;
       if (!editor) {
         vscode.window.showWarningMessage('⚠️ 请先打开一个文件');
-        return;
+        return { success: false, error: 'No active editor' };
       }
 
       const selection = editor.selection;
       if (selection.isEmpty) {
         vscode.window.showWarningMessage('⚠️ 请先选中要优化的SQL语句');
-        return;
+        return { success: false, error: 'No selection' };
       }
 
       const sql = editor.document.getText(selection).trim();
       if (!sql) {
         vscode.window.showWarningMessage('⚠️ 选中的内容为空');
-        return;
+        return { success: false, error: 'Empty selection' };
       }
 
       // 2. 显示进度提示
@@ -101,12 +83,30 @@ export class OptimizeSQLCommand extends BaseCommand {
         }
       });
 
+      // 6. 发布任务完成事件（由 MemorySystem 订阅并记录记忆）
+      this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
+        actionId: 'optimizeSQL',
+        result: { success: true },
+        durationMs: Date.now() - startTime
+      }, { source: 'OptimizeSQLCommand' });
+
+      return { success: true };
+
     } catch (error) {
       const durationMs = Date.now() - startTime;
       const errorMessage = getUserFriendlyMessage(error);
       vscode.window.showErrorMessage(`SQL优化失败: ${errorMessage}`);
       
       await this.auditLogger.logError('optimize_sql', error as Error, durationMs);
+      
+      // 即使失败也发布事件，让 MemorySystem 记录失败结果
+      this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
+        actionId: 'optimizeSQL',
+        result: { success: false, error: errorMessage },
+        durationMs
+      }, { source: 'OptimizeSQLCommand' });
+      
+      return { success: false, error: errorMessage };
     }
   }
 
