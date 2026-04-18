@@ -11,6 +11,7 @@ import { AuditLogger } from '../core/security/AuditLogger';
 import { getUserFriendlyMessage } from '../utils/ErrorCodes';
 import { LLMResponseCache } from '../core/cache/LLMResponseCache';
 import { EventBus, CoreEventType } from '../core/eventbus/EventBus';
+import { BestPracticeLibrary } from '../core/knowledge/BestPracticeLibrary';
 
 export class CodeGenerationCommand {
   private auditLogger: AuditLogger;
@@ -39,10 +40,29 @@ export class CodeGenerationCommand {
         return;
       }
 
-      // 2. 弹出输入框获取用户需求
+      // 2. 检查是否有选中的注释，如果有则预填充
+      let defaultRequirement = '';
+      const selection = editor.selection;
+      if (!selection.isEmpty) {
+        const selectedText = editor.document.getText(selection);
+        // 检查是否为注释（以 // 或 /* 开头）
+        const trimmedText = selectedText.trim();
+        if (trimmedText.startsWith('//') || trimmedText.startsWith('/*')) {
+          // 去除注释符号，提取注释内容
+          defaultRequirement = trimmedText
+            .replace(/^\/\//, '')
+            .replace(/^\/\*/, '')
+            .replace(/\*\/$/, '')
+            .trim();
+          console.log('[CodeGenerationCommand] Detected comment:', defaultRequirement);
+        }
+      }
+
+      // 3. 弹出输入框获取用户需求（预填充注释内容）
       const requirement = await vscode.window.showInputBox({
         prompt: '请输入代码生成需求',
         placeHolder: '例如：创建一个函数，计算数组中所有偶数的和',
+        value: defaultRequirement, // 预填充注释内容
         validateInput: (value) => {
           if (!value || value.trim().length === 0) {
             return '需求不能为空';
@@ -129,9 +149,24 @@ export class CodeGenerationCommand {
       ? `\n\n当前文件上下文：\n\`\`\`${languageId}\n${contextCode.substring(0, 1000)}\n\`\`\``
       : '';
 
+    // 获取最佳实践建议
+    const bestPracticeLib = container.resolve(BestPracticeLibrary);
+    const allPractices = bestPracticeLib.getAll();
+    // 简单过滤：查找与语言相关的实践
+    const relevantPractices = allPractices.filter(p => 
+      p.title.toLowerCase().includes(languageId.toLowerCase()) ||
+      p.description.toLowerCase().includes(languageId.toLowerCase())
+    ).slice(0, 3); // 最多取3条
+
+    let bestPracticeHint = '';
+    if (relevantPractices.length > 0) {
+      bestPracticeHint = '\n\n推荐的最佳实践：\n' + 
+        relevantPractices.map((p, i) => `${i + 1}. ${p.title}: ${p.description}`).join('\n');
+    }
+
     const prompt = `请根据以下需求生成${languageId}代码：
 
-需求：${requirement}${contextInfo}
+需求：${requirement}${contextInfo}${bestPracticeHint}
 
 要求：
 1. 代码必须符合${languageId}语言规范

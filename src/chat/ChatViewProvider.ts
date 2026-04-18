@@ -421,10 +421,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
    * 智能意图识别
    */
   private readonly INTENT_KEYWORDS: Record<string, string[]> = {
-    explainCode: ['解释', 'explain', '什么意思', '这段代码'],
-    generateCommit: ['提交', 'commit', 'git提交', '生成提交'],
-    checkNaming: ['命名', 'naming', '变量名', '方法名'],
-    generateCode: ['生成', 'create', '写一个', '实现一个', '帮我写']
+    explainCode: ['解释', 'explain', '什么意思', '这段代码', '怎么看', '如何理解', '代码分析', '做什么的', '干嘛的'],
+    generateCommit: ['提交', 'commit', 'git提交', '生成提交', '写个提交', 'commit message'],
+    checkNaming: ['命名', 'naming', '变量名', '方法名', '名字好不好', '命名规范', '起名'],
+    generateCode: ['生成', 'create', '写一个', '实现一个', '帮我写', '怎么写', '如何实现', '做一个', '创建一个', '编写']
   };
 
   private detectIntent(message: string): string | null {
