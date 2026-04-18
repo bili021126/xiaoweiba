@@ -3,9 +3,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { promisify } from 'util';
 import { container } from 'tsyringe';
-import { MemoryService } from '../core/memory/MemoryService';
+import { EpisodicMemory } from '../core/memory/EpisodicMemory';
+import { DatabaseManager } from '../storage/DatabaseManager';
 import { AuditLogger } from '../core/security/AuditLogger';
 import { getUserFriendlyMessage } from '../utils/ErrorCodes';
+import { BaseCommand, CommandInput, CommandResult } from '../core/memory/BaseCommand';
+import { MemorySystem, MemoryContext } from '../core/memory/MemorySystem';
+import { EventBus, CoreEventType } from '../core/eventbus/EventBus';
 import * as crypto from 'crypto';
 
 const writeFile = promisify(fs.writeFile);
@@ -28,35 +32,42 @@ interface ExportedMemoryData {
 /**
  * 记忆导出命令处理器
  */
-export class ExportMemoryCommand {
-  private memoryService: MemoryService;
+export class ExportMemoryCommand extends BaseCommand {
+  private episodicMemory: EpisodicMemory;
+  private databaseManager: DatabaseManager;
   private auditLogger: AuditLogger;
 
-  constructor(memoryService?: MemoryService) {
-    this.memoryService = memoryService || new MemoryService();
+  constructor(
+    memorySystem: MemorySystem,
+    eventBus: EventBus
+  ) {
+    super(memorySystem, eventBus, 'exportMemory');
+    this.episodicMemory = container.resolve(EpisodicMemory);
+    this.databaseManager = container.resolve(DatabaseManager);
     this.auditLogger = container.resolve(AuditLogger);
   }
 
   /**
    * 执行记忆导出命令
    */
-  async execute(): Promise<void> {
+  protected async executeCore(input: CommandInput, context: MemoryContext): Promise<CommandResult> {
     const startTime = Date.now();
     
     try {
       // 1. 获取记忆统计信息
-      await vscode.window.withProgress({
+      const result = await vscode.window.withProgress({
         location: vscode.ProgressLocation.Notification,
         title: '正在准备导出记忆...',
         cancellable: false
       }, async (progress) => {
         progress.report({ message: '获取记忆统计...' });
 
-        const stats = await this.memoryService.getStats();
+        // 获取所有记忆
+        const memories = await this.retrieveAllMemories();
         
-        if (stats.totalCount === 0) {
+        if (memories.length === 0) {
           vscode.window.showInformationMessage('当前没有可导出的记忆');
-          return;
+          return { success: true, data: { count: 0 } };
         }
 
         // 2. 选择导出路径
@@ -73,15 +84,10 @@ export class ExportMemoryCommand {
 
         if (!saveUri) {
           // 用户取消
-          return;
+          return { success: false, error: 'User cancelled' };
         }
 
-        // 3. 检索所有记忆
-        progress.report({ message: `检索 ${stats.totalCount} 条记忆...` });
-        
-        const memories = await this.retrieveAllMemories();
-
-        // 4. 构建导出数据
+        // 3. 构建导出数据
         progress.report({ message: '构建导出数据...' });
         
         const exportData: ExportedMemoryData = {
@@ -94,12 +100,12 @@ export class ExportMemoryCommand {
           episodicMemories: memories
         };
 
-        // 5. 写入文件
+        // 4. 写入文件
         progress.report({ message: '写入文件...' });
         
         await writeFile(saveUri.fsPath, JSON.stringify(exportData, null, 2), 'utf-8');
 
-        // 6. 显示成功消息
+        // 5. 显示成功消息
         vscode.window.showInformationMessage(
           `成功导出 ${memories.length} 条记忆到 ${path.basename(saveUri.fsPath)}`,
           '打开文件位置'
@@ -109,7 +115,7 @@ export class ExportMemoryCommand {
           }
         });
 
-        // 7. 记录审计日志
+        // 6. 记录审计日志
         const durationMs = Date.now() - startTime;
         await this.auditLogger.log('export_memory', 'success', durationMs, {
           parameters: {
@@ -117,7 +123,18 @@ export class ExportMemoryCommand {
             filePath: saveUri.fsPath
           }
         });
+
+        // 7. 发布任务完成事件
+        this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
+          actionId: 'exportMemory',
+          result: { success: true, count: memories.length },
+          durationMs
+        }, { source: 'ExportMemoryCommand' });
+
+        return { success: true, data: { count: memories.length, filePath: saveUri.fsPath } };
       });
+
+      return result;
 
     } catch (error) {
       const durationMs = Date.now() - startTime;
@@ -125,6 +142,15 @@ export class ExportMemoryCommand {
       vscode.window.showErrorMessage(`记忆导出失败: ${errorMessage}`);
       
       await this.auditLogger.logError('export_memory', error as Error, durationMs);
+      
+      // 即使失败也发布事件
+      this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
+        actionId: 'exportMemory',
+        result: { success: false, error: errorMessage },
+        durationMs
+      }, { source: 'ExportMemoryCommand' });
+      
+      return { success: false, error: errorMessage };
     }
   }
 
@@ -132,29 +158,40 @@ export class ExportMemoryCommand {
    * 检索所有记忆
    */
   private async retrieveAllMemories(): Promise<any[]> {
-    // 分批检索，避免一次性加载过多数据
-    const batchSize = 100;
-    const allMemories: any[] = [];
-    let offset = 0;
+    try {
+      // 直接使用episodicMemory.getAll()获取所有记忆
+      const db = this.databaseManager.getDatabase();
+      if (!db) {
+        console.warn('[ExportMemoryCommand] Database not initialized');
+        return [];
+      }
 
-    while (true) {
-      // 使用retrieve方法获取记忆（不带过滤条件）
-      const batch = await this.memoryService.getRecentMemories(100);
+      // 查询所有情景记忆
+      const stmt = db.prepare('SELECT * FROM episodic_memories ORDER BY timestamp DESC');
+      const rows: any[] = [];
       
-      if (!batch || batch.length === 0) {
-        break;
+      while (stmt.step()) {
+        rows.push(stmt.getAsObject());
       }
-
-      allMemories.push(...batch);
-      offset += batchSize;
-
-      // 如果返回数量小于批次大小，说明已经是最后一批
-      if (batch.length < batchSize) {
-        break;
-      }
+      
+      stmt.free();
+      
+      // 转换为对象数组
+      return rows.map((row: any) => ({
+        id: row.id,
+        taskType: row.task_type,
+        summary: row.summary,
+        entities: row.entities ? JSON.parse(row.entities) : [],
+        outcome: row.outcome,
+        modelId: row.model_id,
+        durationMs: row.duration_ms,
+        timestamp: row.timestamp,
+        metadata: row.metadata ? JSON.parse(row.metadata) : {}
+      }));
+    } catch (error) {
+      console.error('[ExportMemoryCommand] Failed to retrieve memories:', error);
+      return [];
     }
-
-    return allMemories;
   }
 
   /**
