@@ -51,6 +51,8 @@ import { ExplainCodeCommand } from './commands/ExplainCodeCommand';
 import { GenerateCommitCommand } from './commands/GenerateCommitCommand';
 import { CommitStyleLearner } from './core/memory/CommitStyleLearner';
 import { ConfigureApiKeyCommand } from './commands/ConfigureApiKeyCommand';
+import { ExportMemoryCommand } from './commands/ExportMemoryCommand';
+import { ImportMemoryCommand } from './commands/ImportMemoryCommand';
 import { CheckNamingCommand } from './commands/CheckNamingCommand';
 import { CodeGenerationCommand } from './commands/CodeGenerationCommand';
 import { OptimizeSQLCommand } from './commands/OptimizeSQLCommand';
@@ -291,6 +293,18 @@ function registerCommands(context: vscode.ExtensionContext): void {
     return await configureApiKeyHandler.execute(input);
   }, '配置API Key');
   
+  // 创建ExportMemoryCommand和ImportMemoryCommand实例
+  const exportMemoryHandler = new ExportMemoryCommand(memorySystem, eventBus);
+  const importMemoryHandler = new ImportMemoryCommand(memorySystem, eventBus);
+  
+  memorySystem.registerAction('exportMemory', async (input, context) => {
+    return await exportMemoryHandler.execute(input);
+  }, '导出记忆');
+  
+  memorySystem.registerAction('importMemory', async (input, context) => {
+    return await importMemoryHandler.execute(input);
+  }, '导入记忆');
+  
   // 注册 VS Code 命令（作为入口，调用 MemorySystem）
   const explainCodeCmd = vscode.commands.registerCommand(
     'xiaoweiba.explainCode',
@@ -427,6 +441,22 @@ function registerCommands(context: vscode.ExtensionContext): void {
     }
   );
 
+  // 导出记忆命令
+  const exportMemoryCmd = vscode.commands.registerCommand(
+    'xiaoweiba.exportMemory',
+    async () => {
+      await memorySystem.executeAction('exportMemory', {});
+    }
+  );
+
+  // 导入记忆命令
+  const importMemoryCmd = vscode.commands.registerCommand(
+    'xiaoweiba.importMemory',
+    async () => {
+      await memorySystem.executeAction('importMemory', {});
+    }
+  );
+
   // 阶段 2 命令（占位实现）
   const repairMemoryCmd = vscode.commands.registerCommand(
     'xiaoweiba.repair-memory',
@@ -537,12 +567,12 @@ function registerCommands(context: vscode.ExtensionContext): void {
     showCommitHistoryCmd,
     // TODO: 以下命令待改造后重新启用
     // generateCommitCmd,
-    // exportMemoryCmd,
-    // importMemoryCmd,
     // checkNamingCmd,
     // codeGenerationCmd,
     optimizeSQLCmd,
     configureApiKeyCmd,
+    exportMemoryCmd,
+    importMemoryCmd,
     repairMemoryCmd,
     openChatCmd,
     // 智能唤醒监听器

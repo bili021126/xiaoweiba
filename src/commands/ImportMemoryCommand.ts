@@ -2,9 +2,12 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import { promisify } from 'util';
 import { container } from 'tsyringe';
-import { MemoryService } from '../core/memory/MemoryService';
+import { DatabaseManager } from '../storage/DatabaseManager';
 import { AuditLogger } from '../core/security/AuditLogger';
 import { getUserFriendlyMessage } from '../utils/ErrorCodes';
+import { BaseCommand, CommandInput, CommandResult } from '../core/memory/BaseCommand';
+import { MemorySystem, MemoryContext } from '../core/memory/MemorySystem';
+import { EventBus, CoreEventType } from '../core/eventbus/EventBus';
 
 const readFile = promisify(fs.readFile);
 
@@ -24,19 +27,23 @@ interface ImportedMemoryData {
 /**
  * 记忆导入命令处理器
  */
-export class ImportMemoryCommand {
-  private memoryService: MemoryService;
+export class ImportMemoryCommand extends BaseCommand {
+  private databaseManager: DatabaseManager;
   private auditLogger: AuditLogger;
 
-  constructor(memoryService?: MemoryService) {
-    this.memoryService = memoryService || new MemoryService();
+  constructor(
+    memorySystem: MemorySystem,
+    eventBus: EventBus
+  ) {
+    super(memorySystem, eventBus, 'importMemory');
+    this.databaseManager = container.resolve(DatabaseManager);
     this.auditLogger = container.resolve(AuditLogger);
   }
 
   /**
    * 执行记忆导入命令
    */
-  async execute(): Promise<void> {
+  protected async executeCore(input: CommandInput, context: MemoryContext): Promise<CommandResult> {
     const startTime = Date.now();
     
     try {
@@ -51,14 +58,13 @@ export class ImportMemoryCommand {
       });
 
       if (!openUri || openUri.length === 0) {
-        // 用户取消
-        return;
+        return { success: false, error: 'User cancelled' };
       }
 
       const filePath = openUri[0].fsPath;
 
       // 2. 读取并验证文件
-      await vscode.window.withProgress({
+      const result = await vscode.window.withProgress({
         location: vscode.ProgressLocation.Notification,
         title: '正在导入记忆...',
         cancellable: false
@@ -85,7 +91,7 @@ export class ImportMemoryCommand {
         const confirmed = await this.showImportConfirmation(importData);
         if (!confirmed) {
           vscode.window.showInformationMessage('已取消导入');
-          return;
+          return { success: false, error: 'User cancelled' };
         }
 
         // 5. 执行导入
@@ -119,7 +125,18 @@ export class ImportMemoryCommand {
             sourceFile: filePath
           }
         });
+
+        // 8. 发布任务完成事件
+        this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
+          actionId: 'importMemory',
+          result: { success: true, ...importResult },
+          durationMs
+        }, { source: 'ImportMemoryCommand' });
+
+        return { success: true, data: importResult };
       });
+
+      return result;
 
     } catch (error) {
       const durationMs = Date.now() - startTime;
@@ -127,6 +144,15 @@ export class ImportMemoryCommand {
       vscode.window.showErrorMessage(`记忆导入失败: ${errorMessage}`);
       
       await this.auditLogger.logError('import_memory', error as Error, durationMs);
+      
+      // 即使失败也发布事件
+      this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
+        actionId: 'importMemory',
+        result: { success: false, error: errorMessage },
+        durationMs
+      }, { source: 'ImportMemoryCommand' });
+      
+      return { success: false, error: errorMessage };
     }
   }
 
@@ -191,6 +217,11 @@ export class ImportMemoryCommand {
       errors: [] as Array<{ index: number; error: string }>
     };
 
+    const db = this.databaseManager.getDatabase();
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+
     for (let i = 0; i < memories.length; i++) {
       try {
         const memory = memories[i];
@@ -202,28 +233,33 @@ export class ImportMemoryCommand {
         }
 
         // 检查是否已存在（通过ID或时间戳+摘要判断）
-        console.log('[ImportMemoryCommand] Checking if memory exists:', memory.summary.substring(0, 50));
-        const exists = await this.checkMemoryExists(memory);
-        console.log('[ImportMemoryCommand] Memory exists:', exists);
+        const exists = await this.checkMemoryExists(db, memory);
         if (exists) {
-          console.log('[ImportMemoryCommand] Skipping duplicate memory');
           result.skipCount++;
           continue;
         }
 
-        // 导入记忆
-        console.log('[ImportMemoryCommand] Importing memory...');
-        await this.memoryService.recordMemory({
-          taskType: memory.taskType,
-          summary: memory.summary,
-          entities: memory.entities || [],
-          outcome: memory.outcome,
-          modelId: memory.modelId,
-          durationMs: memory.durationMs || 0
-        });
+        // 插入记忆到数据库
+        const stmt = db.prepare(`
+          INSERT INTO episodic_memories 
+          (task_type, summary, entities, outcome, model_id, duration_ms, timestamp, metadata)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `);
 
+        stmt.bind([
+          memory.taskType,
+          memory.summary,
+          JSON.stringify(memory.entities || []),
+          memory.outcome,
+          memory.modelId || 'unknown',
+          memory.durationMs || 0,
+          memory.timestamp || Date.now(),
+          JSON.stringify(memory.metadata || {})
+        ]);
+        
+        stmt.step();
+        stmt.free();
         result.successCount++;
-        console.log('[ImportMemoryCommand] Memory imported successfully, total success:', result.successCount);
       } catch (error) {
         result.errorCount++;
         result.errors.push({
@@ -258,7 +294,8 @@ export class ImportMemoryCommand {
       'NAMING_CHECK',
       'REFACTOR',
       'DEBUG',
-      'TEST_GENERATE'
+      'TEST_GENERATE',
+      'CHAT_COMMAND'
     ];
 
     if (!validTaskTypes.includes(memory.taskType)) {
@@ -277,32 +314,37 @@ export class ImportMemoryCommand {
   /**
    * 检查记忆是否已存在
    */
-  private async checkMemoryExists(memory: any): Promise<boolean> {
+  private async checkMemoryExists(db: any, memory: any): Promise<boolean> {
     try {
-      // 优先通过ID检查（如果导出的记录有ID）
+      // 优先通过ID检查
       if (memory.id) {
-        // 简化处理：直接尝试导入，由recordMemory处理重复
-        return false;
+        const stmt = db.prepare('SELECT COUNT(*) as count FROM episodic_memories WHERE id = ?');
+        stmt.bind([memory.id]);
+        if (stmt.step()) {
+          const row = stmt.getAsObject();
+          stmt.free();
+          return row.count > 0;
+        }
+        stmt.free();
       }
 
       // 其次通过摘要和时间范围搜索相似记忆
-      const similarMemories = await this.memoryService.searchMemories(memory.summary, undefined, 5);
+      const stmt = db.prepare(`
+        SELECT COUNT(*) as count FROM episodic_memories 
+        WHERE summary = ? AND task_type = ? AND ABS(timestamp - ?) < 2000
+      `);
+      stmt.bind([memory.summary, memory.taskType, memory.timestamp || Date.now()]);
       
-      // 如果找到完全匹配的摘要和任务类型，且时间戳相近（±1秒），认为已存在
-      const isDuplicate = similarMemories.some((m: any) => 
-        m.summary === memory.summary && 
-        m.taskType === memory.taskType &&
-        Math.abs(m.timestamp - memory.timestamp) < 2000  // 2秒内视为同一条
-      );
-      
-      if (isDuplicate) {
-        console.log('[ImportMemoryCommand] Duplicate memory found by summary+taskType');
+      if (stmt.step()) {
+        const row = stmt.getAsObject();
+        stmt.free();
+        return row.count > 0;
       }
       
-      return isDuplicate;
+      stmt.free();
+      return false;
     } catch (error) {
       console.warn('[ImportMemoryCommand] checkMemoryExists failed:', error);
-      // 搜索失败时，保守处理：不跳过
       return false;
     }
   }
@@ -311,10 +353,6 @@ export class ImportMemoryCommand {
    * 显示导入错误详情
    */
   private async showImportErrors(errors: Array<{ index: number; error: string }>): Promise<void> {
-    const errorMessages = errors.map(e => 
-      `第 ${e.index + 1} 条: ${e.error}`
-    ).join('\n');
-
     const panel = vscode.window.createWebviewPanel(
       'xiaoweiba.importErrors',
       '导入错误详情 - 小尾巴',
