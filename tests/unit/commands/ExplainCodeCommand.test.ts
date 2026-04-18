@@ -5,7 +5,9 @@ import { ExplainCodeCommand } from '../../../src/commands/ExplainCodeCommand';
 import { LLMTool } from '../../../src/tools/LLMTool';
 import { PreferenceMemory } from '../../../src/core/memory/PreferenceMemory';
 import { AuditLogger } from '../../../src/core/security/AuditLogger';
-import { MemoryContext } from '../../../src/core/memory/MemorySystem';
+import { MemoryContext, MemorySystem } from '../../../src/core/memory/MemorySystem';
+import { EventBus } from '../../../src/core/eventbus/EventBus';
+import { createMockMemorySystem, createMockEventBus, createMockLLMTool } from '../../helpers/mockFactory';
 
 // Mock LLMResponseCache
 jest.mock('../../../src/core/cache/LLMResponseCache', () => {
@@ -37,33 +39,23 @@ jest.mock('vscode', () => ({
 
 describe('ExplainCodeCommand (BaseCommand架构)', () => {
   let command: ExplainCodeCommand;
-  let mockLLMTool: jest.Mocked<LLMTool>;
-  let mockPreferenceMemory: jest.Mocked<PreferenceMemory>;
-  let mockAuditLogger: jest.Mocked<AuditLogger>;
+  let mockLLMTool: any;
+  let mockMemorySystem: any;
+  let mockEventBus: any;
 
   beforeEach(() => {
     // 创建 Mock 对象
-    mockLLMTool = {
-      call: jest.fn(),
-      callStream: jest.fn()
-    } as any;
+    mockLLMTool = createMockLLMTool();
+    mockMemorySystem = createMockMemorySystem();
+    mockEventBus = createMockEventBus();
 
-    mockPreferenceMemory = {
-      getRecommendations: jest.fn().mockResolvedValue([])
-    } as any;
-
-    mockAuditLogger = {
-      log: jest.fn().mockResolvedValue(undefined),
-      logError: jest.fn().mockResolvedValue(undefined)
-    } as any;
-
-    // 注册 Mock 到容器
+    // 注册 Mock 到容器（用于依赖注入）
     container.registerInstance(LLMTool, mockLLMTool);
-    container.registerInstance(PreferenceMemory, mockPreferenceMemory);
-    container.registerInstance(AuditLogger, mockAuditLogger);
+    container.registerInstance(PreferenceMemory, { getRecommendations: jest.fn().mockResolvedValue([]) } as any);
+    container.registerInstance(AuditLogger, { log: jest.fn(), logError: jest.fn() } as any);
 
-    // 创建命令实例
-    command = new ExplainCodeCommand(mockLLMTool);
+    // 创建命令实例（使用新构造函数）
+    command = new ExplainCodeCommand(mockMemorySystem, mockEventBus, mockLLMTool);
   });
 
   afterEach(() => {
