@@ -35,24 +35,7 @@ export class CodeGenerationCommand extends BaseCommand {
   /**
    * 执行代码生成命令
    */
-  async execute(input: CommandInput): Promise<CommandResult> {
-    try {
-      await this.executeLegacy(input);
-      return { success: true };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error)
-      };
-    }
-  }
-
   protected async executeCore(input: CommandInput, context: MemoryContext): Promise<CommandResult> {
-    // 当前使用executeLegacy包装层，此方法暂不直接使用
-    return { success: true };
-  }
-
-  private async executeLegacy(input: CommandInput): Promise<void> {
     const startTime = Date.now();
     
     try {
@@ -60,7 +43,7 @@ export class CodeGenerationCommand extends BaseCommand {
       const editor = vscode.window.activeTextEditor;
       if (!editor) {
         vscode.window.showWarningMessage('⚠️ 请先打开一个文件');
-        return;
+        return { success: false, error: 'No active editor' };
       }
 
       // 2. 检查是否有选中的注释，如果有则预填充
@@ -99,10 +82,10 @@ export class CodeGenerationCommand extends BaseCommand {
 
       if (!requirement || requirement.trim().length === 0) {
         vscode.window.showInformationMessage('已取消代码生成');
-        return;
+        return { success: false, error: 'User cancelled' };
       }
 
-      // 3. 显示进度提示
+      // 4. 显示进度提示
       await vscode.window.withProgress({
         location: vscode.ProgressLocation.Notification,
         title: '🚀 生成代码',
@@ -110,7 +93,7 @@ export class CodeGenerationCommand extends BaseCommand {
       }, async (progress) => {
         progress.report({ message: '🤖 分析需求...', increment: 10 });
 
-        // 4. 调用LLM生成代码
+        // 5. 调用LLM生成代码
         const generatedCode = await this.generateCode(
           requirement,
           editor.document.languageId,
@@ -119,15 +102,15 @@ export class CodeGenerationCommand extends BaseCommand {
         
         progress.report({ message: '✨ 生成完成，准备展示...', increment: 60 });
 
-        // 5. 展示生成的代码并提供操作选项
+        // 6. 展示生成的代码并提供操作选项
         await this.showGeneratedCodeOptions(generatedCode, requirement, editor);
 
         progress.report({ message: '💾 记录情景记忆...', increment: 80 });
 
-        // 6. 发布任务完成事件（由 MemorySystem 订阅并记录记忆）
+        // 7. 发布任务完成事件（由 MemorySystem 订阅并记录记忆）
         const durationMs = Date.now() - startTime;
         this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
-          actionId: 'codeGenerate',
+          actionId: 'generateCode',
           result: { success: true },
           durationMs
         }, { source: 'CodeGenerationCommand' });
@@ -135,7 +118,7 @@ export class CodeGenerationCommand extends BaseCommand {
         progress.report({ message: '✅ 全部完成！', increment: 100 });
       });
 
-      // 7. 记录审计日志
+      // 8. 记录审计日志
       const durationMs = Date.now() - startTime;
       await this.auditLogger.log('code_generation', 'success', durationMs, {
         parameters: {
@@ -143,6 +126,8 @@ export class CodeGenerationCommand extends BaseCommand {
           requirementLength: requirement.length
         }
       });
+
+      return { success: true };
 
     } catch (error) {
       const durationMs = Date.now() - startTime;
@@ -153,10 +138,12 @@ export class CodeGenerationCommand extends BaseCommand {
       
       // 即使失败也发布事件，让 MemorySystem 记录失败结果
       this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
-        actionId: 'codeGenerate',
+        actionId: 'generateCode',
         result: { success: false, error: errorMessage },
         durationMs
       }, { source: 'CodeGenerationCommand' });
+      
+      return { success: false, error: errorMessage };
     }
   }
 
@@ -307,7 +294,8 @@ export class CodeGenerationCommand extends BaseCommand {
         // 清除缓存后异步重新执行，避免递归调用栈溢出
         this.cache.clear();
         vscode.window.showInformationMessage('🔄 正在重新生成...');
-        setTimeout(() => this.executeLegacy({}), 100);
+        // 注意：重新生成需要通过vscode.commands重新触发
+        setTimeout(() => vscode.commands.executeCommand('xiaoweiba.generateCode'), 100);
         break;
     }
   }

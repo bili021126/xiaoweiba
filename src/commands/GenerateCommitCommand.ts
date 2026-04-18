@@ -52,30 +52,9 @@ export class GenerateCommitCommand extends BaseCommand {
   }
 
   /**
-   * 执行提交信息生成命令（包装层，调用原有逻辑）
-   */
-  async execute(input: CommandInput): Promise<CommandResult> {
-    try {
-      // 调用原有的execute逻辑
-      await this.executeLegacy();
-      return { success: true };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error)
-      };
-    }
-  }
-
-  /**
-   * 原有的执行逻辑（待重构为executeCore）
+   * 执行提交信息生成命令
    */
   protected async executeCore(input: CommandInput, context: MemoryContext): Promise<CommandResult> {
-    // 当前使用executeLegacy包装层，此方法暂不直接使用
-    return { success: true };
-  }
-
-  private async executeLegacy(): Promise<void> {
     const startTime = Date.now();
     
     try {
@@ -83,7 +62,7 @@ export class GenerateCommitCommand extends BaseCommand {
       const workspaceFolders = vscode.workspace.workspaceFolders;
       if (!workspaceFolders || workspaceFolders.length === 0) {
         vscode.window.showWarningMessage('请先打开一个工作区');
-        return;
+        return { success: false, error: 'No workspace' };
       }
 
       const workspacePath = workspaceFolders[0].uri.fsPath;
@@ -100,7 +79,7 @@ export class GenerateCommitCommand extends BaseCommand {
         
         if (!diff || diff.trim().length === 0) {
           vscode.window.showInformationMessage('✅ 没有检测到代码变更');
-          return;
+          return { success: true, data: { message: 'No changes' } };
         }
 
         progress.report({ message: '🧠 检索历史记忆...', increment: 20 });
@@ -149,6 +128,8 @@ export class GenerateCommitCommand extends BaseCommand {
         }
       });
 
+      return { success: true };
+
     } catch (error) {
       const durationMs = Date.now() - startTime;
       const errorMessage = getUserFriendlyMessage(error);
@@ -162,6 +143,8 @@ export class GenerateCommitCommand extends BaseCommand {
         result: { success: false, error: errorMessage },
         durationMs
       }, { source: 'GenerateCommitCommand' });
+      
+      return { success: false, error: errorMessage };
     }
   }
 
@@ -362,7 +345,8 @@ ${truncatedDiff}
       
       case '$(refresh) 重新生成':
         vscode.window.showInformationMessage('🔄 正在重新生成...');
-        setTimeout(() => this.executeLegacy(), 100);  // 异步执行，避免嵌套progress导致内存泄漏
+        // 注意：重新生成需要通过vscode.commands重新触发
+        setTimeout(() => vscode.commands.executeCommand('xiaoweiba.generateCommit'), 100);
         break;
       
       case '$(edit) 手动编辑':
