@@ -10,6 +10,7 @@ import { AuditLogger } from '../core/security/AuditLogger';
 import { generateChatViewHtml } from './ChatViewHtml';
 import { DialogManager, InteractionMode } from './DialogManager';
 import { InteractionModeSelector } from './InteractionModeSelector';
+import { EventBus, CoreEventType } from '../core/eventbus/EventBus';
 
 /**
  * 聊天视图提供者�?
@@ -39,6 +40,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     this.promptEngine = new PromptEngine(configManager);
     this.dialogManager = new DialogManager();
     this.modeSelector = new InteractionModeSelector(configManager, context);
+    
+    // 订阅主动推荐事件
+    this.subscribeToRecommendations();
   }
 
   /**
@@ -354,7 +358,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
     let fullContent = '';
 
-    // 发送开始流式响应信�?
+    // 发送开始流式响应信号?
     this.view.webview.postMessage({
       type: 'startStreaming',
       messageId: assistantMessage.id
@@ -389,14 +393,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         throw new Error(result.error || 'LLM调用失败');
       }
 
-      // 发送完成信�?
+      // 发送完成信号?
       this.view.webview.postMessage({
         type: 'endStreaming',
         messageId: assistantMessage.id,
         content: fullContent
       });
 
-      // 更新assistantMessage的内�?
+      // 更新assistantMessage的内容
       assistantMessage.content = fullContent;
     } catch (error) {
       console.error('[ChatViewProvider] 流式响应失败:', error);
@@ -536,6 +540,34 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       type: 'updateSessionList',
       sessions: sessions,
       currentSessionId: currentSessionId
+    });
+  }
+
+  /**
+   * 订阅主动推荐事件
+   */
+  private subscribeToRecommendations(): void {
+    const eventBus = new EventBus();
+    
+    eventBus.subscribe(CoreEventType.MEMORY_RECOMMEND, (payload) => {
+      console.log('[ChatViewProvider] Received MEMORY_RECOMMEND event:', payload);
+      
+      if (!this.view) {
+        console.warn('[ChatViewProvider] View not ready, skipping recommendation display');
+        return;
+      }
+
+      // 在聊天面板顶部显示推荐提示
+      const recommendations = (payload as any).recommendations || [];
+      if (recommendations.length > 0) {
+        const message = `📌 你可能需要这些历史记忆：\n${recommendations.map((r: any) => `- ${r.summary || r}`).join('\n')}`;
+        
+        this.view.webview.postMessage({
+          type: 'showNotification',
+          text: message,
+          level: 'info'
+        });
+      }
     });
   }
 

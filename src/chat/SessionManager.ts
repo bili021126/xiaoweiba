@@ -241,7 +241,7 @@ ${conversationText}
 
         // 记录到情景记忆
         await this.episodicMemory.record({
-          taskType: 'CHAT' as any,
+          taskType: 'CHAT_COMMAND',
           summary,
           entities,
           outcome: 'SUCCESS',
@@ -294,7 +294,7 @@ ${conversationText}
 
       // 记录到情景记忆
       const recordId = await this.episodicMemory.record({
-        taskType: 'CHAT' as any,
+        taskType: 'CHAT_COMMAND',
         summary,
         entities,
         outcome: 'SUCCESS',

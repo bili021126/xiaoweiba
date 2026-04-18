@@ -247,6 +247,7 @@ async function initializeContainer(context: vscode.ExtensionContext): Promise<vo
   container.registerSingleton(ConfigManager);
   container.registerSingleton(DatabaseManager);
   container.registerSingleton(AuditLogger);
+  container.registerSingleton(CommitStyleLearner);
 }
 
 /**
@@ -290,6 +291,78 @@ function registerCommands(context: vscode.ExtensionContext): void {
   //     await memorySystem.executeAction('generateCommit', {});
   //   }
   // );
+
+  // 查看提交历史命令
+  const showCommitHistoryCmd = vscode.commands.registerCommand(
+    'xiaoweiba.showCommitHistory',
+    async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) {
+        vscode.window.showWarningMessage('⚠️ 请先打开一个文件');
+        return;
+      }
+
+      const filePath = editor.document.fileName;
+      const workspaceFolder = vscode.workspace.getWorkspaceFolder(editor.document.uri);
+      
+      if (!workspaceFolder) {
+        vscode.window.showWarningMessage('⚠️ 无法获取工作区');
+        return;
+      }
+
+      try {
+        const { exec } = require('child_process');
+        const util = require('util');
+        const execPromise = util.promisify(exec);
+        
+        const { stdout } = await execPromise(
+          `git log --oneline --max-count=20 -- "${filePath}"`,
+          { cwd: workspaceFolder.uri.fsPath }
+        );
+
+        if (!stdout.trim()) {
+          vscode.window.showInformationMessage('📝 该文件暂无提交历史');
+          return;
+        }
+
+        // 显示提交历史
+        const panel = vscode.window.createWebviewPanel(
+          'commitHistory',
+          '提交历史',
+          vscode.ViewColumn.Beside,
+          {}
+        );
+
+        const commits = stdout.split('\n').filter((line: string) => line.trim());
+        const html = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="UTF-8">
+            <style>
+              body { font-family: var(--vscode-font-family); padding: 20px; }
+              .commit { margin-bottom: 10px; padding: 10px; border-left: 3px solid var(--vscode-gitDecoration-addedResourceForeground); }
+              .hash { color: var(--vscode-gitDecoration-modifiedResourceForeground); font-weight: bold; }
+              .message { margin-top: 5px; }
+            </style>
+          </head>
+          <body>
+            <h2>📋 提交历史: ${filePath.split('/').pop()}</h2>
+            ${commits.map((commit: string) => {
+              const [hash, ...msgParts] = commit.split(' ');
+              const message = msgParts.join(' ');
+              return `<div class="commit"><div class="hash">${hash}</div><div class="message">${message}</div></div>`;
+            }).join('')}
+          </body>
+          </html>
+        `;
+
+        panel.webview.html = html;
+      } catch (error) {
+        vscode.window.showErrorMessage(`获取提交历史失败: ${error}`);
+      }
+    }
+  );
 
   // const exportMemoryCmd = vscode.commands.registerCommand(
   //   'xiaoweiba.export-memory',
@@ -434,6 +507,7 @@ function registerCommands(context: vscode.ExtensionContext): void {
   // 添加到订阅
   context.subscriptions.push(
     explainCodeCmd,
+    showCommitHistoryCmd,
     // TODO: 以下命令待改造后重新启用
     // generateCommitCmd,
     // exportMemoryCmd,
