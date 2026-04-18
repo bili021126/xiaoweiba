@@ -54,3 +54,26 @@ export function createMockLLMTool(overrides?: Partial<LLMTool>): any {
     ...overrides
   };
 }
+
+/**
+ * 创建Mock DatabaseManager
+ */
+export function createMockDatabaseManager(overrides?: any) {
+  const mockStmt = {
+    bind: jest.fn(),
+    step: jest.fn().mockReturnValue(false),
+    getAsObject: jest.fn().mockReturnValue({}),
+    free: jest.fn()
+  };
+  return {
+    getDatabase: jest.fn().mockReturnValue({
+      prepare: jest.fn().mockReturnValue(mockStmt),
+      exec: jest.fn().mockReturnValue([]),
+      run: jest.fn(),
+      getRowsModified: jest.fn().mockReturnValue(1)
+    }),
+    initialize: jest.fn(),
+    close: jest.fn(),
+    ...overrides
+  };
+}
