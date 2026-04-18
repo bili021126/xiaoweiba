@@ -424,7 +424,9 @@ export class MemorySystem {
    * 处理动作完成事件（自动记录到记忆）
    */
   private async onActionCompleted(event: any): Promise<void> {
-    const { actionId, result, durationMs } = event.payload;
+    // ✅ EventBus传递data，兼容payload
+    const payload = event.payload || event.data;
+    const { actionId, result, durationMs } = payload;
     
     console.log(`[MemorySystem] onActionCompleted triggered for: ${actionId}`, { result, durationMs });
     
