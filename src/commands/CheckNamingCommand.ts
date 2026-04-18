@@ -11,18 +11,23 @@ import { AuditLogger } from '../core/security/AuditLogger';
 import { getUserFriendlyMessage } from '../utils/ErrorCodes';
 import { LLMResponseCache } from '../core/cache/LLMResponseCache';
 import { EventBus, CoreEventType } from '../core/eventbus/EventBus';
+import { BaseCommand, CommandInput, CommandResult } from '../core/memory/BaseCommand';
+import { MemorySystem, MemoryContext } from '../core/memory/MemorySystem';
 
-export class CheckNamingCommand {
+export class CheckNamingCommand extends BaseCommand {
   private auditLogger: AuditLogger;
   private llmTool: LLMTool;
   private cache: LLMResponseCache;
-  private eventBus: EventBus;
 
-  constructor(llmTool?: LLMTool) {
+  constructor(
+    memorySystem: MemorySystem,
+    eventBus: EventBus,
+    llmTool?: LLMTool
+  ) {
+    super(memorySystem, eventBus, 'checkNaming');
     this.auditLogger = container.resolve(AuditLogger);
     this.llmTool = llmTool || container.resolve(LLMTool);
     this.cache = new LLMResponseCache();
-    this.eventBus = container.resolve(EventBus);
   }
 
   /**
