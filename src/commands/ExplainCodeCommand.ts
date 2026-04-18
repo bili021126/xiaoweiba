@@ -21,19 +21,11 @@ export class ExplainCodeCommand extends BaseCommand {
   private cache: LLMResponseCache;
 
   constructor(
-    memorySystem?: any,
-    eventBus?: EventBus,
+    memorySystem: MemorySystem,
+    eventBus: EventBus,
     llmTool?: LLMTool
   ) {
-    // 支持两种调用方式：向后兼容
-    if (memorySystem && eventBus) {
-      super(memorySystem, eventBus, 'explainCode');
-    } else {
-      // 旧版调用：需要手动设置commandId
-      super(container.resolve(MemorySystem), container.resolve(EventBus), 'explainCode');
-    }
-    
-    console.log('[ExplainCodeCommand] Constructor called');
+    super(memorySystem, eventBus, 'explainCode');
     
     this.auditLogger = container.resolve(AuditLogger);
     this.preferenceMemory = container.resolve(PreferenceMemory);
