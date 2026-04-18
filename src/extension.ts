@@ -313,13 +313,16 @@ function registerCommands(context: vscode.ExtensionContext): void {
     }
   );
 
-  // TODO: 注册其他命令（待改造为 BaseCommand）
-  // const generateCommitCmd = vscode.commands.registerCommand(
-  //   'xiaoweiba.generateCommit',
-  //   async () => {
-  //     await memorySystem.executeAction('generateCommit', {});
-  //   }
-  // );
+  // ✅ 修复2：注册generateCommit命令
+  const generateCommitCmd = vscode.commands.registerCommand(
+    'xiaoweiba.generateCommit',
+    async () => {
+      const editor = vscode.window.activeTextEditor;
+      await memorySystem.executeAction('generateCommit', {
+        filePath: editor?.document.uri.fsPath
+      });
+    }
+  );
 
   // 查看提交历史命令
   const showCommitHistoryCmd = vscode.commands.registerCommand(
@@ -393,33 +396,21 @@ function registerCommands(context: vscode.ExtensionContext): void {
     }
   );
 
-  // const exportMemoryCmd = vscode.commands.registerCommand(
-  //   'xiaoweiba.export-memory',
-  //   async () => {
-  //     await exportMemoryHandler.execute();
-  //   }
-  // );
+  // ✅ 修复2：注册checkNaming命令
+  const checkNamingCmd = vscode.commands.registerCommand(
+    'xiaoweiba.checkNaming',
+    async () => {
+      await memorySystem.executeAction('checkNaming', {});
+    }
+  );
 
-  // const importMemoryCmd = vscode.commands.registerCommand(
-  //   'xiaoweiba.import-memory',
-  //   async () => {
-  //     await importMemoryHandler.execute();
-  //   }
-  // );
-
-  // const checkNamingCmd = vscode.commands.registerCommand(
-  //   'xiaoweiba.checkNaming',
-  //   async () => {
-  //     await checkNamingHandler.execute();
-  //   }
-  // );
-
-  // const codeGenerationCmd = vscode.commands.registerCommand(
-  //   'xiaoweiba.generateCode',
-  //   async () => {
-  //     await codeGenerationHandler.execute();
-  //   }
-  // );
+  // ✅ 修复2：注册codeGeneration命令
+  const codeGenerationCmd = vscode.commands.registerCommand(
+    'xiaoweiba.generateCode',
+    async () => {
+      await memorySystem.executeAction('generateCode', {});
+    }
+  );
 
   const optimizeSQLCmd = vscode.commands.registerCommand(
     'xiaoweiba.optimizeSQL',
@@ -477,13 +468,6 @@ function registerCommands(context: vscode.ExtensionContext): void {
       }
     }
   );
-
-  // const configureApiKeyCmd = vscode.commands.registerCommand(
-  //   'xiaoweiba.configure-api-key',
-  //   async () => {
-  //     await configureApiKeyHandler.execute();
-  //   }
-  // );
 
   // 打开AI助手命令
   const openChatCmd = vscode.commands.registerCommand(
@@ -565,10 +549,9 @@ function registerCommands(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     explainCodeCmd,
     showCommitHistoryCmd,
-    // TODO: 以下命令待改造后重新启用
-    // generateCommitCmd,
-    // checkNamingCmd,
-    // codeGenerationCmd,
+    generateCommitCmd,    // ✅ 修复2：启用
+    checkNamingCmd,       // ✅ 修复2：启用
+    codeGenerationCmd,    // ✅ 修复2：启用
     optimizeSQLCmd,
     configureApiKeyCmd,
     exportMemoryCmd,

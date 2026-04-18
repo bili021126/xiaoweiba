@@ -63,19 +63,19 @@
         "title": "小尾巴: 优化 SQL"
       },
       {
-        "command": "xiaoweiba.repair-memory",
+        "command": "xiaoweiba.repairMemory",
         "title": "小尾巴: 修复记忆数据库"
       },
       {
-        "command": "xiaoweiba.export-memory",
+        "command": "xiaoweiba.exportMemory",
         "title": "小尾巴: 导出记忆"
       },
       {
-        "command": "xiaoweiba.import-memory",
+        "command": "xiaoweiba.importMemory",
         "title": "小尾巴: 导入记忆"
       },
       {
-        "command": "xiaoweiba.configure-api-key",
+        "command": "xiaoweiba.configureApiKey",
         "title": "小尾巴: 配置 API Key"
       },
       {
