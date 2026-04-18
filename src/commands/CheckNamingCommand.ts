@@ -33,7 +33,19 @@ export class CheckNamingCommand extends BaseCommand {
   /**
    * 执行命名检查
    */
-  async execute(): Promise<void> {
+  async execute(input: CommandInput): Promise<CommandResult> {
+    try {
+      await this.executeLegacy();
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  }
+
+  private async executeLegacy(): Promise<void> {
     const startTime = Date.now();
     
     try {

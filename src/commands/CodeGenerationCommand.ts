@@ -35,7 +35,19 @@ export class CodeGenerationCommand extends BaseCommand {
   /**
    * 执行代码生成命令
    */
-  async execute(): Promise<void> {
+  async execute(input: CommandInput): Promise<CommandResult> {
+    try {
+      await this.executeLegacy(input);
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  }
+
+  private async executeLegacy(input: CommandInput): Promise<void> {
     const startTime = Date.now();
     
     try {
@@ -290,7 +302,7 @@ export class CodeGenerationCommand extends BaseCommand {
         // 清除缓存后异步重新执行，避免递归调用栈溢出
         this.cache.clear();
         vscode.window.showInformationMessage('🔄 正在重新生成...');
-        setTimeout(() => this.execute(), 100);
+        setTimeout(() => this.executeLegacy({}), 100);
         break;
     }
   }

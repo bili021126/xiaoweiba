@@ -48,7 +48,7 @@ import { DatabaseManager } from './storage/DatabaseManager';
 import { AuditLogger } from './core/security/AuditLogger';
 import { getUserFriendlyMessage } from './utils/ErrorCodes';
 import { ExplainCodeCommand } from './commands/ExplainCodeCommand';
-import { GenerateCommitCommandV2 as GenerateCommitCommand } from './commands/GenerateCommitCommand';
+import { GenerateCommitCommand } from './commands/GenerateCommitCommand';
 import { CommitStyleLearner } from './core/memory/CommitStyleLearner';
 import { ExportMemoryCommand } from './commands/ExportMemoryCommand';
 import { ImportMemoryCommand } from './commands/ImportMemoryCommand';

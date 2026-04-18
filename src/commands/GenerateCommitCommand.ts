@@ -23,7 +23,7 @@ import { MemorySystem, MemoryContext } from '../core/memory/MemorySystem';
 
 const execAsync = promisify(exec);
 
-export class GenerateCommitCommandV2 extends BaseCommand {
+export class GenerateCommitCommand extends BaseCommand {
   private auditLogger: AuditLogger;
   private episodicMemory: EpisodicMemory;
   private commitStyleLearner: CommitStyleLearner;
@@ -52,9 +52,25 @@ export class GenerateCommitCommandV2 extends BaseCommand {
   }
 
   /**
-   * 执行提交信息生成命令
+   * 执行提交信息生成命令（包装层，调用原有逻辑）
    */
-  async execute(): Promise<void> {
+  async execute(input: CommandInput): Promise<CommandResult> {
+    try {
+      // 调用原有的execute逻辑
+      await this.executeLegacy();
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  }
+
+  /**
+   * 原有的执行逻辑（待重构为executeCore）
+   */
+  private async executeLegacy(): Promise<void> {
     const startTime = Date.now();
     
     try {
@@ -113,9 +129,9 @@ export class GenerateCommitCommandV2 extends BaseCommand {
           actionId: 'generateCommit',
           result: { success: true },
           durationMs
-        }, { source: 'GenerateCommitCommandV2' });
+        }, { source: 'GenerateCommitCommand' });
         
-        console.log('[GenerateCommitCommandV2] TASK_COMPLETED event published');
+        console.log('[GenerateCommitCommand] TASK_COMPLETED event published');
         progress.report({ message: '✅ 全部完成！', increment: 100 });
       });
 
@@ -140,7 +156,7 @@ export class GenerateCommitCommandV2 extends BaseCommand {
         actionId: 'generateCommit',
         result: { success: false, error: errorMessage },
         durationMs
-      }, { source: 'GenerateCommitCommandV2' });
+      }, { source: 'GenerateCommitCommand' });
     }
   }
 
@@ -206,7 +222,7 @@ export class GenerateCommitCommandV2 extends BaseCommand {
 
       return files;
     } catch (error) {
-      console.error('[GenerateCommitCommandV2] Failed to get changed files:', error);
+      console.error('[GenerateCommitCommand] Failed to get changed files:', error);
       return [];
     }
   }
@@ -217,7 +233,7 @@ export class GenerateCommitCommandV2 extends BaseCommand {
   private async retrieveRelevantMemories(files: string[]): Promise<EpisodicMemoryRecord[]> {
     // 简化实现：直接返回空数组，实际使用时可通过语义检索
     // TODO: 实现基于文件名的实体检索
-    console.log('[GenerateCommitCommandV2] retrieveRelevantMemories - simplified implementation');
+    console.log('[GenerateCommitCommand] retrieveRelevantMemories - simplified implementation');
     return [];
   }
 
@@ -306,7 +322,7 @@ ${truncatedDiff}
     commitMessage = commitMessage.trim();
     
     if (!commitMessage) {
-      console.warn('[GenerateCommitCommandV2] LLM returned empty message, using fallback');
+      console.warn('[GenerateCommitCommand] LLM returned empty message, using fallback');
       commitMessage = 'chore: update files';
     }
 
@@ -341,7 +357,7 @@ ${truncatedDiff}
       
       case '$(refresh) 重新生成':
         vscode.window.showInformationMessage('🔄 正在重新生成...');
-        setTimeout(() => this.execute(), 100);  // 异步执行，避免嵌套progress导致内存泄漏
+        setTimeout(() => this.executeLegacy(), 100);  // 异步执行，避免嵌套progress导致内存泄漏
         break;
       
       case '$(edit) 手动编辑':
@@ -414,6 +430,6 @@ ${truncatedDiff}
     durationMs: number
   ): Promise<void> {
     // 此方法已废弃，记忆记录由 MemorySystem 通过 TASK_COMPLETED 事件自动处理
-    console.debug('[GenerateCommitCommandV2] recordMemory deprecated - using EventBus instead');
+    console.debug('[GenerateCommitCommand] recordMemory deprecated - using EventBus instead');
   }
 }
