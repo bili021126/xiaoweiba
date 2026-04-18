@@ -1,0 +1,196 @@
+{
+  "name": "xiaoweiba",
+  "displayName": "小尾巴 (XiaoWeiba)",
+  "description": "以记忆蒸馏为内核的个人 AI 编程助手",
+  "version": "0.1.0",
+  "publisher": "xiaoweiba",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xiaoweiba/xiaoweiba.git"
+  },
+  "engines": {
+    "vscode": "^1.85.0",
+    "node": ">=18.0.0"
+  },
+  "categories": [
+    "AI",
+    "Programming Languages",
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "xiaoweiba",
+          "title": "小尾巴AI助手",
+          "icon": "$(comment)"
+        }
+      ]
+    },
+    "views": {
+      "xiaoweiba": [
+        {
+          "type": "webview",
+          "id": "xiaoweiba.chatView",
+          "name": "AI对话"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "xiaoweiba.explainCode",
+        "title": "小尾巴: 解释代码"
+      },
+      {
+        "command": "xiaoweiba.generateCommit",
+        "title": "小尾巴: 生成提交信息"
+      },
+      {
+        "command": "xiaoweiba.checkNaming",
+        "title": "小尾巴: 检查命名"
+      },
+      {
+        "command": "xiaoweiba.generateCode",
+        "title": "小尾巴: 生成代码"
+      },
+      {
+        "command": "xiaoweiba.optimizeSQL",
+        "title": "小尾巴: 优化 SQL"
+      },
+      {
+        "command": "xiaoweiba.repair-memory",
+        "title": "小尾巴: 修复记忆数据库"
+      },
+      {
+        "command": "xiaoweiba.export-memory",
+        "title": "小尾巴: 导出记忆"
+      },
+      {
+        "command": "xiaoweiba.import-memory",
+        "title": "小尾巴: 导入记忆"
+      },
+      {
+        "command": "xiaoweiba.configure-api-key",
+        "title": "小尾巴: 配置 API Key"
+      },
+      {
+        "command": "xiaoweiba.openChat",
+        "title": "小尾巴: 打开AI助手"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "xiaoweiba.explainCode",
+          "group": "xiaoweiba@1",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "xiaoweiba.checkNaming",
+          "group": "xiaoweiba@2",
+          "when": "editorHasSelection && editorLangId =~ /typescript|javascript|python|java|go|rust/"
+        },
+        {
+          "command": "xiaoweiba.generateCode",
+          "group": "xiaoweiba@3",
+          "when": "editorTextFocus"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "xiaoweiba.explainCode",
+          "group": "navigation@1",
+          "when": "editorHasSelection"
+        }
+      ],
+      "scm/title": [
+        {
+          "command": "xiaoweiba.generateCommit",
+          "group": "navigation@1",
+          "when": "scmProvider == git"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "xiaoweiba.openChat",
+        "key": "ctrl+shift+l",
+        "when": "editorTextFocus"
+      }
+    ],
+    "configuration": {
+      "title": "小尾巴 (XiaoWeiba)",
+      "properties": {
+        "xiaoweiba.model.default": {
+          "type": "string",
+          "default": "deepseek",
+          "description": "默认 LLM 提供商 ID"
+        },
+        "xiaoweiba.security.trustLevel": {
+          "type": "string",
+          "enum": [
+            "strict",
+            "moderate",
+            "lenient"
+          ],
+          "default": "moderate",
+          "description": "安全信任级别"
+        },
+        "xiaoweiba.memory.retentionDays": {
+          "type": "number",
+          "default": 90,
+          "description": "记忆保留天数"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "compile:integration": "tsc -p ./tsconfig.integration.json",
+    "watch": "tsc -watch -p ./",
+    "test": "jest --coverage",
+    "test:unit": "jest tests/unit",
+    "test:performance": "jest tests/performance --runInBand --verbose",
+    "test:integration": "npm run compile:integration && node out/tests/tests/integration/runIntegrationTests.js",
+    "test:integration:watch": "tsc -p ./tsconfig.integration.json -w",
+    "lint": "eslint src --ext ts",
+    "lint:fix": "eslint src --ext ts --fix",
+    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "check": "npm run compile && npm run lint && npm run test:unit"
+  },
+  "devDependencies": {
+    "@types/glob": "^8.1.0",
+    "@types/jest": "^29.5.11",
+    "@types/js-yaml": "^4.0.9",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^20.19.39",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "@vscode/test-electron": "^2.3.8",
+    "@vscode/vsce": "^2.22.0",
+    "esbuild": "^0.28.0",
+    "eslint": "^8.54.0",
+    "glob": "^13.0.6",
+    "jest": "^29.7.0",
+    "mocha": "^11.7.5",
+    "prettier": "^3.1.0",
+    "ts-jest": "^29.1.1",
+    "typescript": "^5.3.2"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "js-yaml": "^4.1.0",
+    "openai": "^6.34.0",
+    "pino": "^8.17.1",
+    "reflect-metadata": "^0.2.1",
+    "sql.js": "^1.14.1",
+    "tsyringe": "^4.8.0"
+  }
+}
