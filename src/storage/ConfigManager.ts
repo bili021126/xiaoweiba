@@ -243,13 +243,29 @@ export class ConfigManager {
       },
       async () => {
         try {
-          // 这里可以调用LLMTool进行简单测试
-          // 暂时只显示成功消息
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          // ✅ D4修复：真实调用LLM API测试连接
+          const { LLMTool } = await import('../tools/LLMTool');
+          const { AuditLogger } = await import('../core/security/AuditLogger');
           
-          vscode.window.showInformationMessage(
-            `✅ ${providerId} 连接成功！\n模型: ${provider.modelName || '默认'}`
-          );
+          const auditLogger = new AuditLogger(this);
+          const llmTool = new LLMTool(this, auditLogger);
+          
+          // 发送一个简单的测试请求
+          const result = await llmTool.call({
+            model: providerId,  // ✅ 使用model字段指定provider
+            messages: [
+              { role: 'user', content: 'Hello' }
+            ],
+            maxTokens: 5
+          });
+          
+          if (result.success) {
+            vscode.window.showInformationMessage(
+              `✅ ${providerId} 连接成功！\n模型: ${provider.modelName || '默认'}`
+            );
+          } else {
+            throw new Error(result.error || '未知错误');
+          }
         } catch (error) {
           vscode.window.showErrorMessage(
             `❌ ${providerId} 连接失败: ${error instanceof Error ? error.message : String(error)}`
