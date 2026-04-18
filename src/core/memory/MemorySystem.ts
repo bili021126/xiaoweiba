@@ -376,6 +376,19 @@ export class MemorySystem {
           taskType: 'CHAT_COMMAND'
         }, { source: 'MemorySystem' });
       }
+      // ✅ 修复6：补充缺失的actionId处理
+      else if (actionId === 'configureApiKey') {
+        // 配置API Key是敏感操作，记录审计日志即可，不记录情景记忆
+        console.log('[MemorySystem] configureApiKey completed, skipping episodic record');
+      }
+      else if (actionId === 'exportMemory') {
+        // 导出记忆是数据操作，不记录情景记忆
+        console.log('[MemorySystem] exportMemory completed, skipping episodic record');
+      }
+      else if (actionId === 'importMemory') {
+        // 导入记忆是数据操作，不记录情景记忆
+        console.log('[MemorySystem] importMemory completed, skipping episodic record');
+      }
       
     } catch (error) {
       console.error('[MemorySystem] Failed to record action completion:', error);
