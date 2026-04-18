@@ -33,24 +33,7 @@ export class CheckNamingCommand extends BaseCommand {
   /**
    * 执行命名检查
    */
-  async execute(input: CommandInput): Promise<CommandResult> {
-    try {
-      await this.executeLegacy();
-      return { success: true };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error)
-      };
-    }
-  }
-
   protected async executeCore(input: CommandInput, context: MemoryContext): Promise<CommandResult> {
-    // 当前使用executeLegacy包装层，此方法暂不直接使用
-    return { success: true };
-  }
-
-  private async executeLegacy(): Promise<void> {
     const startTime = Date.now();
     
     try {
@@ -58,20 +41,20 @@ export class CheckNamingCommand extends BaseCommand {
       
       if (!editor) {
         vscode.window.showWarningMessage('⚠️ 请先打开一个文件');
-        return;
+        return { success: false, error: 'No active editor' };
       }
 
       const selection = editor.selection;
       if (selection.isEmpty) {
         vscode.window.showWarningMessage('⚠️ 请先选中要检查的命名');
-        return;
+        return { success: false, error: 'No selection' };
       }
 
       const selectedText = editor.document.getText(selection);
       
       if (!selectedText || selectedText.trim().length === 0) {
         vscode.window.showWarningMessage('⚠️ 选中的内容为空');
-        return;
+        return { success: false, error: 'Empty selection' };
       }
 
       // 显示进度提示
@@ -122,6 +105,8 @@ export class CheckNamingCommand extends BaseCommand {
         }
       });
 
+      return { success: true };
+
     } catch (error) {
       const durationMs = Date.now() - startTime;
       const errorMessage = getUserFriendlyMessage(error);
@@ -135,6 +120,8 @@ export class CheckNamingCommand extends BaseCommand {
         result: { success: false, error: errorMessage },
         durationMs
       }, { source: 'CheckNamingCommand' });
+      
+      return { success: false, error: errorMessage };
     }
   }
 
