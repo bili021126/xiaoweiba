@@ -228,9 +228,10 @@ export class ImportMemoryCommand extends BaseCommand {
         // 插入记忆到数据库
         let stmt: any = null;
         try {
+          // ✅ 修复1 & 2：表名改为 episodic_memory，字段 duration_ms -> latency_ms
           stmt = db.prepare(`
-            INSERT INTO episodic_memories 
-            (task_type, summary, entities, outcome, model_id, duration_ms, timestamp, metadata)
+            INSERT INTO episodic_memory 
+            (task_type, summary, entities, outcome, model_id, latency_ms, timestamp, metadata)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
           `);
 
@@ -240,7 +241,7 @@ export class ImportMemoryCommand extends BaseCommand {
             JSON.stringify(memory.entities || []),
             memory.outcome,
             memory.modelId || 'unknown',
-            memory.durationMs || 0,
+            memory.durationMs || 0,  // ✅ JSON中的durationMs映射到数据库的latency_ms
             memory.timestamp || Date.now(),
             JSON.stringify(memory.metadata || {})
           ]);

@@ -147,18 +147,17 @@ export class ExportMemoryCommand extends BaseCommand {
       throw new Error('数据库未初始化，无法导出记忆');
     }
 
+    let stmt: any = null;
     try {
-      // 查询所有情景记忆
-      const stmt = db.prepare('SELECT * FROM episodic_memories ORDER BY timestamp DESC');
+      // ✅ 修复1：表名改为 episodic_memory（单数）
+      stmt = db.prepare('SELECT * FROM episodic_memory ORDER BY timestamp DESC');
       const rows: any[] = [];
       
       while (stmt.step()) {
         rows.push(stmt.getAsObject());
       }
       
-      stmt.free();
-      
-      // 转换为对象数组
+      // ✅ 修复2：数据库字段 latency_ms 转换为 durationMs
       return rows.map((row: any) => ({
         id: row.id,
         taskType: row.task_type,
@@ -166,13 +165,22 @@ export class ExportMemoryCommand extends BaseCommand {
         entities: row.entities ? JSON.parse(row.entities) : [],
         outcome: row.outcome,
         modelId: row.model_id,
-        durationMs: row.duration_ms,
+        durationMs: row.latency_ms,  // ✅ 字段映射：latency_ms -> durationMs
         timestamp: row.timestamp,
         metadata: row.metadata ? JSON.parse(row.metadata) : {}
       }));
     } catch (error) {
       console.error('[ExportMemoryCommand] Failed to retrieve memories:', error);
-      return [];
+      throw error;  // ✅ 抛出错误而非静默返回空数组
+    } finally {
+      // ✅ 修复3：确保 stmt 被释放
+      if (stmt) {
+        try {
+          stmt.free();
+        } catch (e) {
+          // 忽略 free 错误
+        }
+      }
     }
   }
 
