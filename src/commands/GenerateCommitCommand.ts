@@ -12,19 +12,21 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { container } from 'tsyringe';
 import { LLMTool } from '../tools/LLMTool';
-import { MemoryService } from '../core/memory/MemoryService';
+import { EpisodicMemory } from '../core/memory/EpisodicMemory';
 import { CommitStyleLearner, CommitStylePreference } from '../core/memory/CommitStyleLearner';
 import { AuditLogger } from '../core/security/AuditLogger';
 import { getUserFriendlyMessage } from '../utils/ErrorCodes';
+import { EventBus, CoreEventType } from '../core/eventbus/EventBus';
 import { EpisodicMemoryRecord } from '../core/memory/types';
 
 const execAsync = promisify(exec);
 
 export class GenerateCommitCommandV2 {
   private auditLogger: AuditLogger;
-  private memoryService: MemoryService;
+  private episodicMemory: EpisodicMemory;
   private commitStyleLearner: CommitStyleLearner;
   private llmTool: LLMTool;
+  private eventBus: EventBus;
 
   // 配置常量
   private readonly MAX_FILES_TO_SEARCH = 5;
@@ -35,14 +37,15 @@ export class GenerateCommitCommandV2 {
   private readonly LLM_MAX_TOKENS = 500;
 
   constructor(
-    memoryService?: MemoryService,
+    episodicMemory?: EpisodicMemory,
     llmTool?: LLMTool,
     commitStyleLearner?: CommitStyleLearner
   ) {
     this.auditLogger = container.resolve(AuditLogger);
-    this.memoryService = memoryService || new MemoryService();
+    this.episodicMemory = episodicMemory || container.resolve(EpisodicMemory);
     this.llmTool = llmTool || container.resolve(LLMTool);
     this.commitStyleLearner = commitStyleLearner || container.resolve(CommitStyleLearner);
+    this.eventBus = container.resolve(EventBus);
   }
 
   /**
@@ -101,17 +104,16 @@ export class GenerateCommitCommandV2 {
 
         progress.report({ message: '💾 记录情景记忆...', increment: 80 });
 
-        // 7. 记录情景记忆
+        // 7. 发布任务完成事件（由 MemorySystem 订阅并记录记忆）
         const durationMs = Date.now() - startTime;
-        console.log('[GenerateCommitCommandV2] About to record memory, duration:', durationMs);
-        try {
-          await this.recordMemory(commitMessage, diff, durationMs);
-          console.log('[GenerateCommitCommandV2] Memory recording completed');
-          progress.report({ message: '✅ 全部完成！', increment: 100 });
-        } catch (memoryError) {
-          console.error('[GenerateCommitCommandV2] Memory recording failed:', memoryError);
-          progress.report({ message: '⚠️ 记忆记录失败，但提交已成功', increment: 100 });
-        }
+        this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
+          actionId: 'generateCommit',
+          result: { success: true },
+          durationMs
+        }, { source: 'GenerateCommitCommandV2' });
+        
+        console.log('[GenerateCommitCommandV2] TASK_COMPLETED event published');
+        progress.report({ message: '✅ 全部完成！', increment: 100 });
       });
 
       // 8. 记录审计日志
@@ -129,6 +131,13 @@ export class GenerateCommitCommandV2 {
       vscode.window.showErrorMessage(`生成提交信息失败: ${errorMessage}`);
       
       await this.auditLogger.logError('generate_commit_v2', error as Error, durationMs);
+      
+      // 即使失败也发布事件，让 MemorySystem 记录失败结果
+      this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
+        actionId: 'generateCommit',
+        result: { success: false, error: errorMessage },
+        durationMs
+      }, { source: 'GenerateCommitCommandV2' });
     }
   }
 
@@ -203,24 +212,10 @@ export class GenerateCommitCommandV2 {
    * 检索相关文件的历史提交记忆
    */
   private async retrieveRelevantMemories(files: string[]): Promise<EpisodicMemoryRecord[]> {
-    // 并行检索所有文件的记忆，提升性能
-    const searchPromises = files.slice(0, this.MAX_FILES_TO_SEARCH).map(async (file) => {
-      const fileName = file.split('/').pop()?.split('\\').pop() || '';
-      if (!fileName) return [];
-
-      return await this.memoryService.searchByEntity(fileName, this.MAX_MEMORIES_PER_FILE);
-    });
-
-    const results = await Promise.all(searchPromises);
-    const memories = results.flat();
-
-    // 去重并按时间排序
-    const uniqueMemories = memories.filter(
-      (m: EpisodicMemoryRecord, index: number, self: EpisodicMemoryRecord[]) => 
-        index === self.findIndex((t: EpisodicMemoryRecord) => t.id === m.id)
-    ).sort((a: EpisodicMemoryRecord, b: EpisodicMemoryRecord) => b.timestamp - a.timestamp);
-
-    return uniqueMemories.slice(0, this.MAX_MEMORIES_TO_RETURN);
+    // 简化实现：直接返回空数组，实际使用时可通过语义检索
+    // TODO: 实现基于文件名的实体检索
+    console.log('[GenerateCommitCommandV2] retrieveRelevantMemories - simplified implementation');
+    return [];
   }
 
   /**
@@ -407,35 +402,15 @@ ${truncatedDiff}
   }
 
   /**
-   * 记录情景记忆
+   * 记录情景记忆（已废弃，改为通过 EventBus 发布事件）
+   * @deprecated 使用 EventBus.publish(CoreEventType.TASK_COMPLETED) 替代
    */
   private async recordMemory(
     commitMessage: string,
     diff: string,
     durationMs: number
   ): Promise<void> {
-    try {
-      // 提取type和scope
-      const match = commitMessage.match(/^(feat|fix|docs|style|refactor|test|chore)(?:\(([^)]+)\))?:/);
-      const commitType = match?.[1] || 'chore';
-      const scope = match?.[2];
-
-      // 统计变更文件数
-      const filesChanged = diff.split('\n').filter(line => line.startsWith('diff --git')).length;
-
-      await this.memoryService.recordMemory({
-        taskType: 'COMMIT_GENERATE',
-        summary: `生成${commitType}类型的提交信息`,
-        entities: [],  // TODO: 从diff中提取文件列表
-        outcome: 'SUCCESS',
-        modelId: 'unknown',  // TODO: 从LLMTool获取实际modelId
-        durationMs
-      });
-
-      console.log('[GenerateCommitCommandV2] Memory recorded successfully');
-    } catch (error) {
-      console.error('[GenerateCommitCommandV2] Failed to record memory:', error);
-      // 不抛出错误，避免影响主流程
-    }
+    // 此方法已废弃，记忆记录由 MemorySystem 通过 TASK_COMPLETED 事件自动处理
+    console.debug('[GenerateCommitCommandV2] recordMemory deprecated - using EventBus instead');
   }
 }

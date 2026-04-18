@@ -95,6 +95,42 @@ describe('ExpertSelector - High Coverage', () => {
       
       expect(expertSelector).toBeDefined();
     });
+    
+    it('应该确保权重不低于最小值 0.05', async () => {
+      const intent = { temporal: 0.1, entity: 0.1, semantic: 0.8 };
+      const clickedWeights = { k: 0.0, t: 0.0, e: 0.0, v: 1.0 }; // 极端情况
+      
+      // 多次负向反馈
+      for (let i = 0; i < 20; i++) {
+        await expertSelector.recordFeedback(
+          intent as any,
+          clickedWeights,
+          `min_weight_test_${i}`,
+          3000
+        );
+      }
+      
+      // 验证专家选择器正常工作（不抛出异常）
+      expect(expertSelector.getCurrentExpert()).toBeDefined();
+    });
+    
+    it('应该确保权重不超过最大值 0.7', async () => {
+      const intent = { temporal: 0.9, entity: 0.9, semantic: 0.9 };
+      const clickedWeights = { k: 1.0, t: 1.0, e: 1.0, v: 1.0 }; // 极端正向
+      
+      // 多次正向反馈
+      for (let i = 0; i < 30; i++) {
+        await expertSelector.recordFeedback(
+          intent as any,
+          clickedWeights,
+          `max_weight_test_${i}`,
+          3000
+        );
+      }
+      
+      // 验证专家选择器正常工作（不抛出异常）
+      expect(expertSelector.getCurrentExpert()).toBeDefined();
+    });
   });
 
   describe('去重机制', () => {

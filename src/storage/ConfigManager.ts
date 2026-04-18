@@ -51,6 +51,11 @@ export interface ChatConfig {
   autoGenerateTitle: boolean;
   defaultSystemPrompt: string;
   enableCrossSession: boolean;
+  // 新增：对话交互配置
+  defaultInteractionMode?: 'QUICK' | 'DEEP' | 'COACH' | 'AUTO';
+  enableClarification?: boolean;
+  maxClarificationRounds?: number;
+  preferConcise?: boolean;
 }
 
 export interface InlineCompletionConfig {

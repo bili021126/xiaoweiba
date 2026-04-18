@@ -7,25 +7,22 @@
 import * as vscode from 'vscode';
 import { container } from 'tsyringe';
 import { LLMTool } from '../tools/LLMTool';
-import { MemoryService } from '../core/memory/MemoryService';
 import { AuditLogger } from '../core/security/AuditLogger';
 import { getUserFriendlyMessage } from '../utils/ErrorCodes';
 import { LLMResponseCache } from '../core/cache/LLMResponseCache';
+import { EventBus, CoreEventType } from '../core/eventbus/EventBus';
 
 export class CheckNamingCommand {
   private auditLogger: AuditLogger;
-  private memoryService: MemoryService;
   private llmTool: LLMTool;
   private cache: LLMResponseCache;
+  private eventBus: EventBus;
 
-  constructor(
-    memoryService?: MemoryService,
-    llmTool?: LLMTool
-  ) {
+  constructor(llmTool?: LLMTool) {
     this.auditLogger = container.resolve(AuditLogger);
-    this.memoryService = memoryService || new MemoryService();
     this.llmTool = llmTool || container.resolve(LLMTool);
     this.cache = new LLMResponseCache();
+    this.eventBus = container.resolve(EventBus);
   }
 
   /**
@@ -82,8 +79,13 @@ export class CheckNamingCommand {
           
           progress.report({ message: '💾 记录记忆...', increment: 80 });
 
-          // 记录情景记忆
-          await this.recordMemory(selectedText, result.data);
+          // 发布任务完成事件（由 MemorySystem 订阅并记录记忆）
+          const durationMs = Date.now() - startTime;
+          this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
+            actionId: 'checkNaming',
+            result: { success: true },
+            durationMs
+          }, { source: 'CheckNamingCommand' });
           
           progress.report({ message: '✅ 完成！', increment: 100 });
         }
@@ -104,6 +106,13 @@ export class CheckNamingCommand {
       vscode.window.showErrorMessage(`命名检查失败: ${errorMessage}`);
       
       await this.auditLogger.logError('check_naming', error as Error, durationMs);
+      
+      // 即使失败也发布事件，让 MemorySystem 记录失败结果
+      this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
+        actionId: 'checkNaming',
+        result: { success: false, error: errorMessage },
+        durationMs
+      }, { source: 'CheckNamingCommand' });
     }
   }
 
@@ -322,23 +331,11 @@ export class CheckNamingCommand {
   }
 
   /**
-   * 记录情景记忆
+   * 记录情景记忆（已废弃，改为通过 EventBus 发布事件）
+   * @deprecated 使用 EventBus.publish(CoreEventType.TASK_COMPLETED) 替代
    */
   private async recordMemory(name: string, result: string): Promise<void> {
-    try {
-      const parsedResult = JSON.parse(result);
-      const isValid = parsedResult.isValid;
-      
-      await this.memoryService.recordMemory({
-        taskType: 'NAMING_CHECK',
-        summary: `检查命名 "${name}" - ${isValid ? '通过' : '未通过'}`,
-        entities: [name],
-        outcome: isValid ? 'SUCCESS' : 'FAILURE',
-        modelId: 'deepseek',
-        durationMs: 0
-      });
-    } catch (error) {
-      console.warn('[CheckNamingCommand] Memory recording failed:', error);
-    }
+    // 此方法已废弃，记忆记录由 MemorySystem 通过 TASK_COMPLETED 事件自动处理
+    console.debug('[CheckNamingCommand] recordMemory deprecated - using EventBus instead');
   }
 }

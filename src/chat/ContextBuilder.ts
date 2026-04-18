@@ -69,23 +69,36 @@ export class ContextBuilder {
     console.log(`[ContextBuilder] Searching memories with limit=${memoryLimit}, enableCrossSession=${options.enableCrossSession}`);
     console.log('[ContextBuilder] episodicMemory object:', this.episodicMemory ? 'exists' : 'NULL');
     console.log('[ContextBuilder] episodicMemory.search method:', typeof this.episodicMemory.search);
+    console.log('[ContextBuilder] episodicMemory instance ID:', (this.episodicMemory as any).__instanceId || 'unknown');
     
-    const allEpisodes = await this.episodicMemory.search(options.userMessage, {
-      limit: memoryLimit
-    });
-    console.log(`[ContextBuilder] Found ${allEpisodes.length} memories`);
-
-    // 4. 跨会话检索（从检索结果中分割）
-    let crossSessionMemories: EpisodicMemoryRecord[] = [];
-    let episodes: EpisodicMemoryRecord[] = [];
+    // 并行检索：当前相关记忆 + 跨会话摘要
+    let allEpisodes: EpisodicMemoryRecord[] = [];
+    let crossSessionSummaries: EpisodicMemoryRecord[] = [];
     
     if (options.enableCrossSession) {
-      // 前3条作为当前会话相关，后3条作为跨会话
-      episodes = allEpisodes.slice(0, 3);
-      crossSessionMemories = allEpisodes.slice(3);
+      // 检索当前相关的记忆
+      const currentPromise = this.episodicMemory.search(options.userMessage, {
+        limit: 3
+      });
+      
+      // 检索跨会话摘要（taskType='CHAT'的记忆是会话摘要）
+      const crossSessionPromise = this.retrieveCrossSessionSummaries(3);
+      
+      const [currentEpisodes, summaries] = await Promise.all([currentPromise, crossSessionPromise]);
+      allEpisodes = currentEpisodes;
+      crossSessionSummaries = summaries;
+      
+      console.log(`[ContextBuilder] Found ${allEpisodes.length} current memories, ${crossSessionSummaries.length} cross-session summaries`);
     } else {
-      episodes = allEpisodes;
+      allEpisodes = await this.episodicMemory.search(options.userMessage, {
+        limit: memoryLimit
+      });
+      console.log(`[ContextBuilder] Found ${allEpisodes.length} memories`);
     }
+
+    // 4. 整理结果
+    let episodes: EpisodicMemoryRecord[] = allEpisodes;
+    let crossSessionMemories: EpisodicMemoryRecord[] = crossSessionSummaries;
 
     // 5. 检索偏好记忆
     let preferences: PreferenceRecommendation[] = [];
@@ -262,5 +275,29 @@ export class ContextBuilder {
     });
 
     return messages;
+  }
+
+  /**
+   * 检索跨会话摘要
+   * 
+   * @param limit 返回数量
+   * @returns 最近的会话摘要（taskType='CHAT'的记忆）
+   */
+  private async retrieveCrossSessionSummaries(limit: number = 3): Promise<EpisodicMemoryRecord[]> {
+    try {
+      // 直接通过retrieve方法按taskType过滤，避免全量检索
+      const sessionSummaries = await this.episodicMemory.retrieve({
+        taskType: 'CHAT_COMMAND',
+        limit: limit * 2  // 获取更多以便后续排序
+      });
+      
+      // 按时间戳降序排序，取最近的limit条
+      return sessionSummaries
+        .sort((a, b) => b.timestamp - a.timestamp)
+        .slice(0, limit);
+    } catch (error) {
+      console.error('[ContextBuilder] Failed to retrieve cross-session summaries:', error);
+      return [];
+    }
   }
 }

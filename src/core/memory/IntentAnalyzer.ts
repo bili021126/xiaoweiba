@@ -12,6 +12,12 @@ export class IntentAnalyzer {
     /上一个/, /上一步/, /之前的/, /那次/
   ];
   
+  // 久远时间关键词模式（用于检索历史记忆）
+  private distantTemporalPatterns = [
+    /很久以前/, /之前/, /上个月/, /去年/, /历史/, 
+    /以前的/, /早期的/, /过去的/, /旧版本/
+  ];
+  
   // 实体关键词模式（函数、类、表名等）
   private entityPatterns = [
     /函数/, /方法/, /类/, /表/, /接口/,
@@ -27,16 +33,22 @@ export class IntentAnalyzer {
    * 分析查询文本，输出意图向量
    * @param query 用户查询文本
    * @param languageId 当前编辑器语言ID（可选）
-   * @returns 意图向量 {temporal, entity, semantic}
+   * @returns 意图向量 {temporal, entity, semantic, distantTemporal}
    */
   analyze(query: string, languageId?: string): IntentVector {
     let temporal = 0;
     let entity = 0;
     let semantic = 0;
+    let distantTemporal = 0;
   
     // 检测时间敏感性
     if (this.temporalPatterns.some(p => p.test(query))) {
       temporal = 0.8;
+    }
+    
+    // 检测久远时间意图
+    if (this.distantTemporalPatterns.some(p => p.test(query))) {
+      distantTemporal = 0.9;
     }
   
     // 检测实体敏感性
@@ -64,7 +76,7 @@ export class IntentAnalyzer {
       entity = Math.max(entity, 0.6);  // 代码环境下默认有实体
     }
   
-    return { temporal, entity, semantic };
+    return { temporal, entity, semantic, distantTemporal };
   }
   
   /**

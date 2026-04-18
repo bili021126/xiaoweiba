@@ -1,43 +1,41 @@
 import * as vscode from 'vscode';
 import { container } from 'tsyringe';
 import { LLMTool } from '../tools/LLMTool';
-import { MemoryService } from '../core/memory/MemoryService';
 import { PreferenceMemory } from '../core/memory/PreferenceMemory';
 import { AuditLogger } from '../core/security/AuditLogger';
 import { getUserFriendlyMessage } from '../utils/ErrorCodes';
 import { LLMResponseCache } from '../core/cache/LLMResponseCache';
 import { generateCompleteStyles } from '../ui/styles';
 import { generateCard, generateCodeBlock, generateBadge, generateWebviewTemplate } from '../ui/components';
+import { BaseCommand } from '../core/memory/BaseCommand';
+import { MemoryContext } from '../core/memory/MemorySystem';
+import { EventBus, CoreEventType } from '../core/eventbus/EventBus';
 
 /**
  * 代码解释命令处理器
  */
-export class ExplainCodeCommand {
+export class ExplainCodeCommand extends BaseCommand {
   private auditLogger: AuditLogger;
-  private memoryService: MemoryService;
   private preferenceMemory: PreferenceMemory;
   private llmTool: LLMTool;
   private cache: LLMResponseCache;
+  private eventBus: EventBus;
 
-  constructor(memoryService?: MemoryService, llmTool?: LLMTool) {
+  constructor(llmTool?: LLMTool) {
+    super();
     console.log('[ExplainCodeCommand] Constructor called');
-    console.log('[ExplainCodeCommand] memoryService param:', memoryService ? 'provided' : 'undefined');
-    console.log('[ExplainCodeCommand] llmTool param:', llmTool ? 'provided' : 'undefined');
     
     this.auditLogger = container.resolve(AuditLogger);
-    // 如果传入了实例则使用，否则创建新实例（兼容测试）
-    this.memoryService = memoryService || new MemoryService();
     this.preferenceMemory = container.resolve(PreferenceMemory);
     this.llmTool = llmTool || container.resolve(LLMTool);
     this.cache = new LLMResponseCache();
-    
-    console.log('[ExplainCodeCommand] memoryService instance:', this.memoryService ? 'initialized' : 'null');
+    this.eventBus = container.resolve(EventBus);
   }
 
   /**
-   * 执行代码解释命令
+   * 核心执行逻辑（由 MemorySystem 调用）
    */
-  async execute(): Promise<void> {
+  protected async executeCore(input: any, context: MemoryContext): Promise<any> {
     const startTime = Date.now();
     
     try {
@@ -45,7 +43,7 @@ export class ExplainCodeCommand {
       const editor = vscode.window.activeTextEditor;
       if (!editor) {
         vscode.window.showWarningMessage('⚠️ 请先打开一个文件并选中要解释的代码');
-        return;
+        return { success: false, error: 'No active editor' };
       }
 
       const selection = editor.selection;
@@ -53,7 +51,7 @@ export class ExplainCodeCommand {
       
       if (!selectedCode || selectedCode.trim().length === 0) {
         vscode.window.showWarningMessage('⚠️ 请先选中要解释的代码');
-        return;
+        return { success: false, error: 'No code selected' };
       }
 
       // 2. 显示进度提示
@@ -64,18 +62,19 @@ export class ExplainCodeCommand {
       }, async (progress) => {
         progress.report({ message: '调用 AI 模型...' });
 
-        // 3. 调用 LLM 解释代码
-        const explanation = await this.explainCodeWithLLM(selectedCode, editor.document.languageId);
+        // 3. 调用 LLM 解释代码（注入记忆上下文）
+        const explanation = await this.explainCodeWithLLM(
+          selectedCode, 
+          editor.document.languageId,
+          context
+        );
         
         progress.report({ message: '生成完成' });
 
         // 4. 在 Webview 中展示结果
         await this.showExplanationInWebview(explanation, selectedCode, editor.document.languageId);
 
-        // 5. 异步记录情景记忆（不阻塞返回）
-        const durationMs = Date.now() - startTime;
-        this.recordMemory(editor.document.fileName, selectedCode, explanation, durationMs)
-          .catch(err => console.error('[ExplainCodeCommand] Memory record failed:', err));
+        // 5. 记忆记录已通过 EventBus 发布 TASK_COMPLETED 事件，由 MemorySystem 自动处理
       });
 
       // 6. 记录审计日志
@@ -87,30 +86,70 @@ export class ExplainCodeCommand {
         }
       });
 
+      // 7. 发布任务完成事件（由 MemorySystem 订阅并记录记忆）
+      this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
+        actionId: 'explainCode',
+        result: { success: true },
+        durationMs
+      }, { source: 'ExplainCodeCommand' });
+
+      return { success: true, durationMs };
+
     } catch (error) {
       const durationMs = Date.now() - startTime;
       const errorMessage = getUserFriendlyMessage(error);
       vscode.window.showErrorMessage(`代码解释失败: ${errorMessage}`);
       
       await this.auditLogger.logError('explain_code', error as Error, durationMs);
+      
+      // 即使失败也发布事件，让 MemorySystem 记录失败结果
+      this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
+        actionId: 'explainCode',
+        result: { success: false, error: errorMessage },
+        durationMs
+      }, { source: 'ExplainCodeCommand' });
+      
+      return { success: false, error: errorMessage };
     }
   }
 
   /**
-   * 使用 LLM 解释代码
+   * 使用 LLM 解释代码（注入记忆上下文）
    */
-  private async explainCodeWithLLM(code: string, languageId: string): Promise<string> {
-    // F04: 查询用户偏好
-    const preferences = await this.preferenceMemory.getRecommendations(
-      'CODE_PATTERN',
-      { language: languageId }
-    );
+  private async explainCodeWithLLM(
+    code: string, 
+    languageId: string,
+    context: MemoryContext
+  ): Promise<string> {
+    // F04: 查询用户偏好（优先使用注入的偏好，其次实时查询）
+    let preferences = context.preferenceRecommendations || [];
+    if (preferences.length === 0) {
+      const rawPrefs = await this.preferenceMemory.getRecommendations(
+        'CODE_PATTERN',
+        { language: languageId }
+      );
+      // 转换为标准格式
+      preferences = rawPrefs.map(p => ({
+        domain: p.record.domain,
+        pattern: p.record.pattern,
+        confidence: p.record.confidence
+      }));
+    }
     
     let preferenceHint = '';
     if (preferences.length > 0) {
       preferenceHint = '\n\n根据用户历史偏好：\n';
       preferences.forEach((pref, index) => {
-        preferenceHint += `${index + 1}. ${JSON.stringify(pref.record.pattern)} (置信度: ${(pref.record.confidence * 100).toFixed(0)}%)\n`;
+        preferenceHint += `${index + 1}. ${JSON.stringify(pref.pattern)} (置信度: ${(pref.confidence * 100).toFixed(0)}%)\n`;
+      });
+    }
+
+    // 添加相关记忆到Prompt
+    let memoryHint = '';
+    if (context.episodicMemories && context.episodicMemories.length > 0) {
+      memoryHint = '\n\n相关历史记忆：\n';
+      context.episodicMemories.forEach((mem, index) => {
+        memoryHint += `${index + 1}. [${mem.taskType}] ${mem.summary}\n`;
       });
     }
 
@@ -123,13 +162,18 @@ ${code}
 请用中文回答（300字以内），包含：
 1. 功能概述
 2. 关键逻辑
-3. 改进建议（如有）${preferenceHint}`;
+3. 改进建议（如有）${preferenceHint}${memoryHint}`;
 
-    // 尝试从缓存获取
-    const cachedResult = this.cache.get(prompt);
-    if (cachedResult) {
-      console.log('[ExplainCodeCommand] Using cached result');
-      return cachedResult;
+    // 尝试从缓存获取（可通过环境变量 DISABLE_LLM_CACHE 禁用）
+    const disableCache = process.env.DISABLE_LLM_CACHE === 'true';
+    if (!disableCache) {
+      const cachedResult = this.cache.get(prompt);
+      if (cachedResult) {
+        console.log('[ExplainCodeCommand] Using cached result');
+        return cachedResult;
+      }
+    } else {
+      console.log('[ExplainCodeCommand] Cache disabled by environment variable');
     }
 
     const result = await this.llmTool.call({
@@ -255,7 +299,8 @@ ${code}
   }
 
   /**
-   * 记录情景记忆
+   * 记录情景记忆（已废弃，改为通过 EventBus 发布事件）
+   * @deprecated 使用 EventBus.publish(CoreEventType.TASK_COMPLETED) 替代
    */
   private async recordMemory(
     fileName: string,
@@ -263,18 +308,7 @@ ${code}
     explanation: string,
     durationMs: number
   ): Promise<void> {
-    try {
-      await this.memoryService.recordMemory({
-        taskType: 'CODE_EXPLAIN',
-        summary: `解释 ${fileName.split('/').pop()} 中的代码`,
-        entities: [fileName.split('.').pop() || 'unknown'],
-        outcome: 'SUCCESS',
-        modelId: 'deepseek',
-        durationMs
-      });
-    } catch (error) {
-      // 记忆记录失败不影响主流程，仅记录日志
-      console.warn('记忆记录失败:', error);
-    }
+    // 此方法已废弃，记忆记录由 MemorySystem 通过 TASK_COMPLETED 事件自动处理
+    console.debug('[ExplainCodeCommand] recordMemory deprecated - using EventBus instead');
   }
 }

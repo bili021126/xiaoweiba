@@ -411,6 +411,9 @@ export class ExpertSelector {
 
   /**
    * 根据历史反馈选择最匹配的专家权重（元学习）
+   * 
+   * @deprecated 此方法已废弃，完全依赖在线学习权重更新（updateFactorWeights）
+   * 保留仅用于向后兼容，不再被调用
    */
   private updateBestExpert(): void {
     if (this.feedbackHistory.length === 0) return;

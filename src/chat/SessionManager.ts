@@ -124,6 +124,18 @@ export class SessionManager {
   }
 
   /**
+   * 获取会话列表
+   */
+  getSessionList(): Array<{ id: string; title: string; messageCount: number; createdAt: number }> {
+    return Array.from(this.sessions.entries()).map(([id, session]) => ({
+      id,
+      title: session.title || `会话 ${new Date(session.createdAt).toLocaleString()}`,
+      messageCount: session.messages.length,
+      createdAt: session.createdAt
+    })).sort((a, b) => b.createdAt - a.createdAt); // 按创建时间降序
+  }
+
+  /**
    * 获取当前会话
    */
   getCurrentSession(): ChatSession | null {
@@ -264,18 +276,24 @@ ${conversationText}
    */
   private async summarizeSessionLocal(session: ChatSession): Promise<void> {
     if (!this.episodicMemory) {
+      console.warn('[SessionManager] EpisodicMemory未初始化，跳过摘要生成');
       return; // EpisodicMemory未初始化，跳过
     }
 
+    console.log(`[SessionManager] 检查会话 ${session.id} 是否需要摘要: ${session.messages.length} 条消息`);
+    
     if (session.messages.length < 5) {
+      console.log(`[SessionManager] 会话消息不足5条 (${session.messages.length})，跳过摘要生成`);
       return; // 消息太少，不生成摘要
     }
 
     try {
       const { summary, entities } = this.generateLocalSummary(session);
+      console.log(`[SessionManager] 生成摘要: "${summary}"`);
+      console.log(`[SessionManager] 提取实体: [${entities.join(', ')}]`);
 
       // 记录到情景记忆
-      await this.episodicMemory.record({
+      const recordId = await this.episodicMemory.record({
         taskType: 'CHAT' as any,
         summary,
         entities,
@@ -285,7 +303,7 @@ ${conversationText}
         metadata: { sessionId: session.id }
       });
 
-      console.log('[SessionManager] 本地规则摘要生成成功:', summary);
+      console.log('[SessionManager] 本地规则摘要生成成功，recordId:', recordId);
     } catch (error) {
       console.error('[SessionManager] 本地规则摘要生成失败:', error);
     }

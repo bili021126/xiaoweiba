@@ -16,6 +16,29 @@ try {
   }
 }
 
+// 加载环境变量（开发环境）
+try {
+  const path = require('path');
+  const fs = require('fs');
+  
+  // 优先加载 .env 文件
+  const envPath = path.join(__dirname, '..', '.env');
+  const envExamplePath = path.join(__dirname, '..', '.env.example');
+  
+  if (fs.existsSync(envPath)) {
+    require('dotenv').config({ path: envPath });
+    console.log('[Extension] .env file loaded successfully');
+  } else if (fs.existsSync(envExamplePath)) {
+    // 如果 .env 不存在，尝试加载 .env.example 作为默认值
+    require('dotenv').config({ path: envExamplePath });
+    console.log('[Extension] .env file not found, using .env.example as default');
+  } else {
+    console.log('[Extension] No .env or .env.example file found, using environment variables');
+  }
+} catch (err) {
+  console.warn('[Extension] Failed to load .env file:', err);
+}
+
 // 生产环境不使用.env文件，改用VS Code SecretStorage API
 // 开发环境的API密钥应通过VS Code设置或环境变量注入
 import * as vscode from 'vscode';
@@ -27,7 +50,6 @@ import { getUserFriendlyMessage } from './utils/ErrorCodes';
 import { ExplainCodeCommand } from './commands/ExplainCodeCommand';
 import { GenerateCommitCommandV2 as GenerateCommitCommand } from './commands/GenerateCommitCommand';
 import { CommitStyleLearner } from './core/memory/CommitStyleLearner';
-import { MemoryService } from './core/memory/MemoryService';
 import { ExportMemoryCommand } from './commands/ExportMemoryCommand';
 import { ImportMemoryCommand } from './commands/ImportMemoryCommand';
 import { ConfigureApiKeyCommand } from './commands/ConfigureApiKeyCommand';
@@ -215,64 +237,87 @@ async function initializeContainer(context: vscode.ExtensionContext): Promise<vo
   
   // 注册 SecretStorage
   container.registerInstance('SecretStorage', context.secrets);
+  
+  // 注册核心服务为单例（确保全局唯一实例）
+  container.registerSingleton(EpisodicMemory);
+  container.registerSingleton(PreferenceMemory);
+  container.registerSingleton(EventBus);
+  container.registerSingleton(MemorySystem);
+  container.registerSingleton(LLMTool);
+  container.registerSingleton(ConfigManager);
+  container.registerSingleton(DatabaseManager);
+  container.registerSingleton(AuditLogger);
 }
 
 /**
  * 注册命令
  */
 function registerCommands(context: vscode.ExtensionContext): void {
-  // 阶段 1 核心命令（传入已初始化的单例）
-  const memoryService = new MemoryService(episodicMemory);
-  const explainCodeHandler = new ExplainCodeCommand(memoryService, llmTool);
-  const commitStyleLearner = container.resolve(CommitStyleLearner);
-  const generateCommitHandler = new GenerateCommitCommand(memoryService, llmTool, commitStyleLearner);
-  const exportMemoryHandler = new ExportMemoryCommand(memoryService);
-  const importMemoryHandler = new ImportMemoryCommand(memoryService);
-  const configureApiKeyHandler = new ConfigureApiKeyCommand();
-  const checkNamingHandler = new CheckNamingCommand(memoryService, llmTool);
-  const codeGenerationHandler = new CodeGenerationCommand(memoryService, llmTool);
+  // 阶段 1 核心命令（通过 MemorySystem 统一调度）
+  const explainCodeHandler = new ExplainCodeCommand(llmTool);
   
+  // TODO: 以下命令待改造为 BaseCommand
+  // const commitStyleLearner = container.resolve(CommitStyleLearner);
+  // const generateCommitHandler = new GenerateCommitCommand(llmTool, commitStyleLearner);
+  // const exportMemoryHandler = new ExportMemoryCommand();
+  // const importMemoryHandler = new ImportMemoryCommand();
+  // const configureApiKeyHandler = new ConfigureApiKeyCommand();
+  // const checkNamingHandler = new CheckNamingCommand(llmTool);
+  // const codeGenerationHandler = new CodeGenerationCommand(llmTool);
+  
+  // 注册动作到 MemorySystem
+  memorySystem.registerAction('explainCode', async (input, context) => {
+    return await explainCodeHandler.execute(input, context);
+  }, '代码解释');
+  
+  // TODO: 注册其他动作
+  // memorySystem.registerAction('generateCommit', async (input, context) => {
+  //   return await generateCommitHandler.execute(input, context);
+  // }, '生成提交信息');
+  
+  // 注册 VS Code 命令（作为入口，调用 MemorySystem）
   const explainCodeCmd = vscode.commands.registerCommand(
     'xiaoweiba.explainCode',
     async () => {
-      await explainCodeHandler.execute();
+      await memorySystem.executeAction('explainCode', {});
     }
   );
 
-  const generateCommitCmd = vscode.commands.registerCommand(
-    'xiaoweiba.generateCommit',
-    async () => {
-      await generateCommitHandler.execute();
-    }
-  );
+  // TODO: 注册其他命令（待改造为 BaseCommand）
+  // const generateCommitCmd = vscode.commands.registerCommand(
+  //   'xiaoweiba.generateCommit',
+  //   async () => {
+  //     await memorySystem.executeAction('generateCommit', {});
+  //   }
+  // );
 
-  const exportMemoryCmd = vscode.commands.registerCommand(
-    'xiaoweiba.export-memory',
-    async () => {
-      await exportMemoryHandler.execute();
-    }
-  );
+  // const exportMemoryCmd = vscode.commands.registerCommand(
+  //   'xiaoweiba.export-memory',
+  //   async () => {
+  //     await exportMemoryHandler.execute();
+  //   }
+  // );
 
-  const importMemoryCmd = vscode.commands.registerCommand(
-    'xiaoweiba.import-memory',
-    async () => {
-      await importMemoryHandler.execute();
-    }
-  );
+  // const importMemoryCmd = vscode.commands.registerCommand(
+  //   'xiaoweiba.import-memory',
+  //   async () => {
+  //     await importMemoryHandler.execute();
+  //   }
+  // );
 
-  const checkNamingCmd = vscode.commands.registerCommand(
-    'xiaoweiba.checkNaming',
-    async () => {
-      await checkNamingHandler.execute();
-    }
-  );
+  // const checkNamingCmd = vscode.commands.registerCommand(
+  //   'xiaoweiba.checkNaming',
+  //   async () => {
+  //     await checkNamingHandler.execute();
+  //   }
+  // );
 
-  const codeGenerationCmd = vscode.commands.registerCommand(
-    'xiaoweiba.generateCode',
-    async () => {
-      await codeGenerationHandler.execute();
-    }
-  );
+  // const codeGenerationCmd = vscode.commands.registerCommand(
+  //   'xiaoweiba.generateCode',
+  //   async () => {
+  //     await codeGenerationHandler.execute();
+  //   }
+  // );
 
   const optimizeSQLCmd = vscode.commands.registerCommand(
     'xiaoweiba.optimizeSQL',
@@ -303,12 +348,12 @@ function registerCommands(context: vscode.ExtensionContext): void {
     }
   );
 
-  const configureApiKeyCmd = vscode.commands.registerCommand(
-    'xiaoweiba.configure-api-key',
-    async () => {
-      await configureApiKeyHandler.execute();
-    }
-  );
+  // const configureApiKeyCmd = vscode.commands.registerCommand(
+  //   'xiaoweiba.configure-api-key',
+  //   async () => {
+  //     await configureApiKeyHandler.execute();
+  //   }
+  // );
 
   // 打开AI助手命令
   const openChatCmd = vscode.commands.registerCommand(
@@ -389,14 +434,15 @@ function registerCommands(context: vscode.ExtensionContext): void {
   // 添加到订阅
   context.subscriptions.push(
     explainCodeCmd,
-    generateCommitCmd,
-    exportMemoryCmd,
-    importMemoryCmd,
-    checkNamingCmd,
-    codeGenerationCmd,
+    // TODO: 以下命令待改造后重新启用
+    // generateCommitCmd,
+    // exportMemoryCmd,
+    // importMemoryCmd,
+    // checkNamingCmd,
+    // codeGenerationCmd,
     optimizeSQLCmd,
     repairMemoryCmd,
-    configureApiKeyCmd,
+    // configureApiKeyCmd,
     openChatCmd,
     // 智能唤醒监听器
     onDidSaveTextDocument,

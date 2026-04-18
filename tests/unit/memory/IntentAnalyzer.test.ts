@@ -69,22 +69,22 @@ describe('IntentAnalyzer', () => {
 
   describe('getDominantIntent', () => {
     it('应返回主导意图为temporal', () => {
-      const intent: IntentVector = { temporal: 0.8, entity: 0.1, semantic: 0.1 };
+      const intent: IntentVector = { temporal: 0.8, entity: 0.1, semantic: 0.1, distantTemporal: 0 };
       expect(analyzer.getDominantIntent(intent)).toBe('temporal');
     });
 
     it('应返回主导意图为entity', () => {
-      const intent: IntentVector = { temporal: 0.1, entity: 0.7, semantic: 0.1 };
+      const intent: IntentVector = { temporal: 0.1, entity: 0.7, semantic: 0.1, distantTemporal: 0 };
       expect(analyzer.getDominantIntent(intent)).toBe('entity');
     });
 
     it('应返回主导意图为semantic', () => {
-      const intent: IntentVector = { temporal: 0.1, entity: 0.1, semantic: 0.6 };
+      const intent: IntentVector = { temporal: 0.1, entity: 0.1, semantic: 0.6, distantTemporal: 0 };
       expect(analyzer.getDominantIntent(intent)).toBe('semantic');
     });
 
     it('所有维度都低时应返回balanced', () => {
-      const intent: IntentVector = { temporal: 0.2, entity: 0.2, semantic: 0.2 };
+      const intent: IntentVector = { temporal: 0.2, entity: 0.2, semantic: 0.2, distantTemporal: 0 };
       expect(analyzer.getDominantIntent(intent)).toBe('balanced');
     });
   });
@@ -110,14 +110,14 @@ describe('ExpertSelector', () => {
 
   describe('recordFeedback', () => {
     it('应能记录反馈', () => {
-      const intent: IntentVector = { temporal: 0.8, entity: 0, semantic: 0 };
+      const intent: IntentVector = { temporal: 0.8, entity: 0, semantic: 0, distantTemporal: 0 };
       const weights: RetrievalWeights = { k: 0.2, t: 0.6, e: 0.1, v: 0.1 };
       
       expect(() => selector.recordFeedback(intent, weights)).not.toThrow();
     });
 
     it('每10次反馈应触发专家评估', () => {
-      const intent: IntentVector = { temporal: 0.8, entity: 0, semantic: 0 };
+      const intent: IntentVector = { temporal: 0.8, entity: 0, semantic: 0, distantTemporal: 0 };
       const weights: RetrievalWeights = { k: 0.2, t: 0.6, e: 0.1, v: 0.1 };
 
       for (let i = 0; i < 10; i++) {
@@ -132,7 +132,7 @@ describe('ExpertSelector', () => {
   describe('reset', () => {
     it('重置后应恢复到balanced专家', () => {
       // 先记录一些反馈
-      const intent: IntentVector = { temporal: 0.8, entity: 0, semantic: 0 };
+      const intent: IntentVector = { temporal: 0.8, entity: 0, semantic: 0, distantTemporal: 0 };
       const weights: RetrievalWeights = { k: 0.2, t: 0.6, e: 0.1, v: 0.1 };
       
       for (let i = 0; i < 15; i++) {
@@ -148,7 +148,7 @@ describe('ExpertSelector', () => {
 
   describe('getState and restore', () => {
     it('应能保存和恢复状态', () => {
-      const intent: IntentVector = { temporal: 0.8, entity: 0, semantic: 0 };
+      const intent: IntentVector = { temporal: 0.8, entity: 0, semantic: 0, distantTemporal: 0 };
       const weights: RetrievalWeights = { k: 0.2, t: 0.6, e: 0.1, v: 0.1 };
 
       // 记录一些反馈
@@ -167,7 +167,7 @@ describe('ExpertSelector', () => {
     });
 
     it('恢复时应限制历史记录长度', () => {
-      const intent: IntentVector = { temporal: 0.8, entity: 0, semantic: 0 };
+      const intent: IntentVector = { temporal: 0.8, entity: 0, semantic: 0, distantTemporal: 0 };
       const weights: RetrievalWeights = { k: 0.2, t: 0.6, e: 0.1, v: 0.1 };
 
       // 模拟超过100条的历史记录
@@ -198,7 +198,7 @@ describe('ExpertSelector', () => {
 
   describe('专家切换逻辑', () => {
     it('时间敏感型反馈应倾向于切换到temporal专家', () => {
-      const intent: IntentVector = { temporal: 0.9, entity: 0.1, semantic: 0.1 };
+      const intent: IntentVector = { temporal: 0.9, entity: 0.1, semantic: 0.1, distantTemporal: 0 };
       const temporalWeights = EXPERT_WEIGHTS.temporal;
 
       // 记录大量时间敏感的反馈
@@ -212,7 +212,7 @@ describe('ExpertSelector', () => {
     });
 
     it('实体敏感型反馈应倾向于切换到entity专家', () => {
-      const intent: IntentVector = { temporal: 0.1, entity: 0.9, semantic: 0.1 };
+      const intent: IntentVector = { temporal: 0.1, entity: 0.9, semantic: 0.1, distantTemporal: 0 };
       const entityWeights = EXPERT_WEIGHTS.entity;
 
       // 记录大量实体敏感的反馈
@@ -251,5 +251,44 @@ describe('EXPERT_WEIGHTS 常量', () => {
   it('entity专家的关键词权重应最高', () => {
     expect(EXPERT_WEIGHTS.entity.k).toBeGreaterThan(EXPERT_WEIGHTS.balanced.k);
     expect(EXPERT_WEIGHTS.entity.k).toBeGreaterThan(EXPERT_WEIGHTS.temporal.k);
+  });
+});
+
+describe('IntentAnalyzer - 久远时间意图检测', () => {
+  let analyzer: IntentAnalyzer;
+
+  beforeEach(() => {
+    analyzer = new IntentAnalyzer();
+  });
+
+  it('应识别"很久以前"为久远时间意图', () => {
+    const result = analyzer.analyze('很久以前做过什么');
+    expect(result.distantTemporal).toBe(0.9);
+  });
+
+  it('应识别"上个月"为久远时间意图', () => {
+    const result = analyzer.analyze('上个月的项目');
+    expect(result.distantTemporal).toBe(0.9);
+  });
+
+  it('应识别"去年"为久远时间意图', () => {
+    const result = analyzer.analyze('去年的代码');
+    expect(result.distantTemporal).toBe(0.9);
+  });
+
+  it('应识别"历史"为久远时间意图', () => {
+    const result = analyzer.analyze('历史记录');
+    expect(result.distantTemporal).toBe(0.9);
+  });
+
+  it('普通查询不应触发久远时间意图', () => {
+    const result = analyzer.analyze('刚才做了什么');
+    expect(result.distantTemporal).toBe(0);
+  });
+
+  it('久远查询应同时具有时间敏感性', () => {
+    const result = analyzer.analyze('很久以前的项目');
+    expect(result.distantTemporal).toBe(0.9);
+    expect(result.temporal).toBe(0); // 不包含“刚才”等近期词
   });
 });

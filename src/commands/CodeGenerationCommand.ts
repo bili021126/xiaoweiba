@@ -7,22 +7,22 @@
 import * as vscode from 'vscode';
 import { container } from 'tsyringe';
 import { LLMTool } from '../tools/LLMTool';
-import { MemoryService } from '../core/memory/MemoryService';
 import { AuditLogger } from '../core/security/AuditLogger';
 import { getUserFriendlyMessage } from '../utils/ErrorCodes';
 import { LLMResponseCache } from '../core/cache/LLMResponseCache';
+import { EventBus, CoreEventType } from '../core/eventbus/EventBus';
 
 export class CodeGenerationCommand {
   private auditLogger: AuditLogger;
-  private memoryService: MemoryService;
   private llmTool: LLMTool;
   private cache: LLMResponseCache;
+  private eventBus: EventBus;
 
-  constructor(memoryService?: MemoryService, llmTool?: LLMTool) {
+  constructor(llmTool?: LLMTool) {
     this.auditLogger = container.resolve(AuditLogger);
-    this.memoryService = memoryService || new MemoryService();
     this.llmTool = llmTool || container.resolve(LLMTool);
     this.cache = new LLMResponseCache();
+    this.eventBus = container.resolve(EventBus);
   }
 
   /**
@@ -81,9 +81,13 @@ export class CodeGenerationCommand {
 
         progress.report({ message: '💾 记录情景记忆...', increment: 80 });
 
-        // 6. 记录情景记忆
+        // 6. 发布任务完成事件（由 MemorySystem 订阅并记录记忆）
         const durationMs = Date.now() - startTime;
-        await this.recordMemory(requirement, generatedCode, durationMs);
+        this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
+          actionId: 'codeGenerate',
+          result: { success: true },
+          durationMs
+        }, { source: 'CodeGenerationCommand' });
         
         progress.report({ message: '✅ 全部完成！', increment: 100 });
       });
@@ -103,6 +107,13 @@ export class CodeGenerationCommand {
       vscode.window.showErrorMessage(`代码生成失败: ${errorMessage}`);
       
       await this.auditLogger.logError('code_generation', error as Error, durationMs);
+      
+      // 即使失败也发布事件，让 MemorySystem 记录失败结果
+      this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
+        actionId: 'codeGenerate',
+        result: { success: false, error: errorMessage },
+        durationMs
+      }, { source: 'CodeGenerationCommand' });
     }
   }
 
@@ -235,9 +246,10 @@ export class CodeGenerationCommand {
         vscode.window.showInformationMessage('✅ 代码已复制到剪贴板');
         break;
       case '$(refresh) 重新生成':
-        // 清除缓存后重新执行
+        // 清除缓存后异步重新执行，避免递归调用栈溢出
         this.cache.clear();
-        await this.execute();
+        vscode.window.showInformationMessage('🔄 正在重新生成...');
+        setTimeout(() => this.execute(), 100);
         break;
     }
   }
@@ -308,24 +320,15 @@ export class CodeGenerationCommand {
   }
 
   /**
-   * 记录情景记忆
+   * 记录情景记忆（已废弃，改为通过 EventBus 发布事件）
+   * @deprecated 使用 EventBus.publish(CoreEventType.TASK_COMPLETED) 替代
    */
   private async recordMemory(
     requirement: string,
     code: string,
     durationMs: number
   ): Promise<void> {
-    try {
-      await this.memoryService.recordMemory({
-        taskType: 'CODE_GENERATE',
-        summary: `生成代码: ${requirement.substring(0, 50)}`,
-        entities: ['code', requirement.substring(0, 20)],
-        outcome: 'SUCCESS',
-        modelId: 'deepseek',
-        durationMs
-      });
-    } catch (error) {
-      console.warn('[CodeGenerationCommand] Memory recording failed:', error);
-    }
+    // 此方法已废弃，记忆记录由 MemorySystem 通过 TASK_COMPLETED 事件自动处理
+    console.debug('[CodeGenerationCommand] recordMemory deprecated - using EventBus instead');
   }
 }

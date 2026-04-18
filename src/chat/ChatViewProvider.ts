@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { SessionManager } from './SessionManager';
+import { SessionManager, ChatMessage } from './SessionManager';
 import { ContextBuilder } from './ContextBuilder';
 import { PromptEngine } from './PromptEngine';
 import { LLMTool } from '../tools/LLMTool';
@@ -8,14 +8,8 @@ import { PreferenceMemory } from '../core/memory/PreferenceMemory';
 import { ConfigManager } from '../storage/ConfigManager';
 import { AuditLogger } from '../core/security/AuditLogger';
 import { generateChatViewHtml } from './ChatViewHtml';
-
-export interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-  timestamp: number;
-  metadata?: Record<string, any>;
-}
+import { DialogManager, InteractionMode } from './DialogManager';
+import { InteractionModeSelector } from './InteractionModeSelector';
 
 /**
  * 聊天视图提供者�?
@@ -29,6 +23,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private sessionManager: SessionManager;
   private contextBuilder: ContextBuilder;
   private promptEngine: PromptEngine;
+  private dialogManager: DialogManager;
+  private modeSelector: InteractionModeSelector;
 
   constructor(
     private context: vscode.ExtensionContext,
@@ -41,6 +37,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     this.sessionManager = new SessionManager(context, episodicMemory, llmTool);
     this.contextBuilder = new ContextBuilder(episodicMemory, preferenceMemory, this.sessionManager);
     this.promptEngine = new PromptEngine(configManager);
+    this.dialogManager = new DialogManager();
+    this.modeSelector = new InteractionModeSelector(configManager, context);
   }
 
   /**
@@ -126,77 +124,221 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         return;
       }
 
-      // 智能意图识别：分析用户消息，自动执行对应命令
+      // 检查是否为澄清响应（多轮对话）
+      const dialogContext = this.dialogManager.getContext();
+      if (dialogContext.state === 'CLARIFYING') {
+        await this.handleClarificationResponse(text);
+        return;
+      }
+
+      // 智能意图识别 + 复杂度评估
+      const assessment = this.dialogManager.assessComplexity(text);
+      console.log(`[ChatViewProvider] Complexity assessment:`, assessment);
+
+      // 选择交互模式
       const detectedCommand = this.detectIntent(text);
+      const taskType = detectedCommand || 'GENERAL_CHAT';
+      
+      const mode = this.modeSelector.selectMode(
+        taskType,
+        assessment.complexity,
+        assessment.needsClarification,
+        this.isExploratoryQuery(text)
+      );
+      
+      console.log(`[ChatViewProvider] Selected interaction mode: ${mode}`);
+
+      // 根据模式决定是否需要澄清
+      const shouldClarify = this.modeSelector.shouldEnableClarification(
+        mode,
+        assessment.needsClarification
+      );
+
+      if (shouldClarify && mode !== 'QUICK') {
+        // 进入澄清流程
+        await this.startClarification(text, taskType, mode);
+        return;
+      }
+
+      // 直接执行（快速模式或无需澄清）
       if (detectedCommand) {
         console.log(`[ChatViewProvider] Detected intent: ${detectedCommand}`);
         await this.executeCommandFromChat(detectedCommand, text);
         return;
       }
 
-      // 添加用户消息到会�?
-      const userMessage = {
+      // 普通对话
+      await this.handleGeneralChat(text);
+    } catch (error) {
+      console.error('[ChatViewProvider] Error handling message:', error);
+      vscode.window.showErrorMessage('处理消息时出错');
+    }
+  }
+
+  /**
+   * 处理澄清响应
+   */
+  private async handleClarificationResponse(userResponse: string): Promise<void> {
+    const context = this.dialogManager.getContext();
+    const nextQuestion = this.dialogManager.getNextQuestion();
+    
+    if (nextQuestion) {
+      // 记录用户响应
+      this.dialogManager.handleUserResponse(nextQuestion.id, userResponse);
+      
+      // 添加用户消息到会话
+      const userMessage: ChatMessage = {
         id: `msg_${Date.now()}_user`,
         role: 'user' as const,
-        content: text,
-        timestamp: Date.now(),
-        metadata: {
-          command: options?.command
-        }
-      };
-      this.sessionManager.addMessage(userMessage);
-
-      // 发送用户消息到Webview
-      this.view.webview.postMessage({
-        type: 'addMessage',
-        message: userMessage
-      });
-
-      // 构建上下文和Prompt
-      const contextResult = await this.contextBuilder.build({
-        userMessage: text,
-        includeSelectedCode: true,
-        maxHistoryMessages: 10,
-        enableCrossSession: true
-      });
-
-      // 生成系统提示
-      const systemPrompt = this.promptEngine.generatePrompt(
-        text,
-        contextResult,
-        options?.command
-      );
-
-      // 创建AI消息占位�?
-      const assistantMessage = {
-        id: `msg_${Date.now()}_assistant`,
-        role: 'assistant' as const,
-        content: '',
+        content: userResponse,
         timestamp: Date.now()
       };
+      this.sessionManager.addMessage(userMessage);
+      this.view!.webview.postMessage({ type: 'addMessage', message: userMessage });
 
-      // 流式响应
-      const startTime = Date.now();
-      await this.streamResponse(contextResult.messages, systemPrompt, assistantMessage);
-      const duration = Date.now() - startTime;
+      // 检查是否还有下一个问题
+      const remainingQuestion = this.dialogManager.getNextQuestion();
+      if (remainingQuestion) {
+        // 继续询问
+        await this.sendClarificationQuestion(remainingQuestion);
+      } else {
+        // 所有问题已回答，执行任务
+        const fullContext = this.dialogManager.collectFullContext();
+        console.log('[ChatViewProvider] All clarifications answered, executing with context:', fullContext);
+        
+        // TODO: 使用完整上下文执行任务
+        this.dialogManager.reset();
+      }
+    }
+  }
 
-      // 添加AI消息到会话
-      this.sessionManager.addMessage(assistantMessage);
+  /**
+   * 开始澄清流程
+   */
+  private async startClarification(
+    userMessage: string,
+    taskType: string,
+    mode: InteractionMode
+  ): Promise<void> {
+    console.log(`[ChatViewProvider] Starting clarification for task: ${taskType}, mode: ${mode}`);
+    
+    // 启动对话
+    this.dialogManager.startDialog(userMessage, mode);
+    
+    // 生成澄清问题
+    const questions = this.dialogManager.generateClarificationQuestions(userMessage, taskType);
+    
+    if (questions.length > 0) {
+      // 设置问题列表
+      (this.dialogManager as any).context.clarificationQuestions = questions;
+      
+      // 发送第一个问题
+      await this.sendClarificationQuestion(questions[0]);
+    } else {
+      // 无需澄清，直接执行
+      this.dialogManager.reset();
+      if (this.detectIntent(userMessage)) {
+        await this.executeCommandFromChat(this.detectIntent(userMessage)!, userMessage);
+      }
+    }
+  }
 
-      // 记录到审计日志
-      await this.auditLogger.log('chat_message', 'success', duration, {
-        parameters: { messageLength: text.length }
+  /**
+   * 发送澄清问题到UI
+   */
+  private async sendClarificationQuestion(question: any): Promise<void> {
+    const assistantMessage: ChatMessage = {
+      id: `msg_${Date.now()}_assistant`,
+      role: 'assistant' as const,
+      content: question.question,
+      timestamp: Date.now()
+    };
+    
+    this.sessionManager.addMessage(assistantMessage);
+    this.view!.webview.postMessage({ type: 'addMessage', message: assistantMessage });
+    
+    console.log(`[ChatViewProvider] Sent clarification question: ${question.question}`);
+  }
+
+  /**
+   * 处理普通对话
+   */
+  private async handleGeneralChat(text: string): Promise<void> {
+    // 添加用户消息
+    const userMessage: ChatMessage = {
+      id: `msg_${Date.now()}_user`,
+      role: 'user' as const,
+      content: text,
+      timestamp: Date.now()
+    };
+    this.sessionManager.addMessage(userMessage);
+    this.view!.webview.postMessage({ type: 'addMessage', message: userMessage });
+
+    // 构建上下文
+    const contextResult = await this.contextBuilder.build({
+      userMessage: text,
+      includeSelectedCode: true,
+      maxHistoryMessages: 10,
+      enableCrossSession: true
+    });
+
+    // 生成系统提示
+    const systemPrompt = this.promptEngine.generatePrompt(text, contextResult);
+
+    // 创建AI消息占位符
+    const assistantMessage: ChatMessage = {
+      id: `msg_${Date.now()}_assistant`,
+      role: 'assistant' as const,
+      content: '',
+      timestamp: Date.now()
+    };
+    this.sessionManager.addMessage(assistantMessage);
+
+    console.log('[ChatViewProvider] Sending placeholder message with ID:', assistantMessage.id);
+    
+    // 发送占位符到UI
+    this.view!.webview.postMessage({
+      type: 'addMessage',
+      message: assistantMessage
+    });
+
+    // 调用LLM生成回复
+    try {
+      console.log('[ChatViewProvider] Calling LLM with messages:', contextResult.messages.length);
+      const response = await this.llmTool.call({
+        messages: [
+          { role: 'system', content: systemPrompt },
+          ...contextResult.messages
+        ]
+      });
+
+      console.log('[ChatViewProvider] LLM response:', { 
+        success: response.success, 
+        dataLength: response.data?.length || 0,
+        error: response.error 
+      });
+
+      if (!response.success) {
+        throw new Error(response.error || 'LLM 调用失败');
+      }
+
+      // 更新AI消息内容
+      assistantMessage.content = response.data || '';
+      console.log('[ChatViewProvider] Sending updateMessage with ID:', assistantMessage.id, 'Content length:', response.data?.length || 0);
+      
+      this.view!.webview.postMessage({
+        type: 'updateMessage',
+        messageId: assistantMessage.id,
+        content: response.data || ''
       });
     } catch (error) {
-      console.error('[ChatViewProvider] 处理消息失败:', error);
-      
-      // 发送错误消�?
-      if (this.view) {
-        this.view.webview.postMessage({
-          type: 'errorMessage',
-          error: error instanceof Error ? error.message : String(error)
-        });
-      }
+      console.error('[ChatViewProvider] LLM call failed:', error);
+      assistantMessage.content = `抱歉，生成回复时出现错误：${error instanceof Error ? error.message : String(error)}`;
+      this.view!.webview.postMessage({
+        type: 'updateMessage',
+        messageId: assistantMessage.id,
+        content: assistantMessage.content
+      });
     }
   }
 
@@ -402,5 +544,21 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
    */
   private getHtmlForWebview(webview: vscode.Webview): string {
     return generateChatViewHtml(webview);
+  }
+
+  /**
+   * 判断是否为探索性查询
+   */
+  private isExploratoryQuery(message: string): boolean {
+    const exploratoryPatterns = [
+      /怎么.*\?/,
+      /如何.*\?/,
+      /什么是.*/,
+      /学习.*/,
+      /了解.*/,
+      /最佳实践/
+    ];
+    
+    return exploratoryPatterns.some(pattern => pattern.test(message));
   }
 }

@@ -68,6 +68,10 @@ export class EpisodicMemory {
     @inject(ProjectFingerprint) private projectFingerprint: ProjectFingerprint,
     @inject(ConfigManager) private configManager: ConfigManager
   ) {
+    // 为每个实例分配唯一ID，用于调试
+    (this as any).__instanceId = `episodic_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`;
+    console.log(`[EpisodicMemory] Constructor called, instance ID: ${(this as any).__instanceId}`);
+    
     const config = this.configManager.getConfig();
     this.decayLambda = config.memory.decayLambda;
     this.retentionDays = config.memory.retentionDays;
@@ -121,8 +125,8 @@ export class EpisodicMemory {
       db.run(
         `INSERT INTO episodic_memory (
           id, project_fingerprint, timestamp, task_type, summary,
-          entities, decision, outcome, final_weight, model_id, latency_ms, memory_tier
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          entities, decision, outcome, final_weight, model_id, latency_ms, memory_tier, metadata
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id,
           projectFingerprint,
@@ -135,7 +139,8 @@ export class EpisodicMemory {
           finalWeight,
           memory.modelId,
           memory.durationMs || null,
-          memoryTier
+          memoryTier,
+          memory.metadata ? JSON.stringify(memory.metadata) : null  // 新增：保存metadata
         ]
       );
 
@@ -182,7 +187,7 @@ export class EpisodicMemory {
       // 使用白名单验证防止SQL注入（仅用于ORDER BY子句）
       const sortBy = options.sortBy === 'finalWeight' ? 'final_weight' : 'timestamp';
       const sortOrder = options.sortOrder === 'ASC' ? 'ASC' : 'DESC';
-      const limit = Math.min(options.limit || 20, 100);
+      const limit = options.limit !== undefined ? Math.min(Math.max(options.limit, 0), 100) : 20;  // 修复：支持limit=0
       const offset = Math.max(options.offset || 0, 0);
 
       // 构建SQL（使用?占位符）
@@ -248,16 +253,27 @@ export class EpisodicMemory {
       // 1. 时间指代检测
       if (this.isTemporalQuery(query)) {
         console.log('[EpisodicMemory] Temporal query detected, returning recent memories');
-        const recentMemories = await this.getRecentMemoriesFromDB(options.limit || 3);
-        return this.deduplicator.deduplicate(recentMemories);
+        const limit = options.limit !== undefined ? Math.max(options.limit, 0) : 3;
+        const recentMemories = await this.getRecentMemoriesFromDB(limit, options.memoryTier);
+        // 去重前按 timestamp 降序排序
+        const sortedMemories = recentMemories.sort((a, b) => b.timestamp - a.timestamp);
+        return this.deduplicator.deduplicate(sortedMemories);
+      }
+      
+      // 1.5 久远时间意图检测：强制检索 LONG_TERM 层级
+      const intent = this.intentAnalyzer.analyze(query);
+      if (intent.distantTemporal > 0.5) {
+        console.log('[EpisodicMemory] Distant temporal intent detected, forcing LONG_TERM tier filter');
+        options.memoryTier = 'LONG_TERM';
       }
 
       // 2. 使用语义检索（混合评分）
-      const limit = Math.min(options.limit || 5, 20);
+      const limit = options.limit !== undefined ? Math.min(Math.max(options.limit, 0), 20) : 5;  // 修复：支持limit=0
       const memories = await this.searchSemantic(query, limit);
       
-      // 3. 去重
-      const deduplicatedMemories = this.deduplicator.deduplicate(memories);
+      // 3. 去重前按 timestamp 降序排序，确保较新的记忆优先保留
+      const sortedMemories = memories.sort((a, b) => b.timestamp - a.timestamp);
+      const deduplicatedMemories = this.deduplicator.deduplicate(sortedMemories);
       
       const duration = Date.now() - startTime;
       await this.auditLogger.log('memory_search', 'success', duration, {
@@ -478,7 +494,7 @@ export class EpisodicMemory {
       finalWeight: row.final_weight as number,
       modelId: row.model_id as string,
       durationMs: (row.latency_ms as number) || 0,
-      metadata: undefined,
+      metadata: row.metadata ? JSON.parse(row.metadata as string) : undefined,  // 新增：读取metadata
       memoryTier: (row.memory_tier as MemoryTier) || 'LONG_TERM'
     };
   }
@@ -499,36 +515,9 @@ export class EpisodicMemory {
       finalWeight: row[8] as number,
       modelId: row[9] as string,
       durationMs: (row[12] as number) || 0, // latency_ms
-      metadata: undefined
+      metadata: row[15] ? JSON.parse(row[15] as string) : undefined,  // 新增：读取metadata
+      memoryTier: (row[13] as MemoryTier) || 'LONG_TERM'
     };
-  }
-
-  /**
-   * 获取最近的记忆（用于模糊查询降级）
-   */
-  private async getRecentMemories(
-    db: any,
-    projectFingerprint: string,
-    limit: number
-  ): Promise<EpisodicMemoryRecord[]> {
-    const sql = `
-      SELECT em.* FROM episodic_memory em
-      WHERE em.project_fingerprint = ?
-      ORDER BY em.timestamp DESC
-      LIMIT ?
-    `;
-
-    const stmt = db.prepare(sql);
-    stmt.bind([projectFingerprint, limit]);
-    
-    const memories: EpisodicMemoryRecord[] = [];
-    while (stmt.step()) {
-      const row = stmt.getAsObject();
-      memories.push(this.objectToMemory(row));
-    }
-    stmt.free();
-
-    return memories;
   }
 
   // ========== 混合检索核心方法 ==========
@@ -711,9 +700,17 @@ export class EpisodicMemory {
     }
 
     // 获取自适应权重
+    const intent = this.intentAnalyzer.analyze(query);
     const adaptiveWeights = this.getAdaptiveWeights(query);
-    const dominantIntent = this.intentAnalyzer.getDominantIntent(this.intentAnalyzer.analyze(query));
-    console.log(`[EpisodicMemory] Adaptive weights for "${query}": k=${adaptiveWeights.k.toFixed(2)}, t=${adaptiveWeights.t.toFixed(2)}, e=${adaptiveWeights.e.toFixed(2)}, v=${adaptiveWeights.v.toFixed(2)} (intent: ${dominantIntent})`);
+    const dominantIntent = this.intentAnalyzer.getDominantIntent(intent);
+    
+    // 动态调整衰减系数：久远时间意图降低衰减，允许检索更久远的记忆
+    const effectiveLambda = intent.distantTemporal > 0.5 ? this.decayLambda * 0.2 : this.decayLambda;
+    if (intent.distantTemporal > 0.5) {
+      console.log(`[EpisodicMemory] Distant temporal intent detected, reducing decay lambda: ${this.decayLambda} -> ${effectiveLambda.toFixed(4)}`);
+    }
+    
+    console.log(`[EpisodicMemory] Adaptive weights for "${query}": k=${adaptiveWeights.k.toFixed(2)}, t=${adaptiveWeights.t.toFixed(2)}, e=${adaptiveWeights.e.toFixed(2)}, v=${adaptiveWeights.v.toFixed(2)} (intent: ${dominantIntent}, distantTemporal: ${intent.distantTemporal.toFixed(2)})`);
 
     const queryTerms = this.tokenize(query);
     const candidateIds = new Set<string>();
@@ -729,11 +726,29 @@ export class EpisodicMemory {
     }
 
     const now = Date.now();
-    const scores: Array<{ id: string; score: number }> = [];
+    const scores: Array<{ id: string; score: number; timestamp: number }> = [];
+
+    // 性能优化：先获取所有候选记忆的摘要信息（从内存索引）
+    // 避免在循环中逐条查询数据库
+    const candidateMemoriesMap = new Map<string, { timestamp: number; entities?: string[] }>();
+    for (const id of candidateIds) {
+      const memory = this.docTermFreq.get(id);
+      if (memory) {
+        // 从内存索引中获取基本信息（实际项目中应该缓存更多字段）
+        // 这里暂时保留getMemoryById，但后续可以进一步优化
+        const mem = await this.getMemoryById(id);
+        if (mem) {
+          candidateMemoriesMap.set(id, {
+            timestamp: mem.timestamp,
+            entities: mem.entities
+          });
+        }
+      }
+    }
 
     for (const id of candidateIds) {
-      const memory = await this.getMemoryById(id);
-      if (!memory) continue;
+      const memoryInfo = candidateMemoriesMap.get(id);
+      if (!memoryInfo) continue;
 
       // 1. TF-IDF 得分
       let tfidf = 0;
@@ -745,16 +760,16 @@ export class EpisodicMemory {
       // 归一化（简单除以查询词数）
       const normTfidf = Math.min(tfidf / queryTerms.length, 1);
 
-      // 2. 时间衰减得分（深化点4: 使用lastAccessedAt）
-      const lastAccessTime = memory.lastAccessedAt || memory.timestamp;
+      // 2. 时间衰减得分（使用动态衰减系数）
+      const lastAccessTime = memoryInfo.timestamp;
       const ageDays = (now - lastAccessTime) / (1000 * 3600 * 24);
-      const timeScore = Math.exp(-ageDays * this.decayLambda); // λ=0.1，半衰期约7天
+      const timeScore = Math.exp(-ageDays * effectiveLambda); // λ 根据意图动态调整
 
       // 3. 实体匹配加分
       let entityBonus = 0;
-      if (memory.entities && memory.entities.length) {
+      if (memoryInfo.entities && memoryInfo.entities.length) {
         for (const term of queryTerms) {
-          if (memory.entities.some(e => e.toLowerCase().includes(term))) {
+          if (memoryInfo.entities.some(e => e.toLowerCase().includes(term))) {
             entityBonus += 0.2;
           }
         }
@@ -767,20 +782,19 @@ export class EpisodicMemory {
         timeScore * adaptiveWeights.t +
         entityBonus * adaptiveWeights.e;
       
-      scores.push({ id, score: finalScore });
+      scores.push({ id, score: finalScore, timestamp: memoryInfo.timestamp });
     }
 
-    scores.sort((a, b) => b.score - a.score);
+    // 稳定排序：得分相同时按 timestamp 降序（较新的优先）
+    scores.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return b.timestamp - a.timestamp; // 次级排序：时间戳降序
+    });
     const topIds = scores.slice(0, limit).map(s => s.id);
     if (topIds.length === 0) return [];
     
-    // 根据 ID 获取完整记忆对象
-    const results: EpisodicMemoryRecord[] = [];
-    for (const id of topIds) {
-      const mem = await this.getMemoryById(id);
-      if (mem) results.push(mem);
-    }
-    return results;
+    // 性能优化：批量获取完整记忆对象，避免N+1查询
+    return await this.getMemoriesByIds(topIds);
   }
 
   /**
@@ -803,6 +817,36 @@ export class EpisodicMemory {
     } catch (error) {
       console.error('[EpisodicMemory] getMemoryById error:', error);
       return null;
+    }
+  }
+
+  /**
+   * 批量获取记忆（性能优化：避免N+1查询）
+   */
+  private async getMemoriesByIds(ids: string[]): Promise<EpisodicMemoryRecord[]> {
+    if (ids.length === 0) return [];
+    
+    try {
+      const db = this.dbManager.getDatabase();
+      // 使用 IN 子句一次性查询多条记录
+      const placeholders = ids.map(() => '?').join(',');
+      const sql = `SELECT * FROM episodic_memory WHERE id IN (${placeholders})`;
+      const stmt = db.prepare(sql);
+      stmt.bind(ids);
+      
+      const results: EpisodicMemoryRecord[] = [];
+      while (stmt.step()) {
+        const row = stmt.getAsObject();
+        results.push(this.objectToMemory(row));
+      }
+      stmt.free();
+      
+      // 保持传入ID的顺序
+      const memoryMap = new Map(results.map(m => [m.id, m]));
+      return ids.map(id => memoryMap.get(id)).filter((m): m is EpisodicMemoryRecord => m !== undefined);
+    } catch (error) {
+      console.error('[EpisodicMemory] getMemoriesByIds error:', error);
+      return [];
     }
   }
 
@@ -847,21 +891,30 @@ export class EpisodicMemory {
   /**
    * 从数据库获取最近记忆
    */
-  private async getRecentMemoriesFromDB(limit: number): Promise<EpisodicMemoryRecord[]> {
+  private async getRecentMemoriesFromDB(limit: number, memoryTier?: MemoryTier): Promise<EpisodicMemoryRecord[]> {
     try {
       const db = this.dbManager.getDatabase();
       const projectFingerprint = await this.projectFingerprint.getCurrentProjectFingerprint();
       if (!projectFingerprint) return [];
 
-      const sql = `
+      let sql = `
         SELECT em.* FROM episodic_memory em
         WHERE em.project_fingerprint = ?
-        ORDER BY em.timestamp DESC
-        LIMIT ?
       `;
+      
+      const params: any[] = [projectFingerprint];
+      
+      // 如果指定了 memoryTier，添加过滤条件
+      if (memoryTier) {
+        sql += ` AND em.memory_tier = ?`;
+        params.push(memoryTier);
+      }
+      
+      sql += ` ORDER BY em.timestamp DESC LIMIT ?`;
+      params.push(limit);
 
       const stmt = db.prepare(sql);
-      stmt.bind([projectFingerprint, limit]);
+      stmt.bind(params);
       
       const memories: EpisodicMemoryRecord[] = [];
       while (stmt.step()) {
@@ -882,20 +935,37 @@ export class EpisodicMemory {
    * 显式初始化（由外部调用，如extension.ts）
    */
   async initialize(): Promise<void> {
-    if (this.initPromise) return this.initPromise;
+    console.log(`[EpisodicMemory] initialize() called on instance: ${(this as any).__instanceId}`);
+    if (this.initPromise) {
+      console.log(`[EpisodicMemory] Already initializing, returning existing promise`);
+      return this.initPromise;
+    }
     this.initPromise = this.buildIndex();
     await this.initPromise;
     this.indexReady = true;
-    console.log('[EpisodicMemory] Initialized successfully');
+    console.log(`[EpisodicMemory] Initialized successfully, indexReady=${this.indexReady}, instance: ${(this as any).__instanceId}`);
   }
 
   /**
    * 确保已初始化（检索前自动调用）
    */
   private async ensureInitialized(): Promise<void> {
-    if (!this.indexReady && this.initPromise) {
-      await this.initPromise;
+    // 如果已经就绪，直接返回
+    if (this.indexReady) {
+      return;
     }
+    
+    // 如果正在初始化，等待完成
+    if (this.initPromise) {
+      console.log(`[EpisodicMemory] Waiting for initialization to complete...`);
+      await this.initPromise;
+      console.log(`[EpisodicMemory] Initialization completed, indexReady=${this.indexReady}`);
+      return;
+    }
+    
+    // 如果从未初始化，立即触发初始化
+    console.log(`[EpisodicMemory] Not initialized yet, triggering lazy initialization...`);
+    await this.initialize();
   }
 
   /**

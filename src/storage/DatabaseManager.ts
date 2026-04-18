@@ -184,7 +184,8 @@ export class DatabaseManager {
         latency_ms INTEGER,
         vector BLOB,
         memory_tier TEXT DEFAULT 'LONG_TERM',
-        last_accessed_at INTEGER  -- 深化点4: 最后访问时间
+        last_accessed_at INTEGER,  -- 深化点4: 最后访问时间
+        metadata TEXT  -- 新增：元数据（JSON格式）
       )
     `);
 

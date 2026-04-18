@@ -402,10 +402,11 @@ export class PreferenceMemory {
     
     // 更新置信度和样本数
     const newSampleCount = current.sample_count + 1;
-    // 使用移动平均更新置信度
+    // 使用移动平均更新置信度（增加最小置信度保护，避免永久失效）
+    const MIN_CONFIDENCE = 0.1; // 最小置信度阈值
     const newConfidence = isPositive
       ? Math.min(1.0, current.confidence + (1 - current.confidence) / newSampleCount)
-      : Math.max(0.0, current.confidence - current.confidence / newSampleCount);
+      : Math.max(MIN_CONFIDENCE, current.confidence - current.confidence / newSampleCount);
 
     const sql = `
       UPDATE preference_memory

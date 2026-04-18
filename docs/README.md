@@ -17,19 +17,19 @@
 ## 📖 核心文档
 
 ### 需求与设计
-- [**xiaoweiba.md**](xiaoweiba.md) - 完整功能需求与设计规范（40.8KB）
-- [**xiaoweiba-technical-docs.md**](xiaoweiba-technical-docs.md) - 技术架构与实现细节（19.6KB）
+- [**REQUIREMENTS.md**](REQUIREMENTS.md) - 功能需求与架构设计
+- [**MEMORY_DRIVEN_ARCHITECTURE.md**](MEMORY_DRIVEN_ARCHITECTURE.md) - 记忆驱动架构详细设计（75KB）
 
 ### 实现与进度
-- [**IMPLEMENTATION-PROGRESS.md**](IMPLEMENTATION-PROGRESS.md) ⭐ - **实现进度+Bug修复**（精简版，10.1KB）
-- [implementation-phase-report.md](implementation-phase-report.md) - 详细实现报告（历史版本，32.6KB）
+- [**PROGRESS.md**](PROGRESS.md) ⭐ - **项目进度跟踪**（实时更新）
+- [**COMMANDS_DECOUPLING_PROGRESS.md**](COMMANDS_DECOUPLING_PROGRESS.md) - Commands EventBus解耦报告
 
 ### 测试与质量
-- [**TEST-REPORT-SUMMARY.md**](TEST-REPORT-SUMMARY.md) ⭐ - **测试覆盖与质量分析**（精简版，6.1KB）
-- [test-report.md](test-report.md) - 详细测试报告（历史版本，23.5KB）
+- [**MANUAL_TESTING.md**](MANUAL_TESTING.md) - 人工测试用例
+- [**TESTING-STANDARDS.md**](archive/TESTING-STANDARDS.md) - 测试标准与规范
 
-### 版本历史
-- [**CHANGELOG**](../CHANGELOG.md) - 版本更新日志（根目录）
+### 问题与修复
+- [**ISSUES.md**](ISSUES.md) - 问题记录与修复历史
 
 ---
 
@@ -39,46 +39,46 @@
 
 #### 👤 普通用户
 1. [README](../README.md) - 了解功能和安装
-2. [人工测试指南](manual-testing-guide.md) - 学习如何使用
+2. [MANUAL_TESTING.md](MANUAL_TESTING.md) - 学习如何使用
 
 #### 👨‍💻 开发者
-1. [xiaoweiba-technical-docs.md](xiaoweiba-technical-docs.md) - 技术架构
-2. [IMPLEMENTATION-PROGRESS.md](IMPLEMENTATION-PROGRESS.md) - 实现细节
-3. [UI组件指南](ui-components-guide.md) - UI系统
+1. [MEMORY_DRIVEN_ARCHITECTURE.md](MEMORY_DRIVEN_ARCHITECTURE.md) - 技术架构
+2. [PROGRESS.md](PROGRESS.md) - 实现进度
+3. [ISSUES.md](ISSUES.md) - 问题记录
 
 #### 🧪 测试工程师
-1. [TEST-REPORT-SUMMARY.md](TEST-REPORT-SUMMARY.md) - 测试概览
-2. [test-report.md](test-report.md) - 详细测试数据
-3. [人工测试指南](manual-testing-guide.md) - 手动测试步骤
+1. [TESTING-STANDARDS.md](archive/TESTING-STANDARDS.md) - 测试标准
+2. [MANUAL_TESTING.md](MANUAL_TESTING.md) - 人工测试用例
 
 #### 📊 项目经理
 1. [README](../README.md) - 项目状态
-2. [IMPLEMENTATION-PROGRESS.md](IMPLEMENTATION-PROGRESS.md) - 进度跟踪
-3. [CHANGELOG](../CHANGELOG.md) - 版本历史
+2. [PROGRESS.md](PROGRESS.md) - 进度跟踪
+3. [COMMANDS_DECOUPLING_PROGRESS.md](COMMANDS_DECOUPLING_PROGRESS.md) - 重构进度
 
 ---
 
 ## 📋 文档合并说明
 
-### 已合并的文档
-以下文档已合并到新的精简版本中：
+### 已归档的文档（2026-04-18）
+以下历史报告已归档到 `archive/2026-04-18/`：
 
-| 原文档 | 合并到 | 状态 |
-|--------|--------|------|
-| FINAL-STATUS-20260414.md | README.md | ✅ 已删除 |
-| status-update-20260414.md | README.md | ✅ 已删除 |
-| code-review-report.md | IMPLEMENTATION-PROGRESS.md | ✅ 已删除 |
-| test-report-v0.1.0.md | TEST-REPORT-SUMMARY.md | ✅ 已删除 |
-| testing-guide.md | TEST-REPORT-SUMMARY.md | ✅ 已删除 |
-| bugfix-summary.md | IMPLEMENTATION-PROGRESS.md | ✅ 已删除 |
-| implementation-vs-design-comparison.md | IMPLEMENTATION-PROGRESS.md | ✅ 已删除 |
-| performance-diagnosis.md | IMPLEMENTATION-PROGRESS.md | ✅ 已删除 |
+| 原文档 | 状态 |
+|--------|------|
+| CODE_REVIEW_REPORT_2026-04-18.md | ✅ 已归档 |
+| PHASE1_IMPLEMENTATION_REPORT.md | ✅ 已归档 |
+| GIT_PHASE1_IMPLEMENTATION_REPORT.md | ✅ 已归档 |
+| FINAL_SUMMARY_REPORT.md | ✅ 已归档 |
+| MANUAL-TESTING.md (重复) | ✅ 已归档 |
+| MEMORY_DRIVEN_ARCHITECTURE_DESIGN.md (旧版) | ✅ 已归档 |
 
-### 保留的历史文档
-以下文档保留作为详细参考：
+### 保留的核心文档
+以下文档保留在docs根目录作为主要参考：
 
-- [test-report.md](test-report.md) - 包含每个模块的详细测试数据
-- [implementation-phase-report.md](implementation-phase-report.md) - 包含完整的实现细节和代码片段
+- [PROGRESS.md](PROGRESS.md) - 项目进度跟踪（实时更新）
+- [ISSUES.md](ISSUES.md) - 问题记录与修复
+- [COMMANDS_DECOUPLING_PROGRESS.md](COMMANDS_DECOUPLING_PROGRESS.md) - Commands解耦报告
+- [MEMORY_DRIVEN_ARCHITECTURE.md](MEMORY_DRIVEN_ARCHITECTURE.md) - 架构设计主文档
+- [MANUAL_TESTING.md](MANUAL_TESTING.md) - 人工测试用例
 
 ---
 
@@ -93,22 +93,22 @@
 → [README](../README.md) § 核心功能
 
 #### 测试覆盖率如何？
-→ [TEST-REPORT-SUMMARY.md](TEST-REPORT-SUMMARY.md) § 测试摘要
+→ [PROGRESS.md](PROGRESS.md) § 测试数据
 
 #### 有哪些已知Bug？
-→ [IMPLEMENTATION-PROGRESS.md](IMPLEMENTATION-PROGRESS.md) § Bug修复记录
+→ [ISSUES.md](ISSUES.md) § 已修复问题
 
 #### 如何贡献代码？
 → [README](../README.md) § 贡献指南
 
-#### UI系统怎么用？
-→ [ui-components-guide.md](ui-components-guide.md)
-
 #### 技术架构是什么？
-→ [xiaoweiba-technical-docs.md](xiaoweiba-technical-docs.md)
+→ [MEMORY_DRIVEN_ARCHITECTURE.md](MEMORY_DRIVEN_ARCHITECTURE.md)
+
+#### Commands解耦进度？
+→ [COMMANDS_DECOUPLING_PROGRESS.md](COMMANDS_DECOUPLING_PROGRESS.md)
 
 #### 下一步计划？
-→ [IMPLEMENTATION-PROGRESS.md](IMPLEMENTATION-PROGRESS.md) § 下一步计划
+→ [PROGRESS.md](PROGRESS.md) § 待办事项
 
 ---
 
@@ -116,15 +116,14 @@
 
 | 类型 | 数量 | 总大小 |
 |------|------|--------|
-| 核心文档 | 4 | ~78 KB |
-| 精简报告 | 2 | ~16 KB |
-| 历史详细报告 | 2 | ~56 KB |
-| **总计** | **8** | **~150 KB** |
+| 核心文档 | 5 | ~160 KB |
+| 归档报告 | 6 | ~120 KB |
+| **总计** | **11** | **~280 KB** |
 
-**文档精简效果**: 
-- 从14个文档减少到8个（-43%）
-- 总大小从~200KB减少到~150KB（-25%）
-- 核心信息更易查找 ✅
+**文档整理效果**: 
+- 归档6个历史报告，保持根目录清爽 ✅
+- 合并重复文档（MANUAL-TESTING、ARCHITECTURE_DESIGN）✅
+- 更新所有链接指向最新文档 ✅
 
 ---
 
@@ -132,20 +131,20 @@
 
 ### 第一次接触项目
 1. 阅读 [README](../README.md) 了解概况
-2. 查看 [TEST-REPORT-SUMMARY.md](TEST-REPORT-SUMMARY.md) 了解质量
-3. 浏览 [IMPLEMENTATION-PROGRESS.md](IMPLEMENTATION-PROGRESS.md) 了解进度
+2. 查看 [PROGRESS.md](PROGRESS.md) 了解进度
+3. 浏览 [ISSUES.md](ISSUES.md) 了解问题
 
 ### 需要深入了解
-1. 阅读 [xiaoweiba.md](xiaoweiba.md) 完整需求
-2. 研究 [xiaoweiba-technical-docs.md](xiaoweiba-technical-docs.md) 技术设计
-3. 参考 [test-report.md](test-report.md) 详细测试数据
+1. 阅读 [MEMORY_DRIVEN_ARCHITECTURE.md](MEMORY_DRIVEN_ARCHITECTURE.md) 架构设计
+2. 研究 [COMMANDS_DECOUPLING_PROGRESS.md](COMMANDS_DECOUPLING_PROGRESS.md) 解耦细节
+3. 参考 [MANUAL_TESTING.md](MANUAL_TESTING.md) 测试用例
 
 ### 开发新功能
-1. 查看 [IMPLEMENTATION-PROGRESS.md](IMPLEMENTATION-PROGRESS.md) 了解已有实现
-2. 参考 [UI组件指南](ui-components-guide.md) 使用UI系统
+1. 查看 [PROGRESS.md](PROGRESS.md) 了解已有实现
+2. 参考 [MEMORY_DRIVEN_ARCHITECTURE.md](MEMORY_DRIVEN_ARCHITECTURE.md) 架构规范
 3. 遵循 [README](../README.md) § 开发指南
 
 ---
 
-**最后更新**: 2026-04-17  
+**最后更新**: 2026-04-18（Commands EventBus解耦完成）  
 **维护者**: 小尾巴团队

@@ -463,12 +463,35 @@ export function generateChatViewHtml(webview: vscode.Webview): string {
       
       const div = document.createElement('div');
       div.className = 'message ' + msg.role;
+      div.id = 'msg-' + msg.id;  // 添加 ID 以便后续更新
       const content = document.createElement('div');
       content.className = 'message-content';
       content.innerHTML = renderMarkdown(msg.content);
       div.appendChild(content);
       container.appendChild(div);
       container.scrollTop = container.scrollHeight;
+    }
+
+    // 更新消息内容（用于非流式响应）
+    function updateMessageContent(messageId, content) {
+      console.log('[ChatView] updateMessageContent called for ID:', messageId);
+      const div = document.getElementById('msg-' + messageId);
+      if (!div) {
+        console.warn('[ChatView] Message not found for update:', messageId);
+        console.warn('[ChatView] Looking for element with ID: msg-' + messageId);
+        return;
+      }
+      
+      const contentDiv = div.querySelector('.message-content');
+      if (contentDiv) {
+        console.log('[ChatView] Updating message content, length:', content.length);
+        contentDiv.innerHTML = renderMarkdown(content);
+      }
+      
+      const container = document.getElementById('messagesContainer');
+      if (container) {
+        container.scrollTop = container.scrollHeight;
+      }
     }
 
     // 创建流式消息
@@ -636,6 +659,11 @@ export function generateChatViewHtml(webview: vscode.Webview): string {
       switch (message.type) {
         case 'addMessage':
           appendMessage(message.message);
+          break;
+
+        case 'updateMessage':
+          updateMessageContent(message.messageId, message.content);
+          enableInput();  // 更新完成后启用输入
           break;
 
         case 'startStreaming':

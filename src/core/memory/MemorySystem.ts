@@ -183,13 +183,17 @@ export class MemorySystem {
     const startTime = Date.now();
     const context: MemoryContext = {};
     
+    console.log(`[MemorySystem] retrieveRelevant called for action: ${actionId}`);
+    
     try {
       // 根据不同动作类型，采用不同的检索策略
       
       if (actionId === 'explainCode' || actionId === 'generateCode') {
         // 代码相关：检索该文件的最近历史 + 用户偏好
+        console.log('[MemorySystem] Retrieving code-related memories...');
         context.episodicMemories = await this.retrieveCodeRelatedMemories(input);
         context.preferenceRecommendations = await this.retrieveCodePreferences(input);
+        console.log(`[MemorySystem] Retrieved ${context.episodicMemories?.length || 0} episodic memories`);
         
       } else if (actionId === 'generateCommit') {
         // Git提交：检索最近的代码修改记忆
@@ -209,6 +213,7 @@ export class MemorySystem {
       
       // 记录检索耗时
       context.retrievalDuration = Date.now() - startTime;
+      console.log(`[MemorySystem] Retrieval completed in ${context.retrievalDuration}ms`);
       
       // 发布检索完成事件
       if (context.episodicMemories && context.episodicMemories.length > 0) {
@@ -288,21 +293,26 @@ export class MemorySystem {
   private async onActionCompleted(event: any): Promise<void> {
     const { actionId, result, durationMs } = event.payload;
     
+    console.log(`[MemorySystem] onActionCompleted triggered for: ${actionId}`, { result, durationMs });
+    
     try {
       // 根据不同动作类型，记录不同类型的情景记忆
       if (actionId === 'explainCode') {
-        await this.episodicMemory.record({
+        console.log('[MemorySystem] Recording CODE_EXPLAIN memory...');
+        const memoryId = await this.episodicMemory.record({
           taskType: 'CODE_EXPLAIN',
           summary: `Explained code`,
           entities: [],
           outcome: result?.success ? 'SUCCESS' : 'FAILED',
-          modelId: result?.modelId,
+          modelId: result?.modelId || 'deepseek',  // 确保非 undefined
           durationMs
         });
         
+        console.log(`[MemorySystem] Memory recorded with ID: ${memoryId}`);
+        
         // 发布情景记忆新增事件
         this.eventBus.publish(CoreEventType.MEMORY_RECORDED, {
-          memoryId: '',
+          memoryId,
           taskType: 'CODE_EXPLAIN'
         }, { source: 'MemorySystem' });
       }

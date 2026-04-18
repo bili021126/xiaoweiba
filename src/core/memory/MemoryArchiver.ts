@@ -1,5 +1,6 @@
 import { DatabaseManager } from '../../storage/DatabaseManager';
 import { AuditLogger } from '../security/AuditLogger';
+import { ErrorCode, createError } from '../../utils/ErrorCodes';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -107,8 +108,20 @@ export class MemoryArchiver {
    * 写入归档文件（JSON格式）
    */
   private async writeArchiveFile(memories: any[], projectFingerprint: string): Promise<string> {
-    // 确保归档目录存在
-    const archiveDir = this.config.archivePath || path.join(process.cwd(), 'archives');
+    // 确保归档目录存在，并进行路径合法性校验
+    let archiveDir = this.config.archivePath || path.join(process.cwd(), 'archives');
+    
+    // 路径规范化与安全校验（防止路径遍历攻击）
+    archiveDir = path.normalize(archiveDir);
+    const baseDir = path.resolve(process.cwd());
+    if (!archiveDir.startsWith(baseDir)) {
+      throw createError(
+        ErrorCode.SEC_PATH_TRAVERSAL_DETECTED,
+        `Invalid archive path: ${archiveDir} is outside of base directory`,
+        `归档路径不合法：${archiveDir} 超出了基础目录范围`
+      );
+    }
+    
     if (!fs.existsSync(archiveDir)) {
       fs.mkdirSync(archiveDir, { recursive: true });
     }

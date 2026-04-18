@@ -231,17 +231,30 @@ export class LLMTool implements ILLMTool {
    */
   private async getClientAsync(provider: ModelProviderConfig): Promise<OpenAI> {
     if (!this.clients.has(provider.id)) {
-      // 优先从 SecretStorage 获取 API Key
-      const apiKey = await this.configManager.getApiKey(provider.id) || 
-                     process.env.OPENAI_API_KEY || '';
+      // 智能选择 API Key 来源：
+      // 1. 优先从环境变量读取（开发环境，.env 文件）
+      // 2. 回退到 SecretStorage（生产环境，用户通过 UI 配置）
+      const envKeyVar = `${provider.id.toUpperCase()}_API_KEY`;
+      let apiKey = process.env[envKeyVar] || 
+                   process.env.DEEPSEEK_API_KEY ||  // 向后兼容
+                   process.env.OPENAI_API_KEY || 
+                   '';
+      
+      // 如果环境变量未配置，尝试从 SecretStorage 获取
+      if (!apiKey) {
+        console.log(`[LLMTool] API key not found in environment, trying SecretStorage for ${provider.id}`);
+        apiKey = await this.configManager.getApiKey(provider.id) || '';
+      }
 
       if (!apiKey && provider.id !== 'ollama') {
         throw createError(
           ErrorCode.LLM_API_CALL_FAILED,
           `API key not configured for provider: ${provider.id}`,
-          `未配置 API Key: ${provider.id}，请在配置文件中设置或通过环境变量提供`
+          `未配置 API Key: ${provider.id}，请在 .env 文件中设置 ${envKeyVar} 或通过"配置 API Key"命令设置`
         );
       }
+
+      console.log(`[LLMTool] Using API key from ${apiKey.startsWith('sk-') ? 'environment/SecretStorage' : 'unknown source'} for ${provider.id}`);
 
       const client = new OpenAI({
         baseURL: provider.apiUrl,

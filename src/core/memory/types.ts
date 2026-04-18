@@ -6,9 +6,10 @@
  * 意图向量 - 描述用户查询的敏感维度
  */
 export interface IntentVector {
-  temporal: number;   // 0-1，时间敏感程度（是否包含"刚才"、"上次"等）
-  entity: number;     // 0-1，实体敏感程度（是否包含函数名、表名等）
-  semantic: number;   // 0-1，语义模糊程度（是否像自然语言描述而非精确关键词）
+  temporal: number;        // 0-1，时间敏感程度（是否包含"刚才"、"上次"等）
+  entity: number;          // 0-1，实体敏感程度（是否包含函数名、表名等）
+  semantic: number;        // 0-1，语义模糊程度（是否像自然语言描述而非精确关键词）
+  distantTemporal: number; // 0-1，久远时间意图（是否检索历史记忆，如"很久以前"、"上个月"）
 }
 
 /**
