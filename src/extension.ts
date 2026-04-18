@@ -50,6 +50,7 @@ import { getUserFriendlyMessage } from './utils/ErrorCodes';
 import { ExplainCodeCommand } from './commands/ExplainCodeCommand';
 import { GenerateCommitCommand } from './commands/GenerateCommitCommand';
 import { CommitStyleLearner } from './core/memory/CommitStyleLearner';
+import { ConfigureApiKeyCommand } from './commands/ConfigureApiKeyCommand';
 import { CheckNamingCommand } from './commands/CheckNamingCommand';
 import { CodeGenerationCommand } from './commands/CodeGenerationCommand';
 import { OptimizeSQLCommand } from './commands/OptimizeSQLCommand';
@@ -283,6 +284,13 @@ function registerCommands(context: vscode.ExtensionContext): void {
     return await optimizeSQLHandler.execute(input);
   }, 'SQL优化');
   
+  // 创建ConfigureApiKeyCommand实例
+  const configureApiKeyHandler = new ConfigureApiKeyCommand(memorySystem, eventBus);
+  
+  memorySystem.registerAction('configureApiKey', async (input, context) => {
+    return await configureApiKeyHandler.execute(input);
+  }, '配置API Key');
+  
   // 注册 VS Code 命令（作为入口，调用 MemorySystem）
   const explainCodeCmd = vscode.commands.registerCommand(
     'xiaoweiba.explainCode',
@@ -411,6 +419,14 @@ function registerCommands(context: vscode.ExtensionContext): void {
     }
   );
 
+  // 配置API Key命令
+  const configureApiKeyCmd = vscode.commands.registerCommand(
+    'xiaoweiba.configureApiKey',
+    async () => {
+      await memorySystem.executeAction('configureApiKey', {});
+    }
+  );
+
   // 阶段 2 命令（占位实现）
   const repairMemoryCmd = vscode.commands.registerCommand(
     'xiaoweiba.repair-memory',
@@ -526,8 +542,8 @@ function registerCommands(context: vscode.ExtensionContext): void {
     // checkNamingCmd,
     // codeGenerationCmd,
     optimizeSQLCmd,
+    configureApiKeyCmd,
     repairMemoryCmd,
-    // configureApiKeyCmd,
     openChatCmd,
     // 智能唤醒监听器
     onDidSaveTextDocument,
