@@ -70,6 +70,11 @@ export class GenerateCommitCommand extends BaseCommand {
   /**
    * 原有的执行逻辑（待重构为executeCore）
    */
+  protected async executeCore(input: CommandInput, context: MemoryContext): Promise<CommandResult> {
+    // 当前使用executeLegacy包装层，此方法暂不直接使用
+    return { success: true };
+  }
+
   private async executeLegacy(): Promise<void> {
     const startTime = Date.now();
     

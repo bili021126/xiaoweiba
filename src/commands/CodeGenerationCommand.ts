@@ -47,6 +47,11 @@ export class CodeGenerationCommand extends BaseCommand {
     }
   }
 
+  protected async executeCore(input: CommandInput, context: MemoryContext): Promise<CommandResult> {
+    // 当前使用executeLegacy包装层，此方法暂不直接使用
+    return { success: true };
+  }
+
   private async executeLegacy(input: CommandInput): Promise<void> {
     const startTime = Date.now();
     
