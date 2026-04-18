@@ -13,6 +13,7 @@ import { EventBus, CoreEventType } from '../eventbus/EventBus';
 import { EpisodicMemory } from './EpisodicMemory';
 import { PreferenceMemory } from './PreferenceMemory';
 import { AuditLogger } from '../security/AuditLogger';
+import { TaskTokenManager, TaskPermissionLevel } from '../security/TaskTokenManager';
 
 /**
  * 动作处理器类型
@@ -69,12 +70,18 @@ interface RegisteredAction {
 export class MemorySystem {
   private actions: Map<string, RegisteredAction> = new Map();
   private initialized: boolean = false;
+  
+  // ✅ 修复7：TaskTokenManager集成
+  private currentTokenId: string | null = null;
+  private currentActionId: string | null = null;
+  private cleanupTimer: NodeJS.Timeout | null = null;
 
   constructor(
     @inject(EventBus) private eventBus: EventBus,
     @inject(EpisodicMemory) private episodicMemory: EpisodicMemory,
     @inject(PreferenceMemory) private preferenceMemory: PreferenceMemory,
-    @inject(AuditLogger) private auditLogger: AuditLogger
+    @inject(AuditLogger) private auditLogger: AuditLogger,
+    @inject(TaskTokenManager) private taskTokenManager: TaskTokenManager
   ) {}
 
   /**
@@ -95,6 +102,110 @@ export class MemorySystem {
     
     this.initialized = true;
     console.log('[MemorySystem] Initialized successfully');
+    
+    // ✅ 修复7：启动定期清理过期Token
+    this.startCleanupTimer();
+  }
+  
+  /**
+   * ✅ 修复7：启动定期清理定时器（每1分钟）
+   */
+  private startCleanupTimer(): void {
+    if (this.cleanupTimer) return;
+    
+    this.cleanupTimer = setInterval(() => {
+      const beforeCount = this.taskTokenManager.getActiveTokenCount();
+      this.taskTokenManager.cleanupExpired();
+      const afterCount = this.taskTokenManager.getActiveTokenCount();
+      
+      if (beforeCount !== afterCount) {
+        console.log(`[TaskTokenManager] Cleaned up ${beforeCount - afterCount} expired tokens`);
+      }
+    }, 60 * 1000); // 每1分钟清理一次
+  }
+  
+  /**
+   * ✅ 修复7：检查是否有有效的写权限Token
+   */
+  public hasValidToken(actionId: string): boolean {
+    if (!this.currentTokenId || !this.currentActionId) return false;
+    
+    // ✅ 问题1修复：验证actionId是否匹配
+    if (this.currentActionId !== actionId) return false;
+    
+    return this.taskTokenManager.validateToken(this.currentTokenId, 'write');
+  }
+  
+  /**
+   * ✅ 修复7：请求用户授权（返回Token）
+   */
+  public async requestWritePermission(actionId: string): Promise<string | null> {
+    const vscode = await import('vscode');
+    
+    // 如果已有有效Token，直接返回
+    if (this.hasValidToken(actionId)) {
+      console.log(`[TaskTokenManager] Reusing existing token for ${actionId}`);
+      return this.currentTokenId;
+    }
+    
+    // 显示授权对话框
+    const choice = await vscode.window.showInformationMessage(
+      `⚠️ "${actionId}" 操作需要写入权限，是否允许？`,
+      { modal: true },
+      '允许',
+      '拒绝'
+    );
+    
+    if (choice === '允许') {
+      // 生成写权限Token
+      const token = this.taskTokenManager.generateToken(actionId, 'write');
+      this.currentTokenId = token.tokenId;
+      this.currentActionId = actionId;
+      
+      console.log(`[TaskTokenManager] Write permission granted for ${actionId}, token: ${token.tokenId}`);
+      return token.tokenId;
+    } else {
+      console.log(`[TaskTokenManager] Write permission denied for ${actionId}`);
+      return null;
+    }
+  }
+  
+  /**
+   * ✅ 修复7：检查是否可以降级为只读模式
+   */
+  public canDegradeToReadOnly(actionId: string): boolean {
+    // generateCode和generateCommit支持只读模式
+    return actionId === 'generateCode' || actionId === 'generateCommit';
+  }
+  
+  /**
+   * ✅ 修复7：执行只读模式（无需授权）
+   */
+  public async executeReadOnly(actionId: string, input: any): Promise<any> {
+    console.log(`[MemorySystem] Executing ${actionId} in read-only mode`);
+    
+    // ✅ 问题2修复：正常检索memoryContext
+    const memoryContext = await this.retrieveRelevant(actionId, input);
+    
+    const registeredAction = this.actions.get(actionId);
+    if (!registeredAction) {
+      throw new Error(`Action '${actionId}' not registered`);
+    }
+    
+    // 调用handler，传递memoryContext
+    return await registeredAction.handler(input, memoryContext);
+  }
+  
+  /**
+   * ✅ 修复7：撤销当前Token
+   */
+  public revokeCurrentToken(): void {
+    if (this.currentTokenId) {
+      this.taskTokenManager.revokeToken(this.currentTokenId);
+      console.log(`[TaskTokenManager] Token revoked: ${this.currentTokenId}`);
+      this.currentTokenId = null;
+      this.currentActionId = null;
+    }
   }
 
   /**
@@ -141,6 +252,28 @@ export class MemorySystem {
     const startTime = Date.now();
     
     try {
+      // ✅ 修复7：授权检查（仅对需要写权限的操作）
+      if (actionId === 'generateCode' || actionId === 'generateCommit') {
+        // 检查是否有有效Token
+        if (!this.hasValidToken(actionId)) {
+          console.log(`[MemorySystem] No valid token for ${actionId}, requesting permission...`);
+          
+          // 请求用户授权
+          const tokenId = await this.requestWritePermission(actionId);
+          
+          if (!tokenId) {
+            // 用户拒绝授权
+            if (this.canDegradeToReadOnly(actionId)) {
+              // ✅ 降级为只读模式
+              console.log(`[MemorySystem] Degrading to read-only mode for ${actionId}`);
+              return await this.executeReadOnly(actionId, input);
+            } else {
+              throw new Error(`操作 "${actionId}" 需要写权限，但用户已拒绝授权`);
+            }
+          }
+        }
+      }
+      
       // 1. 获取注册的handler
       const action = this.actions.get(actionId);
       if (!action) {

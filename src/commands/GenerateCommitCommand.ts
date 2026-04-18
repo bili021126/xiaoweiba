@@ -58,6 +58,15 @@ export class GenerateCommitCommand extends BaseCommand {
     const startTime = Date.now();
     
     try {
+      // ✅ 修复7 & 问题4：检查是否为只读模式
+      const isReadOnly = input.readOnly === true;
+      
+      if (isReadOnly) {
+        console.log('[GenerateCommitCommand] Running in read-only mode');
+        return await this.executeReadOnly(input, context, startTime);
+      }
+      
+      // 正常模式：原有逻辑
       // 1. 检查工作区是否有 Git 仓库
       const workspaceFolders = vscode.workspace.workspaceFolders;
       if (!workspaceFolders || workspaceFolders.length === 0) {
@@ -405,5 +414,69 @@ ${truncatedDiff}
   ): Promise<void> {
     // 此方法已废弃，记忆记录由 MemorySystem 通过 TASK_COMPLETED 事件自动处理
     console.debug('[GenerateCommitCommand] recordMemory deprecated - using EventBus instead');
+  }
+  
+  /**
+   * ✅ 修复7 & 问题4：只读模式执行（生成提交信息但不提交）
+   */
+  private async executeReadOnly(
+    input: CommandInput,
+    context: MemoryContext,
+    startTime: number
+  ): Promise<CommandResult> {
+    const vscode = await import('vscode');
+    
+    try {
+      // 1. 获取diff
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+      if (!workspaceFolders || workspaceFolders.length === 0) {
+        return { success: false, error: 'No workspace' };
+      }
+      
+      const workspacePath = workspaceFolders[0].uri.fsPath;
+      const diff = await this.getGitDiff(workspacePath);
+      
+      if (!diff || diff.trim().length === 0) {
+        return { success: true, data: { message: 'No changes detected' } };
+      }
+      
+      // 2. 生成提交信息（只读模式不使用偏好和历史）
+      const defaultPreference: CommitStylePreference = {
+        domain: 'COMMIT_STYLE',
+        pattern: {
+          alwaysIncludeScope: false,
+          preferredTypes: ['feat', 'fix', 'refactor'],
+          descriptionMaxLength: 72,
+          useBulletPoints: true,
+          language: 'zh'
+        },
+        confidence: 0.5,
+        sampleCount: 0
+      };
+      const commitMessage = await this.generateCommitMessageWithMemory(diff, defaultPreference, []);
+      
+      // 3. 显示在聊天框
+      vscode.window.showInformationMessage(
+        `✅ 提交信息生成完成（只读模式）\n\n${commitMessage}\n\n*提示：授权后可直接提交*`,
+        { modal: false }
+      );
+      
+      const durationMs = Date.now() - startTime;
+      return {
+        success: true,
+        data: {
+          commitMessage,
+          message: '提交信息已生成并显示（只读模式）'
+        },
+        durationMs
+      };
+    } catch (error) {
+      const durationMs = Date.now() - startTime;
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+        durationMs
+      };
+    }
   }
 }

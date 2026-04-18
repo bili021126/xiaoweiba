@@ -40,6 +40,16 @@ export class CodeGenerationCommand extends BaseCommand {
     const startTime = Date.now();
     
     try {
+      // ✅ 修复7 & 问题3：检查是否为只读模式
+      const isReadOnly = input.readOnly === true;
+      
+      if (isReadOnly) {
+        console.log('[CodeGenerationCommand] Running in read-only mode');
+        // 只读模式：仅生成代码并显示在聊天框，不写入文件
+        return await this.executeReadOnly(input, context, startTime);
+      }
+      
+      // 正常模式：原有逻辑
       // 1. 获取当前编辑器
       const editor = vscode.window.activeTextEditor;
       if (!editor) {
@@ -385,5 +395,82 @@ export class CodeGenerationCommand extends BaseCommand {
   ): Promise<void> {
     // 此方法已废弃，记忆记录由 MemorySystem 通过 TASK_COMPLETED 事件自动处理
     console.debug('[CodeGenerationCommand] recordMemory deprecated - using EventBus instead');
+  }
+  
+  /**
+   * ✅ 修复7 & 问题3：只读模式执行（生成代码但不写入文件）
+   */
+  private async executeReadOnly(
+    input: CommandInput,
+    context: MemoryContext,
+    startTime: number
+  ): Promise<CommandResult> {
+    const vscode = await import('vscode');
+    
+    try {
+      // 1. 获取当前编辑器
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) {
+        return { success: false, error: 'No active editor' };
+      }
+      
+      // 2. 使用上次需求或输入框获取需求
+      let requirement = this.lastRequirement;
+      if (!requirement) {
+        const userInput = await vscode.window.showInputBox({
+          prompt: '请输入代码生成需求',
+          placeHolder: '例如：创建一个函数，计算数组中所有偶数的和'
+        });
+        
+        if (!userInput) {
+          return { success: false, error: 'User cancelled' };
+        }
+        
+        requirement = userInput;
+        this.lastRequirement = requirement;
+      }
+      
+      // 3. 生成代码
+      const languageId = editor.document.languageId;
+      const generatedCode = await this.generateCode(requirement, languageId);
+      
+      // 4. ✅ 问题3修复：在聊天框展示代码
+      await this.showCodeInChat(generatedCode, languageId, requirement);
+      
+      const durationMs = Date.now() - startTime;
+      return {
+        success: true,
+        data: {
+          code: generatedCode,
+          message: '代码已生成并显示在聊天框（只读模式）'
+        },
+        durationMs
+      };
+    } catch (error) {
+      const durationMs = Date.now() - startTime;
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+        durationMs
+      };
+    }
+  }
+  
+  /**
+   * ✅ 问题3修复：在聊天框展示生成的代码
+   */
+  private async showCodeInChat(
+    code: string,
+    languageId: string,
+    requirement: string
+  ): Promise<void> {
+    const vscode = await import('vscode');
+    
+    const codeBlock = `\`\`\`${languageId}\n${code}\n\`\`\``;
+    
+    vscode.window.showInformationMessage(
+      `✅ 代码生成完成（只读模式）\n\n**需求**: ${requirement}\n\n${codeBlock}`,
+      { modal: false }
+    );
   }
 }

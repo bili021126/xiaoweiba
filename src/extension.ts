@@ -545,6 +545,15 @@ function registerCommands(context: vscode.ExtensionContext): void {
     await memorySystem.proactiveRecommend(document.fileName);
   });
 
+  // ✅ 修复7：注册撤销写权限命令
+  const revokeWritePermissionCmd = vscode.commands.registerCommand(
+    'xiaoweiba.revokeWritePermission',
+    async () => {
+      memorySystem.revokeCurrentToken();
+      vscode.window.showInformationMessage('✅ 写权限已撤销');
+    }
+  );
+
   // 添加到订阅
   context.subscriptions.push(
     explainCodeCmd,
@@ -558,6 +567,7 @@ function registerCommands(context: vscode.ExtensionContext): void {
     importMemoryCmd,
     repairMemoryCmd,
     openChatCmd,
+    revokeWritePermissionCmd,  // ✅ 修复7：撤销写权限
     // 智能唤醒监听器
     onDidSaveTextDocument,
     onDidChangeActiveTextEditor,
