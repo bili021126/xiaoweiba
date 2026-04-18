@@ -126,13 +126,6 @@ export class ImportMemoryCommand extends BaseCommand {
           }
         });
 
-        // 8. 发布任务完成事件
-        this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
-          actionId: 'importMemory',
-          result: { success: true, ...importResult },
-          durationMs
-        }, { source: 'ImportMemoryCommand' });
-
         return { success: true, data: importResult };
       });
 
@@ -144,13 +137,6 @@ export class ImportMemoryCommand extends BaseCommand {
       vscode.window.showErrorMessage(`记忆导入失败: ${errorMessage}`);
       
       await this.auditLogger.logError('import_memory', error as Error, durationMs);
-      
-      // 即使失败也发布事件
-      this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
-        actionId: 'importMemory',
-        result: { success: false, error: errorMessage },
-        durationMs
-      }, { source: 'ImportMemoryCommand' });
       
       return { success: false, error: errorMessage };
     }

@@ -106,14 +106,6 @@ export class CodeGenerationCommand extends BaseCommand {
         await this.showGeneratedCodeOptions(generatedCode, requirement, editor);
 
         progress.report({ message: '💾 记录情景记忆...', increment: 80 });
-
-        // 7. 发布任务完成事件（由 MemorySystem 订阅并记录记忆）
-        const durationMs = Date.now() - startTime;
-        this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
-          actionId: 'generateCode',
-          result: { success: true },
-          durationMs
-        }, { source: 'CodeGenerationCommand' });
         
         progress.report({ message: '✅ 全部完成！', increment: 100 });
       });
@@ -135,13 +127,6 @@ export class CodeGenerationCommand extends BaseCommand {
       vscode.window.showErrorMessage(`代码生成失败: ${errorMessage}`);
       
       await this.auditLogger.logError('code_generation', error as Error, durationMs);
-      
-      // 即使失败也发布事件，让 MemorySystem 记录失败结果
-      this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
-        actionId: 'generateCode',
-        result: { success: false, error: errorMessage },
-        durationMs
-      }, { source: 'CodeGenerationCommand' });
       
       return { success: false, error: errorMessage };
     }

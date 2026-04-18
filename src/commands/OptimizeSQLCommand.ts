@@ -83,13 +83,6 @@ export class OptimizeSQLCommand extends BaseCommand {
         }
       });
 
-      // 6. 发布任务完成事件（由 MemorySystem 订阅并记录记忆）
-      this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
-        actionId: 'optimizeSQL',
-        result: { success: true },
-        durationMs: Date.now() - startTime
-      }, { source: 'OptimizeSQLCommand' });
-
       return { success: true };
 
     } catch (error) {
@@ -98,13 +91,6 @@ export class OptimizeSQLCommand extends BaseCommand {
       vscode.window.showErrorMessage(`SQL优化失败: ${errorMessage}`);
       
       await this.auditLogger.logError('optimize_sql', error as Error, durationMs);
-      
-      // 即使失败也发布事件，让 MemorySystem 记录失败结果
-      this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
-        actionId: 'optimizeSQL',
-        result: { success: false, error: errorMessage },
-        durationMs
-      }, { source: 'OptimizeSQLCommand' });
       
       return { success: false, error: errorMessage };
     }

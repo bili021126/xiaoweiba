@@ -79,13 +79,6 @@ export class ConfigureApiKeyCommand extends BaseCommand {
         }
       });
 
-      // 6. 发布任务完成事件
-      this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
-        actionId: 'configureApiKey',
-        result: { success: true },
-        durationMs
-      }, { source: 'ConfigureApiKeyCommand' });
-
       console.log(`[ConfigureApiKeyCommand] API key configured for ${selected.label}`);
       
       return { success: true };
@@ -98,13 +91,6 @@ export class ConfigureApiKeyCommand extends BaseCommand {
       
       await this.auditLogger.logError('configure_api_key', error as Error, durationMs);
       console.error('[ConfigureApiKeyCommand] Failed to configure API key:', error);
-      
-      // 即使失败也发布事件
-      this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
-        actionId: 'configureApiKey',
-        result: { success: false, error: errorMessage },
-        durationMs
-      }, { source: 'ConfigureApiKeyCommand' });
       
       return { success: false, error: errorMessage };
     }

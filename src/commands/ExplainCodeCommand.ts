@@ -95,13 +95,6 @@ export class ExplainCodeCommand extends BaseCommand {
         }
       });
 
-      // 7. 发布任务完成事件（由 MemorySystem 订阅并记录记忆）
-      this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
-        actionId: 'explainCode',
-        result: { success: true },
-        durationMs
-      }, { source: 'ExplainCodeCommand' });
-
       return { success: true, durationMs };
 
     } catch (error) {
@@ -110,13 +103,6 @@ export class ExplainCodeCommand extends BaseCommand {
       vscode.window.showErrorMessage(`代码解释失败: ${errorMessage}`);
       
       await this.auditLogger.logError('explain_code', error as Error, durationMs);
-      
-      // 即使失败也发布事件，让 MemorySystem 记录失败结果
-      this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
-        actionId: 'explainCode',
-        result: { success: false, error: errorMessage },
-        durationMs
-      }, { source: 'ExplainCodeCommand' });
       
       return { success: false, error: errorMessage };
     }

@@ -106,14 +106,6 @@ export class GenerateCommitCommand extends BaseCommand {
         await this.showCommitMessageOptions(commitMessage, diff, workspacePath);
 
         progress.report({ message: '💾 记录情景记忆...', increment: 80 });
-
-        // 7. 发布任务完成事件（由 MemorySystem 订阅并记录记忆）
-        const durationMs = Date.now() - startTime;
-        this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
-          actionId: 'generateCommit',
-          result: { success: true },
-          durationMs
-        }, { source: 'GenerateCommitCommand' });
         
         console.log('[GenerateCommitCommand] TASK_COMPLETED event published');
         progress.report({ message: '✅ 全部完成！', increment: 100 });
@@ -136,13 +128,6 @@ export class GenerateCommitCommand extends BaseCommand {
       vscode.window.showErrorMessage(`生成提交信息失败: ${errorMessage}`);
       
       await this.auditLogger.logError('generate_commit_v2', error as Error, durationMs);
-      
-      // 即使失败也发布事件，让 MemorySystem 记录失败结果
-      this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
-        actionId: 'generateCommit',
-        result: { success: false, error: errorMessage },
-        durationMs
-      }, { source: 'GenerateCommitCommand' });
       
       return { success: false, error: errorMessage };
     }

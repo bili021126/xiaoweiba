@@ -82,16 +82,6 @@ export class CheckNamingCommand extends BaseCommand {
           // 显示检查结果
           await this.showNamingResult(result.data, selectedText);
           
-          progress.report({ message: '💾 记录记忆...', increment: 80 });
-
-          // 发布任务完成事件（由 MemorySystem 订阅并记录记忆）
-          const durationMs = Date.now() - startTime;
-          this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
-            actionId: 'checkNaming',
-            result: { success: true },
-            durationMs
-          }, { source: 'CheckNamingCommand' });
-          
           progress.report({ message: '✅ 完成！', increment: 100 });
         }
       );
@@ -113,13 +103,6 @@ export class CheckNamingCommand extends BaseCommand {
       vscode.window.showErrorMessage(`命名检查失败: ${errorMessage}`);
       
       await this.auditLogger.logError('check_naming', error as Error, durationMs);
-      
-      // 即使失败也发布事件，让 MemorySystem 记录失败结果
-      this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
-        actionId: 'checkNaming',
-        result: { success: false, error: errorMessage },
-        durationMs
-      }, { source: 'CheckNamingCommand' });
       
       return { success: false, error: errorMessage };
     }

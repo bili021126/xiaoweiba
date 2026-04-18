@@ -122,13 +122,6 @@ export class ExportMemoryCommand extends BaseCommand {
           }
         });
 
-        // 7. 发布任务完成事件
-        this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
-          actionId: 'exportMemory',
-          result: { success: true, count: memories.length },
-          durationMs
-        }, { source: 'ExportMemoryCommand' });
-
         return { success: true, data: { count: memories.length, filePath: saveUri.fsPath } };
       });
 
@@ -140,13 +133,6 @@ export class ExportMemoryCommand extends BaseCommand {
       vscode.window.showErrorMessage(`记忆导出失败: ${errorMessage}`);
       
       await this.auditLogger.logError('export_memory', error as Error, durationMs);
-      
-      // 即使失败也发布事件
-      this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
-        actionId: 'exportMemory',
-        result: { success: false, error: errorMessage },
-        durationMs
-      }, { source: 'ExportMemoryCommand' });
       
       return { success: false, error: errorMessage };
     }
