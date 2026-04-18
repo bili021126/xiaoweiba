@@ -122,7 +122,8 @@ export class EpisodicMemory {
       // 自动判断记忆层级：7天内的为SHORT_TERM，其他为LONG_TERM
       const memoryTier = this.determineMemoryTier(timestamp);
 
-      db.run(
+      // ✅ 使用智能run()方法，自动持久化
+      this.dbManager.run(
         `INSERT INTO episodic_memory (
           id, project_fingerprint, timestamp, task_type, summary,
           entities, decision, outcome, final_weight, model_id, latency_ms, memory_tier, metadata
@@ -366,10 +367,10 @@ export class EpisodicMemory {
       const db = this.dbManager.getDatabase();
       const cutoffTimestamp = Date.now() - this.retentionDays * 24 * 60 * 60 * 1000;
 
-      // 使用参数化查询防止 SQL 注入
-      db.run('DELETE FROM episodic_memory WHERE timestamp < ?', [cutoffTimestamp]);
+      // ✅ 使用智能run()方法，自动持久化
+      this.dbManager.run('DELETE FROM episodic_memory WHERE timestamp < ?', [cutoffTimestamp]);
 
-      const deletedCount = db.getRowsModified();
+      const deletedCount = this.dbManager.getDatabase().getRowsModified();
 
       const duration = Date.now() - startTime;
       await this.auditLogger.log('memory_cleanup', 'success', duration, {
@@ -1006,12 +1007,14 @@ export class EpisodicMemory {
 
       // 将7天前的SHORT_TERM记忆更新为LONG_TERM
       const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-      db.run(
+      
+      // ✅ 使用智能run()方法，自动持久化
+      this.dbManager.run(
         `UPDATE episodic_memory SET memory_tier = 'LONG_TERM' WHERE project_fingerprint = ? AND memory_tier = 'SHORT_TERM' AND timestamp < ?`,
         [projectFingerprint, sevenDaysAgo]
       );
 
-      const migratedCount = db.getRowsModified();
+      const migratedCount = this.dbManager.getDatabase().getRowsModified();
       console.log(`[EpisodicMemory] Migrated ${migratedCount} memories from SHORT_TERM to LONG_TERM`);
       
       return migratedCount;

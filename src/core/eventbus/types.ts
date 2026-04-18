@@ -60,7 +60,17 @@ export interface CoreEventPayloadMap {
   [CoreEventType.MEMORY_RECORDED]: { memoryId: string; taskType: string };
   [CoreEventType.MEMORY_CONTEXT_REQUEST]: { actionId: string; input: unknown };
   [CoreEventType.MEMORY_RECOMMEND]: { filePath: string; recommendations: unknown[] };
-  [CoreEventType.TASK_COMPLETED]: { actionId: string; result: unknown; durationMs: number };
+  [CoreEventType.TASK_COMPLETED]: {
+    actionId: string;
+    result: unknown;
+    durationMs: number;
+    // ✅ 新增：由 Command 提供的记忆元数据
+    memoryMetadata?: {
+      taskType: string;
+      summary: string;
+      entities: string[];
+    };
+  };
   [CoreEventType.CONFIG_UPDATED]: { key: string; oldValue: unknown; newValue: unknown };
 }
 

@@ -100,6 +100,18 @@ export class ContextBuilder {
     let episodes: EpisodicMemoryRecord[] = allEpisodes;
     let crossSessionMemories: EpisodicMemoryRecord[] = crossSessionSummaries;
 
+    // ✅ 检测时间指代查询，过滤对话类记忆
+    const isTemporalQuery = /刚才|上次|之前|刚刚|最近|做了什么|干了什么|记得/.test(options.userMessage);
+    if (isTemporalQuery) {
+      // 过滤：只保留实际操作类型的记忆
+      episodes = allEpisodes.filter(ep => 
+        !['CHAT', 'CHAT_COMMAND'].includes(ep.taskType) &&
+        !ep.summary.startsWith('用户') &&
+        !ep.summary.includes('询问')
+      );
+      console.log(`[ContextBuilder] Temporal query detected, filtered to ${episodes.length} operation memories`);
+    }
+
     // 5. 检索偏好记忆
     let preferences: PreferenceRecommendation[] = [];
     try {
@@ -113,15 +125,24 @@ export class ContextBuilder {
     }
 
     // 6. 构建系统提示
-    const systemPrompt = this.buildSystemPrompt(
+    const systemPrompt = await this.buildSystemPrompt(
       editorContext,
       episodes,
       crossSessionMemories,
-      preferences
+      preferences,
+      options.userMessage  // ✅ 传入用户查询
     );
 
     // 7. 构建消息数组
     const messages = this.buildMessages(historyMessages, options.userMessage, editorContext);
+
+    // 🔍 调试：打印系统提示词的关键部分
+    console.log(`[ContextBuilder] System prompt length: ${systemPrompt.length} chars`);
+    if (episodes.length > 0) {
+      console.log(`[ContextBuilder] Memory instruction included: YES (${episodes.length} memories)`);
+    } else {
+      console.log('[ContextBuilder] Memory instruction included: NO (no memories)');
+    }
 
     return { messages, systemPrompt };
   }
@@ -183,16 +204,44 @@ export class ContextBuilder {
   /**
    * 构建系统提示
    */
-  private buildSystemPrompt(
+  private async buildSystemPrompt(
     editorContext: EditorContext,
     episodes: EpisodicMemoryRecord[],
     crossSessionMemories: EpisodicMemoryRecord[],
-    preferences: PreferenceRecommendation[]
-  ): string {
+    preferences: PreferenceRecommendation[],
+    userQuery: string  // ✅ 需要传入用户查询
+  ): Promise<string> {
     const parts: string[] = [];
 
-    // 基础角色定义
-    parts.push('你是小尾巴AI助手，一个专业的编程伴侣，擅长代码解释、代码生成和技术问题解答。');
+    // ✅ 基础角色设定（始终存在）
+    parts.push('你是小尾巴，用户的私人编程学徒。你记得用户在这个项目里做过的每一件事。');
+    parts.push('你的语气要自然、亲切，像一个熟悉的搭档，而不是一个查询工具。');
+
+    // ✅ 获取有效记忆数，决定语气（异步）
+    const stats = await this.episodicMemory.getStats();
+    
+    // 过滤出有效的操作型记忆（排除对话和失败记录）
+    const validTaskTypes = ['CODE_EXPLAIN', 'CODE_GENERATE', 'COMMIT_GENERATE', 'NAMING_CHECK', 'SQL_OPTIMIZE'];
+    let effectiveMemoryCount = 0;
+    for (const [taskType, count] of Object.entries(stats.byTaskType)) {
+      if (validTaskTypes.includes(taskType)) {
+        effectiveMemoryCount += count;
+      }
+    }
+    
+    let toneInstruction = '';
+    if (effectiveMemoryCount < 5) {
+      toneInstruction = '你刚成为这个用户的学徒，还不太熟悉。请用礼貌、略带生疏的语气，称呼“您”。回答要完整、客气。';
+    } else if (effectiveMemoryCount < 20) {
+      toneInstruction = '你和用户已经合作了一段时间，比较熟悉了。请用自然、友好的语气，称呼“你”。回答可以简洁一些。';
+    } else {
+      toneInstruction = '你是用户的老搭档了，非常默契。请用随意、亲切的语气，偶尔用“咱们”。回答可以直接、有默契感。';
+    }
+    
+    parts.push(`你是小尾巴，用户的私人编程学徒。${toneInstruction}`);
+
+    // ✅ 检测时间指代查询
+    const isTemporalQuery = /刚才|上次|之前|刚刚|最近|做了什么/.test(userQuery);
 
     // 编辑器上下文
     if (editorContext.filePath || editorContext.language) {
@@ -211,12 +260,43 @@ export class ContextBuilder {
 
     // 相关情景记忆
     if (episodes.length > 0) {
-      parts.push('\n<relevant_memories>');
-      parts.push('以下是相关的历史任务记忆:');
-      episodes.slice(0, 3).forEach(ep => {
-        parts.push(`- [${new Date(ep.timestamp).toLocaleDateString()}] ${ep.summary}`);
-      });
-      parts.push('</relevant_memories>');
+      if (isTemporalQuery) {
+        // ✅ 强指令：直接告诉用户做了什么
+        parts.push('\n【重要指令】');
+        parts.push('用户正在问他刚才在这个项目里做了什么操作。你必须直接根据下面的记录回答。');
+        parts.push('严禁使用以下任何表述：');
+        parts.push('- “根据对话记录”');
+        parts.push('- “根据历史记忆”');
+        parts.push('- “你刚才询问了...”');
+        parts.push('- “聊天触发命令”');
+        parts.push('- 任何技术术语（如 taskType、explainCode 等）');
+        parts.push('\n用户最近的实际代码操作：');
+        episodes.slice(0, 5).forEach(ep => {
+          const time = new Date(ep.timestamp).toLocaleTimeString('zh-CN', { hour12: false });
+          parts.push(`- ${time} ${ep.summary}`);
+        });
+        parts.push('\n请这样回答：“你刚才在 [时间] 做了 [操作1]，然后做了 [操作2]。需要我帮你回顾细节吗？”');
+      } else {
+        // 其他查询：记忆作为辅助上下文
+        parts.push('\n<relevant_memories>');
+        parts.push('以下是相关的历史任务记忆:');
+        episodes.slice(0, 3).forEach(ep => {
+          parts.push(`- [${new Date(ep.timestamp).toLocaleDateString()}] ${ep.summary}`);
+        });
+        parts.push('</relevant_memories>');
+        
+        // ✅ 记忆外化：指示AI在回答中自然提及参考的记忆
+        parts.push('\n<memory_usage_instruction>');
+        parts.push('【重要指令】你必须在回答中引用以下历史记忆！');
+        parts.push('当用户询问与历史操作相关的问题时（如“我刚刚做了什么”、“上次我们讨论了什么”、“刚才的操作”），你必须：');
+        parts.push('1. 明确说明你参考了哪些记忆');
+        parts.push('2. 使用自然的语言提及，例如：“根据你刚才的操作...”、“我记得你之前...”、“从历史记录来看...”');
+        parts.push('3. 如果记忆中有相关的代码解释、提交信息生成等操作，主动提及并询问用户是否需要详细说明');
+        parts.push('\n示例回答：');
+        parts.push('“根据对话记录，你刚才解释了TypeScript代码（15:30），然后生成了Git提交信息（15:28）。需要我再详细说说哪部分吗？”');
+        parts.push('\n如果不引用记忆直接回答，会被视为不合格的回答！');
+        parts.push('</memory_usage_instruction>');
+      }
     }
 
     // 跨会话记忆
@@ -227,6 +307,12 @@ export class ContextBuilder {
         parts.push(`- [${new Date(mem.timestamp).toLocaleDateString()}] ${mem.summary}`);
       });
       parts.push('</cross_session_memories>');
+      
+      // ✅ 跨会话记忆外化指令
+      parts.push('\n<cross_session_memory_instruction>');
+      parts.push('【重要】如果用户的问题与之前的会话相关，请主动提及这些跨会话记忆。');
+      parts.push('例如：“在上次会话中，我们讨论了...”、“我记得你之前问过...”');
+      parts.push('</cross_session_memory_instruction>');
     }
 
     // 用户偏好

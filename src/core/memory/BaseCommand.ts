@@ -19,6 +19,12 @@ export interface CommandResult {
   data?: any;
   error?: string;
   durationMs?: number;
+  // ✅ 新增：由 Command 提供的记忆元数据
+  memoryMetadata?: {
+    taskType: string;
+    summary: string;
+    entities: string[];
+  };
 }
 
 export abstract class BaseCommand {
@@ -53,10 +59,16 @@ export abstract class BaseCommand {
       result.durationMs = durationMs;
 
       // 3. 发布完成事件（触发自动记忆记录）
+      console.log(`[BaseCommand] Publishing TASK_COMPLETED for ${this.commandId}, duration: ${durationMs}ms`);
       this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
         actionId: this.commandId,
-        result: result.success ? result.data : { error: result.error },
-        durationMs
+        result: {
+          success: result.success,
+          data: result.data,
+          error: result.error
+        },
+        durationMs,
+        memoryMetadata: result.memoryMetadata  // ✅ 传递元数据
       }, { source: this.commandId });
 
       return result;
@@ -64,8 +76,12 @@ export abstract class BaseCommand {
       const durationMs = Date.now() - startTime;
       this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
         actionId: this.commandId,
-        result: { error: error instanceof Error ? error.message : String(error) },
+        result: {
+          success: false,
+          error: error instanceof Error ? error.message : String(error)
+        },
         durationMs
+        // 失败时不记录记忆元数据
       }, { source: this.commandId });
 
       return {

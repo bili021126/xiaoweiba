@@ -121,6 +121,190 @@
 
 ## 4. 最新进展（2026-04-18）
 
+### 数据读写安全深度代码评审
+
+**完成时间**: 2026-04-18  
+**工时**: 约1小时  
+**状态**: ✅ 完成
+
+#### 评审范围
+
+全面审查所有数据库操作、文件I/O、数据持久化逻辑，重点关注：
+1. 数据库写操作是否调用save()
+2. SQL注入防护
+3. 资源释放（stmt.free()）
+4. 文件路径安全性
+5. 错误处理完整性
+
+#### 评审结果
+
+**总体评分**: ⭐⭐⭐⭐ (4/5) - 优秀，仅发现1个P0问题已修复
+
+| 类别 | 检查项数量 | 发现问题 | 已修复 |
+|------|-----------|---------|--------|
+| 数据库写操作 | 8处 | 1处 | ✅ |
+| 数据库读操作 | 12处 | 0处 | - |
+| 文件写入 | 3处 | 0处 | - |
+| 文件读取 | 2处 | 0处 | - |
+| 路径安全 | 5处 | 0处 | - |
+
+#### P0问题修复
+
+##### ImportMemoryCommand未持久化导入数据 ✅
+
+**问题**: 批量导入记忆后未调用`databaseManager.save()`，导致导入的数据在插件重启后丢失。
+
+**影响**:
+- 用户导入的记忆备份文件失效
+- 跨机器迁移记忆数据失败
+- 灾难恢复场景无法使用
+
+**修复**:
+```typescript
+// src/commands/ImportMemoryCommand.ts:270-273
+
+// 批量插入记忆
+for (let i = 0; i < memories.length; i++) {
+  // ... INSERT操作 ...
+}
+
+// ✅ 修复：导入完成后立即保存到磁盘
+this.databaseManager.save();
+
+return result;
+```
+
+**测试建议**:
+1. 导出记忆到JSON文件
+2. 删除数据库文件
+3. 导入JSON文件
+4. 重启VS Code
+5. 验证数据仍然存在
+
+#### 最佳实践遵循情况
+
+✅ **SQL注入防护完善** - 所有查询都使用参数化  
+✅ **资源管理规范** - stmt正确释放  
+✅ **文件路径安全** - 使用用户授权路径或固定路径  
+✅ **错误处理健全** - 完整的try-catch和用户友好提示  
+✅ **持久化意识强** - 大部分写操作都调用了save()
+
+#### 改进建议
+
+**P1建议**:
+- 迁移到better-sqlite3支持事务（8h）
+- 添加数据库完整性校验（2h）
+
+**详细报告**: [CODE_REVIEW_DATA_IO_2026-04-18.md](./CODE_REVIEW_DATA_IO_2026-04-18.md)
+
+---
+
+### 记忆系统元数据重构与持久化修复
+
+**完成时间**: 2026-04-18  
+**工时**: 约3小时  
+**状态**: ✅ 完成
+
+#### 核心问题
+
+1. **记忆数据质量差**：summary无意义、entities为空、taskType混乱
+2. **数据库未持久化**：sql.js是内存数据库，INSERT后未保存到磁盘
+3. **AI不引用记忆**：Prompt指令不够强，AI忽略记忆内容
+4. **语气缺乏养成感**：无法根据使用深度动态调整语气
+
+#### 修复方案
+
+##### 1. Command自述元数据架构 ✅
+
+**设计原则**：让Command自己决定该记住什么，MemorySystem只负责调度。
+
+**实现**：
+- 扩展`CoreEventPayloadMap`添加`memoryMetadata`字段
+- 扩展`CommandResult`接口添加`memoryMetadata`属性
+- BaseCommand传递元数据到EventBus
+- MemorySystem简化为直接使用元数据
+
+**文件修改**：
+- `src/core/eventbus/types.ts`: 扩展TASK_COMPLETED事件载荷
+- `src/core/memory/BaseCommand.ts`: 传递memoryMetadata
+- `src/core/memory/MemorySystem.ts`: 简化onActionCompleted逻辑
+- `src/commands/ExplainCodeCommand.ts`: 填充memoryMetadata
+
+##### 2. sql.js持久化修复 ✅
+
+**问题**：sql.js是内存数据库，INSERT后需手动保存。
+
+**修复**：
+- DatabaseManager添加public save()方法
+- EpisodicMemory.record()后立即调用save()
+- cleanupExpired()和migrateShortToLongTerm()也调用save()
+
+**文件修改**：
+- `src/storage/DatabaseManager.ts`: 添加public save()方法
+- `src/core/memory/EpisodicMemory.ts`: 在所有写操作后调用save()
+
+##### 3. 时间指代查询强化 ✅
+
+**问题**：AI看到记忆但不知道如何使用。
+
+**修复**：
+- 检测时间指代查询（刚才、上次、之前等）
+- 区分两种记忆呈现方式：
+  - 时间查询：记忆是答案本身，强制AI直接使用
+  - 普通查询：记忆作为辅助上下文
+
+**文件修改**：
+- `src/chat/ContextBuilder.ts`: buildSystemPrompt添加isTemporalQuery检测
+
+##### 4. 动态语气养成系统 ✅
+
+**问题**：语气固定，缺乏成长感。
+
+**修复**：
+- 基于有效记忆数（排除调试噪音）动态调整语气
+- 三阶段：生疏期（<5条）、熟悉期（5-20条）、亲密期（>20条）
+- 异步获取stats，过滤有效操作类型
+
+**文件修改**：
+- `src/chat/ContextBuilder.ts`: buildSystemPrompt改为异步，添加语气指令
+
+##### 5. 相对路径支持 ✅
+
+**问题**：绝对路径跨机器不通用，仅文件名无法区分同名文件。
+
+**修复**：
+- 使用vscode.workspace.asRelativePath()获取相对路径
+- summary和entities都包含相对路径
+
+**文件修改**：
+- `src/commands/ExplainCodeCommand.ts`: 使用相对路径
+
+#### 预期效果
+
+**记忆质量提升**：
+```sql
+-- 修复前
+summary: "Explained code"
+entities: []
+task_type: "CHAT_COMMAND"  -- ❌ 错误
+
+-- 修复后
+summary: "解释了 src/components/LoginView.vue 中的代码"
+entities: '["src/components/LoginView.vue"]'
+task_type: "CODE_EXPLAIN"  -- ✅ 正确
+```
+
+**AI回答改进**：
+- **修复前**：“根据对话记录，你刚才连续三次询问了'我刚刚做了什么'...”
+- **修复后**：“你刚才在 15:32 解释了 LoginView.vue 中的代码，15:30 也解释了一次。”
+
+**语气养成**：
+- **生疏期**（<5条）：“好的，我将为您解释这段代码的功能。请稍等。”
+- **熟悉期**（5-20条）：“行，这段我熟，马上给你说。”
+- **亲密期**（>20条）：“咱们刚才看的那段代码，要不要再拉出来看看？”
+
+---
+
 ### 代码评审与P0问题修复
 
 **完成时间**: 2026-04-18  

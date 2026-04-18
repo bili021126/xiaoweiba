@@ -1,7 +1,7 @@
 # 小尾巴（XiaoWeiba）问题记录
 
 **版本**: 1.0  
-**最后更新**: 2026-04-18（Commands EventBus解耦完成）
+**最后更新**: 2026-04-18（记忆系统元数据重构与持久化修复）
 
 ---
 
@@ -20,6 +20,29 @@
 ---
 
 ## 已修复问题
+
+### 2026-04-18 - 记忆外化体验优化
+
+| 日期 | 问题 | 严重程度 | 原因 | 修复方案 | 状态 | 相关文件 |
+|------|------|---------|------|---------|------|----------|
+| 2026-04-18 | AI回答包含对话类记忆（“你刚才询问了...”） | P0 | 检索未过滤CHAT/CHAT_COMMAND类型记忆，AI误把对话当操作 | ContextBuilder.build()中检测时间指代查询，过滤掉对话类记忆；强化禁止词汇表指令 | ✅ 已修复 | src/chat/ContextBuilder.ts:103-114,250-267 |
+| 2026-04-18 | AI语气机械，缺乏角色扮演 | P1 | 缺少基础角色设定指令 | 在buildSystemPrompt开头添加角色设定：“你是小尾巴，用户的私人编程学徒” | ✅ 已修复 | src/chat/ContextBuilder.ts:220-222 |
+
+### 2026-04-18 - 数据读写安全深度评审
+
+| 日期 | 问题 | 严重程度 | 原因 | 修复方案 | 状态 | 相关文件 |
+|------|------|---------|------|---------|------|----------|
+| 2026-04-18 | ImportMemoryCommand未持久化导入数据 | P0 | 批量导入记忆后未调用databaseManager.save()，重启后数据丢失 | DatabaseManager添加智能run()方法，自动识别写操作并持久化；业务层统一使用dbManager.run() | ✅ 已修复 | src/storage/DatabaseManager.ts:160-191, src/core/memory/EpisodicMemory.ts, src/commands/ImportMemoryCommand.ts |
+
+### 2026-04-18 - 记忆系统元数据重构与持久化修复
+
+| 日期 | 问题 | 严重程度 | 原因 | 修复方案 | 状态 | 相关文件 |
+|------|------|---------|------|---------|------|----------|
+| 2026-04-18 | 记忆数据质量差（summary无意义、entities为空） | P0 | MemorySystem试图猜测Command做了什么，生成通用摘要 | Command自述元数据架构：扩展memoryMetadata字段，让Command自己填充taskType/summary/entities | ✅ 已修复 | src/core/eventbus/types.ts, src/core/memory/BaseCommand.ts, src/core/memory/MemorySystem.ts, src/commands/ExplainCodeCommand.ts |
+| 2026-04-18 | sql.js数据库未持久化 | P0 | sql.js是内存数据库，INSERT后未手动保存，重启后数据丢失 | DatabaseManager添加public save()方法，在所有写操作后调用save() | ✅ 已修复 | src/storage/DatabaseManager.ts, src/core/memory/EpisodicMemory.ts |
+| 2026-04-18 | AI不引用记忆回答时间查询 | P0 | Prompt指令不够强，AI把记忆当参考而非答案 | 检测时间指代查询，区分两种呈现方式：时间查询时强制AI直接使用记忆内容 | ✅ 已修复 | src/chat/ContextBuilder.ts |
+| 2026-04-18 | 语气固定缺乏养成感 | P1 | 无法根据使用深度动态调整语气 | 基于有效记忆数（排除调试噪音）动态调整语气：生疏期/熟悉期/亲密期 | ✅ 已修复 | src/chat/ContextBuilder.ts |
+| 2026-04-18 | 绝对路径跨机器不通用 | P1 | 使用绝对路径或仅文件名，无法精确检索 | 使用vscode.workspace.asRelativePath()获取相对路径，写入summary和entities | ✅ 已修复 | src/commands/ExplainCodeCommand.ts |
 
 ### 2026-04-18 - 代码评审P0问题修复
 

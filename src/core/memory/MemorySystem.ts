@@ -97,6 +97,7 @@ export class MemorySystem {
     
     // 订阅模块动作完成事件（用于自动记录）
     this.eventBus.subscribe(CoreEventType.TASK_COMPLETED, async (event) => {
+      console.log(`[MemorySystem] Received TASK_COMPLETED event:`, event);
       await this.onActionCompleted(event);
     });
     
@@ -290,13 +291,7 @@ export class MemorySystem {
       // 4. 计算耗时
       const duration = Date.now() - startTime;
       
-      // 5. 发布动作完成事件（触发自动记录到记忆）
-      this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
-        actionId,
-        result,
-        durationMs: duration
-      }, { source: 'MemorySystem' });
-      
+      // 5. 返回结果（事件由 BaseCommand.execute() 统一发布，避免重复）
       return result;
     } catch (error) {
       const duration = Date.now() - startTime;
@@ -426,20 +421,24 @@ export class MemorySystem {
   private async onActionCompleted(event: any): Promise<void> {
     // ✅ EventBus传递data，兼容payload
     const payload = event.payload || event.data;
-    const { actionId, result, durationMs } = payload;
+    const { actionId, result, durationMs, memoryMetadata } = payload;
     
-    console.log(`[MemorySystem] onActionCompleted triggered for: ${actionId}`, { result, durationMs });
+    console.log(`[MemorySystem] onActionCompleted triggered for: ${actionId}`, { 
+      result, 
+      durationMs, 
+      hasMetadata: !!memoryMetadata 
+    });
     
     try {
-      // 根据不同动作类型，记录不同类型的情景记忆
-      if (actionId === 'explainCode') {
-        console.log('[MemorySystem] Recording CODE_EXPLAIN memory...');
+      // ✅ 如果 Command 提供了元数据，直接使用
+      if (memoryMetadata) {
+        console.log('[MemorySystem] Using memoryMetadata from Command');
         const memoryId = await this.episodicMemory.record({
-          taskType: 'CODE_EXPLAIN',
-          summary: `Explained code`,
-          entities: [],
+          taskType: memoryMetadata.taskType,
+          summary: memoryMetadata.summary,
+          entities: memoryMetadata.entities,
           outcome: result?.success ? 'SUCCESS' : 'FAILED',
-          modelId: result?.modelId || 'deepseek',  // 确保非 undefined
+          modelId: result?.modelId || 'deepseek',
           durationMs
         });
         
@@ -448,86 +447,15 @@ export class MemorySystem {
         // 发布情景记忆新增事件
         this.eventBus.publish(CoreEventType.MEMORY_RECORDED, {
           memoryId,
-          taskType: 'CODE_EXPLAIN'
+          taskType: memoryMetadata.taskType
         }, { source: 'MemorySystem' });
-      } else if (actionId === 'generateCommit') {
-        console.log('[MemorySystem] Recording GENERATE_COMMIT memory...');
-        const memoryId = await this.episodicMemory.record({
-          taskType: 'CHAT_COMMAND',
-          summary: `Generated commit message`,
-          entities: [],
-          outcome: result?.success ? 'SUCCESS' : 'FAILED',
-          modelId: result?.modelId || 'deepseek',
-          durationMs
-        });
-        
-        this.eventBus.publish(CoreEventType.MEMORY_RECORDED, {
-          memoryId,
-          taskType: 'CHAT_COMMAND'
-        }, { source: 'MemorySystem' });
-      } else if (actionId === 'checkNaming') {
-        console.log('[MemorySystem] Recording CHECK_NAMING memory...');
-        const memoryId = await this.episodicMemory.record({
-          taskType: 'CHAT_COMMAND',
-          summary: `Checked naming convention`,
-          entities: [],
-          outcome: result?.success ? 'SUCCESS' : 'FAILED',
-          modelId: result?.modelId || 'deepseek',
-          durationMs
-        });
-        
-        this.eventBus.publish(CoreEventType.MEMORY_RECORDED, {
-          memoryId,
-          taskType: 'CHAT_COMMAND'
-        }, { source: 'MemorySystem' });
-      } else if (actionId === 'generateCode') {
-        console.log('[MemorySystem] Recording GENERATE_CODE memory...');
-        const memoryId = await this.episodicMemory.record({
-          taskType: 'CHAT_COMMAND',
-          summary: `Generated code`,
-          entities: [],
-          outcome: result?.success ? 'SUCCESS' : 'FAILED',
-          modelId: result?.modelId || 'deepseek',
-          durationMs
-        });
-        
-        this.eventBus.publish(CoreEventType.MEMORY_RECORDED, {
-          memoryId,
-          taskType: 'CHAT_COMMAND'
-        }, { source: 'MemorySystem' });
-      } else if (actionId === 'optimizeSQL') {
-        console.log('[MemorySystem] Recording OPTIMIZE_SQL memory...');
-        const memoryId = await this.episodicMemory.record({
-          taskType: 'CHAT_COMMAND',
-          summary: `Optimized SQL query`,
-          entities: [],
-          outcome: result?.success ? 'SUCCESS' : 'FAILED',
-          modelId: result?.modelId || 'deepseek',
-          durationMs
-        });
-        
-        this.eventBus.publish(CoreEventType.MEMORY_RECORDED, {
-          memoryId,
-          taskType: 'CHAT_COMMAND'
-        }, { source: 'MemorySystem' });
+        return;
       }
-      // ✅ 修复6：补充缺失的actionId处理
-      else if (actionId === 'configureApiKey') {
-        // 配置API Key是敏感操作，记录审计日志即可，不记录情景记忆
-        console.log('[MemorySystem] configureApiKey completed, skipping episodic record');
-      }
-      else if (actionId === 'exportMemory') {
-        // 导出记忆是数据操作，不记录情景记忆
-        console.log('[MemorySystem] exportMemory completed, skipping episodic record');
-      }
-      else if (actionId === 'importMemory') {
-        // 导入记忆是数据操作，不记录情景记忆
-        console.log('[MemorySystem] importMemory completed, skipping episodic record');
-      }
-      
+
+      // 降级：对于没有提供元数据的命令（如导入导出），使用简单逻辑或不记录
+      console.log(`[MemorySystem] No memoryMetadata for action: ${actionId}, skipping episodic record`);
     } catch (error) {
       console.error('[MemorySystem] Failed to record action completion:', error);
-      // 不抛出错误，避免影响主流程
     }
   }
 

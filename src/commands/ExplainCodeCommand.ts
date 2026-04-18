@@ -87,7 +87,24 @@ export class ExplainCodeCommand extends BaseCommand {
         }
       });
 
-      return { success: true, durationMs };
+      // ✅ 修复：返回元数据供MemorySystem使用
+      const relativePath = vscode.workspace.asRelativePath(editor.document.uri.fsPath);
+      
+      return { 
+        success: true, 
+        durationMs,
+        data: {
+          filePath: editor.document.uri.fsPath,
+          fileName: editor.document.fileName.split('/').pop()?.split('\\').pop(),
+          language: editor.document.languageId,
+          code: selectedCode
+        },
+        memoryMetadata: {
+          taskType: 'CODE_EXPLAIN',
+          summary: `解释了 ${relativePath} 中的代码`,
+          entities: [relativePath]
+        }
+      };
 
     } catch (error) {
       const durationMs = Date.now() - startTime;

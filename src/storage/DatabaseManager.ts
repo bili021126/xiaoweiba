@@ -151,6 +151,48 @@ export class DatabaseManager {
   }
 
   /**
+   * 公开保存方法（供外部调用）
+   */
+  public save(): void {
+    this.saveDatabase();
+  }
+
+  /**
+   * 智能执行SQL写操作（自动持久化）
+   * @param sql SQL语句
+   * @param params 参数数组
+   */
+  public run(sql: string, params?: any[]): void {
+    const db = this.getDatabase();
+    
+    // 执行SQL
+    if (params && params.length > 0) {
+      const stmt = db.prepare(sql);
+      stmt.bind(params);
+      stmt.step();
+      stmt.free();
+    } else {
+      db.run(sql);
+    }
+    
+    // ✅ 自动判断是否为写操作，若是则立即持久化
+    const upperSql = sql.trim().toUpperCase();
+    const isWriteOperation = 
+      upperSql.startsWith('INSERT') ||
+      upperSql.startsWith('UPDATE') ||
+      upperSql.startsWith('DELETE') ||
+      upperSql.startsWith('CREATE') ||
+      upperSql.startsWith('ALTER') ||
+      upperSql.startsWith('DROP');
+      
+    if (isWriteOperation) {
+      console.log(`[DatabaseManager] Write operation detected, saving to disk...`);
+      this.saveDatabase();  // 立即落盘
+      console.log(`[DatabaseManager] Database saved successfully`);
+    }
+  }
+
+  /**
    * 关闭数据库连接
    */
   close(): void {

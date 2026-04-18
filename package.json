@@ -14,12 +14,20 @@
     "node": ">=18.0.0"
   },
   "scripts": {
-    "test": "jest",
-    "test:phase0": "jest --testPathPattern='(ExplainCodeCommand|GenerateCommitCommand|CodeGenerationCommand|CheckNamingCommand)\\.test\\.ts'",
+    "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
+    "compile:integration": "tsc -p ./tsconfig.integration.json",
     "watch": "tsc -watch -p ./",
+    "test": "jest --coverage",
+    "test:unit": "jest tests/unit",
+    "test:phase0": "jest --testPathPattern='(ExplainCodeCommand|GenerateCommitCommand|CodeGenerationCommand|CheckNamingCommand)\\.test\\.ts'",
+    "test:performance": "jest tests/performance --runInBand --verbose",
+    "test:integration": "npm run compile:integration && node out/tests/tests/integration/runIntegrationTests.js",
+    "test:integration:watch": "tsc -p ./tsconfig.integration.json -w",
     "lint": "eslint src --ext ts",
-    "format": "prettier --write \"src/**/*.ts\""
+    "lint:fix": "eslint src --ext ts --fix",
+    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "check": "npm run compile && npm run lint && npm run test:unit"
   },
   "categories": [
     "AI",
@@ -156,21 +164,6 @@
         }
       }
     }
-  },
-  "scripts": {
-    "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
-    "compile:integration": "tsc -p ./tsconfig.integration.json",
-    "watch": "tsc -watch -p ./",
-    "test": "jest --coverage",
-    "test:unit": "jest tests/unit",
-    "test:performance": "jest tests/performance --runInBand --verbose",
-    "test:integration": "npm run compile:integration && node out/tests/tests/integration/runIntegrationTests.js",
-    "test:integration:watch": "tsc -p ./tsconfig.integration.json -w",
-    "lint": "eslint src --ext ts",
-    "lint:fix": "eslint src --ext ts --fix",
-    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
-    "check": "npm run compile && npm run lint && npm run test:unit"
   },
   "devDependencies": {
     "@types/glob": "^8.1.0",

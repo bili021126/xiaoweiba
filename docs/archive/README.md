@@ -1,6 +1,6 @@
 # 文档归档说明
 
-**最后更新**: 2026-04-17  
+**最后更新**: 2026-04-18  
 **维护者**: 小尾巴团队
 
 ---
@@ -50,12 +50,20 @@ docs/
 ### 归档文档（仅供参考）
 
 | 文档 | 归档位置 | 原用途 | 替代文档 |
-|------|---------|--------|---------|
-| MEMORY_AS_BRAIN_ARCHITECTURE.md | `archive/2026-04-17/` | v4.0记忆大脑设计 | MEMORY_DRIVEN_ARCHITECTURE_DESIGN.md |
-| ARCHITECTURE_EVOLUTION.md | `archive/2026-04-17/` | v3.0架构演进 | MEMORY_DRIVEN_ARCHITECTURE_DESIGN.md |
-| HEXAGONAL_MICROKERNEL_EVENTBUS.md | `archive/2026-04-17/` | 六边形架构详细设计 | MEMORY_DRIVEN_ARCHITECTURE_DESIGN.md |
-| MEMORY_RETRIEVAL_IMPLEMENTATION.md | `archive/2026-04-17/` | 混合检索实施报告 | MEMORY_DRIVEN_ARCHITECTURE_DESIGN.md §5.2 |
-| INTENT_AWARE_RETRIEVAL.md | `archive/2026-04-17/` | 意图感知检索设计 | MEMORY_DRIVEN_ARCHITECTURE_DESIGN.md §5.3 |
+|------|---------|--------|----------|
+| CODE_REVIEW_DATA_IO_2026-04-18.md | `archive/2026-04-18/` | 数据读写安全深度评审 | PROGRESS.md §4, ISSUES.md |
+| BUGFIX_DUPLICATE_TASK_COMPLETED_2026-04-18.md | `archive/2026-04-18/` | TASK_COMPLETED重复发布修复 | PROGRESS.md §4 |
+| FEATURE_MEMORY_EXTERNALIZATION_2026-04-18.md | `archive/2026-04-18/` | 记忆外化功能实现 | PROGRESS.md §4 |
+| FIX_MEMORY_DATA_QUALITY_2026-04-18.md | `archive/2026-04-18/` | 记忆数据质量修复方案 | PROGRESS.md §4 |
+| CODE_REVIEW_REPORT_*.md | `archive/2026-04-18/` | 代码评审报告系列 | PROGRESS.md §4, ISSUES.md |
+| COMMANDS_DECOUPLING_PROGRESS.md | `archive/2026-04-18/` | Commands解耦进度 | PROGRESS.md §4 |
+| COMPREHENSIVE_CODE_REVIEW_2026-04-18.md | `archive/2026-04-18/` | 综合代码评审 | PROGRESS.md §4 |
+| TECHNICAL_DEBT_PAYDOWN_PROGRESS.md | `archive/2026-04-18/` | 技术债务偿还进度 | PROGRESS.md §4 |
+| MEMORY_AS_BRAIN_ARCHITECTURE.md | `archive/2026-04-17/` | v4.0记忆大脑设计 | MEMORY_DRIVEN_ARCHITECTURE.md |
+| ARCHITECTURE_EVOLUTION.md | `archive/2026-04-17/` | v3.0架构演进 | MEMORY_DRIVEN_ARCHITECTURE.md |
+| HEXAGONAL_MICROKERNEL_EVENTBUS.md | `archive/2026-04-17/` | 六边形架构详细设计 | MEMORY_DRIVEN_ARCHITECTURE.md |
+| MEMORY_RETRIEVAL_IMPLEMENTATION.md | `archive/2026-04-17/` | 混合检索实施报告 | MEMORY_DRIVEN_ARCHITECTURE.md §5.2 |
+| INTENT_AWARE_RETRIEVAL.md | `archive/2026-04-17/` | 意图感知检索设计 | MEMORY_DRIVEN_ARCHITECTURE.md §5.3 |
 
 ---
 
@@ -146,11 +154,11 @@ git commit -m "docs: 归档XXX文档到archive/YYYY-MM-DD/
 
 | 类别 | 数量 | 总行数 |
 |------|------|--------|
-| **主文档** | 5 | ~3,500行 |
-| **归档文档** | 6 | ~2,800行 |
-| **总计** | 11 | ~6,300行 |
+| **主文档** | 5 | ~4,000行 |
+| **归档文档** | 23 | ~8,500行 |
+| **总计** | 28 | ~12,500行 |
 
-**主文档占比**：55% （符合单一真理来源原则）
+**主文档占比**：32% （符合单一真理来源原则）
 
 ---
 
@@ -165,4 +173,4 @@ git commit -m "docs: 归档XXX文档到archive/YYYY-MM-DD/
 ---
 
 **维护者**: 小尾巴团队  
-**最后更新**: 2026-04-17
+**最后更新**: 2026-04-18

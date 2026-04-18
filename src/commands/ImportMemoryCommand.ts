@@ -226,16 +226,14 @@ export class ImportMemoryCommand extends BaseCommand {
         }
 
         // 插入记忆到数据库
-        let stmt: any = null;
         try {
           // ✅ 修复1 & 2：表名改为 episodic_memory，字段 duration_ms -> latency_ms
-          stmt = db.prepare(`
+          // ✅ 使用智能run()方法，自动持久化
+          this.databaseManager.run(`
             INSERT INTO episodic_memory 
             (task_type, summary, entities, outcome, model_id, latency_ms, timestamp, metadata)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-          `);
-
-          stmt.bind([
+          `, [
             memory.taskType,
             memory.summary,
             JSON.stringify(memory.entities || []),
@@ -246,22 +244,20 @@ export class ImportMemoryCommand extends BaseCommand {
             JSON.stringify(memory.metadata || {})
           ]);
           
-          stmt.step();
           result.successCount++;
-        } finally {
-          if (stmt) {
-            try {
-              stmt.free();
-            } catch (e) {
-              // 忽略free错误
-            }
-          }
+        } catch (error) {
+          result.errorCount++;
+          result.errors.push({
+            index: i,
+            error: (error as Error).message
+          });
         }
-      } catch (error) {
+      } catch (outerError) {
+        // 外层try的catch（处理validateMemoryRecord等异常）
         result.errorCount++;
         result.errors.push({
           index: i,
-          error: (error as Error).message
+          error: (outerError as Error).message
         });
       }
     }
