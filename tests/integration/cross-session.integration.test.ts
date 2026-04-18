@@ -60,7 +60,7 @@ describe('跨会话记忆集成', () => {
       expect.objectContaining({
         summary: expect.stringContaining('TypeScript类型系统'),
         entities: expect.arrayContaining(['TypeScript', 'interface', 'type']),
-        taskType: 'CHAT'
+        taskType: 'CHAT_COMMAND'
       })
     );
   });
