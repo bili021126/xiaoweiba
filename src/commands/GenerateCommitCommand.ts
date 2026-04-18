@@ -18,15 +18,16 @@ import { AuditLogger } from '../core/security/AuditLogger';
 import { getUserFriendlyMessage } from '../utils/ErrorCodes';
 import { EventBus, CoreEventType } from '../core/eventbus/EventBus';
 import { EpisodicMemoryRecord } from '../core/memory/types';
+import { BaseCommand, CommandInput, CommandResult } from '../core/memory/BaseCommand';
+import { MemorySystem, MemoryContext } from '../core/memory/MemorySystem';
 
 const execAsync = promisify(exec);
 
-export class GenerateCommitCommandV2 {
+export class GenerateCommitCommandV2 extends BaseCommand {
   private auditLogger: AuditLogger;
   private episodicMemory: EpisodicMemory;
   private commitStyleLearner: CommitStyleLearner;
   private llmTool: LLMTool;
-  private eventBus: EventBus;
 
   // 配置常量
   private readonly MAX_FILES_TO_SEARCH = 5;
@@ -37,15 +38,17 @@ export class GenerateCommitCommandV2 {
   private readonly LLM_MAX_TOKENS = 500;
 
   constructor(
+    memorySystem: MemorySystem,
+    eventBus: EventBus,
     episodicMemory?: EpisodicMemory,
     llmTool?: LLMTool,
     commitStyleLearner?: CommitStyleLearner
   ) {
+    super(memorySystem, eventBus, 'generateCommit');
     this.auditLogger = container.resolve(AuditLogger);
     this.episodicMemory = episodicMemory || container.resolve(EpisodicMemory);
     this.llmTool = llmTool || container.resolve(LLMTool);
     this.commitStyleLearner = commitStyleLearner || container.resolve(CommitStyleLearner);
-    this.eventBus = container.resolve(EventBus);
   }
 
   /**

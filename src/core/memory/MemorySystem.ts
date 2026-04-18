@@ -179,7 +179,7 @@ export class MemorySystem {
    * @param input 输入参数
    * @returns 记忆上下文
    */
-  private async retrieveRelevant(actionId: string, input: any): Promise<MemoryContext> {
+  public async retrieveRelevant(actionId: string, input: any): Promise<MemoryContext> {
     const startTime = Date.now();
     const context: MemoryContext = {};
     

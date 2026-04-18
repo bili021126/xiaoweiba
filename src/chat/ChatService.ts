@@ -9,6 +9,7 @@ import { ConfigManager } from '../storage/ConfigManager';
 import { AuditLogger } from '../core/security/AuditLogger';
 import { DialogManager, InteractionMode } from './DialogManager';
 import { InteractionModeSelector } from './InteractionModeSelector';
+import { MemorySystem } from '../core/memory/MemorySystem';
 import * as vscode from 'vscode';
 
 /**
@@ -30,7 +31,8 @@ export class ChatService {
     private episodicMemory: EpisodicMemory,
     private preferenceMemory: PreferenceMemory,
     private configManager: ConfigManager,
-    private auditLogger: AuditLogger
+    private auditLogger: AuditLogger,
+    private memorySystem: MemorySystem  // 新增参数
   ) {
     // 依赖注入子模块
     this.sessionManager = new SessionManager(context, episodicMemory, llmTool);
@@ -261,36 +263,41 @@ export class ChatService {
   }
 
   /**
-   * 执行聊天中的命令（从 ChatViewProvider 迁移）
+   * 执行聊天中的命令（改为调用 MemorySystem.executeAction）
    */
   private async executeCommandFromChat(command: string, context?: string): Promise<void> {
     const startTime = Date.now();
     console.log(`[ChatService] Executing command from chat: ${command}`);
     
-    try {
-      // 根据命令类型执行对应操作
-      switch (command) {
-        case 'explainCode':
-          await vscode.commands.executeCommand('xiaoweiba.explainCode');
-          break;
-        case 'generateCommit':
-          await vscode.commands.executeCommand('xiaoweiba.generateCommit');
-          break;
-        case 'checkNaming':
-          await vscode.commands.executeCommand('xiaoweiba.checkNaming');
-          break;
-        case 'generateCode':
-          await vscode.commands.executeCommand('xiaoweiba.generateCode');
-          break;
-        default:
-          vscode.window.showWarningMessage(`⚠️ 未知命令: ${command}`);
-          return;
-      }
+    // 命令到 actionId 的映射
+    const commandToActionMap: Record<string, string> = {
+      'explainCode': 'explainCode',
+      'generateCommit': 'generateCommit',
+      'checkNaming': 'checkNaming',
+      'generateCode': 'generateCode',
+    };
 
-      // 记录审计日志
+    const actionId = commandToActionMap[command];
+    if (!actionId) {
+      vscode.window.showWarningMessage(`⚠️ 未知命令: ${command}`);
+      return;
+    }
+
+    try {
+      const editor = vscode.window.activeTextEditor;
+      const input = {
+        userInput: context,
+        selectedCode: editor?.document.getText(editor.selection),
+        filePath: editor?.document.uri.fsPath,
+        language: editor?.document.languageId
+      };
+
+      // 统一通过 MemorySystem 调度
+      await this.memorySystem.executeAction(actionId, input);
+
       const durationMs = Date.now() - startTime;
       await this.auditLogger.log('chat_command', 'success', durationMs, {
-        parameters: { command, contextLength: context?.length || 0 }
+        parameters: { command, actionId, contextLength: context?.length || 0 }
       });
 
       console.log(`[ChatService] Command ${command} executed successfully`);

@@ -7,8 +7,8 @@ import { getUserFriendlyMessage } from '../utils/ErrorCodes';
 import { LLMResponseCache } from '../core/cache/LLMResponseCache';
 import { generateCompleteStyles } from '../ui/styles';
 import { generateCard, generateCodeBlock, generateBadge, generateWebviewTemplate } from '../ui/components';
-import { BaseCommand } from '../core/memory/BaseCommand';
-import { MemoryContext } from '../core/memory/MemorySystem';
+import { BaseCommand, CommandInput, CommandResult } from '../core/memory/BaseCommand';
+import { MemorySystem, MemoryContext } from '../core/memory/MemorySystem';
 import { EventBus, CoreEventType } from '../core/eventbus/EventBus';
 
 /**
@@ -19,23 +19,32 @@ export class ExplainCodeCommand extends BaseCommand {
   private preferenceMemory: PreferenceMemory;
   private llmTool: LLMTool;
   private cache: LLMResponseCache;
-  private eventBus: EventBus;
 
-  constructor(llmTool?: LLMTool) {
-    super();
+  constructor(
+    memorySystem?: any,
+    eventBus?: EventBus,
+    llmTool?: LLMTool
+  ) {
+    // 支持两种调用方式：向后兼容
+    if (memorySystem && eventBus) {
+      super(memorySystem, eventBus, 'explainCode');
+    } else {
+      // 旧版调用：需要手动设置commandId
+      super(container.resolve(MemorySystem), container.resolve(EventBus), 'explainCode');
+    }
+    
     console.log('[ExplainCodeCommand] Constructor called');
     
     this.auditLogger = container.resolve(AuditLogger);
     this.preferenceMemory = container.resolve(PreferenceMemory);
     this.llmTool = llmTool || container.resolve(LLMTool);
     this.cache = new LLMResponseCache();
-    this.eventBus = container.resolve(EventBus);
   }
 
   /**
    * 核心执行逻辑（由 MemorySystem 调用）
    */
-  protected async executeCore(input: any, context: MemoryContext): Promise<any> {
+  protected async executeCore(input: CommandInput, context: MemoryContext): Promise<CommandResult> {
     const startTime = Date.now();
     
     try {
