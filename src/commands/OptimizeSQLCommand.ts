@@ -9,20 +9,46 @@ import { container } from 'tsyringe';
 import { LLMTool } from '../tools/LLMTool';
 import { AuditLogger } from '../core/security/AuditLogger';
 import { getUserFriendlyMessage } from '../utils/ErrorCodes';
+import { BaseCommand, CommandInput, CommandResult } from '../core/memory/BaseCommand';
+import { MemorySystem, MemoryContext } from '../core/memory/MemorySystem';
+import { EventBus } from '../core/eventbus/EventBus';
 
-export class OptimizeSQLCommand {
+export class OptimizeSQLCommand extends BaseCommand {
   private llmTool: LLMTool;
   private auditLogger: AuditLogger;
 
-  constructor(llmTool?: LLMTool) {
+  constructor(
+    memorySystem: MemorySystem,
+    eventBus: EventBus,
+    llmTool?: LLMTool
+  ) {
+    super(memorySystem, eventBus, 'optimizeSQL');
     this.llmTool = llmTool || container.resolve(LLMTool);
     this.auditLogger = container.resolve(AuditLogger);
   }
 
   /**
-   * 执行SQL优化命令
+   * 执行SQL优化命令（包装层）
    */
-  async execute(): Promise<void> {
+  async execute(input: CommandInput): Promise<CommandResult> {
+    try {
+      await this.executeLegacy();
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  }
+
+  protected async executeCore(input: CommandInput, context: MemoryContext): Promise<CommandResult> {
+    // 此方法由 BaseCommand.execute 调用，但当前使用 executeLegacy 包装层
+    // TODO: 未来可重构为真正的 executeCore 实现
+    return { success: true };
+  }
+
+  private async executeLegacy(): Promise<void> {
     const startTime = Date.now();
     
     try {

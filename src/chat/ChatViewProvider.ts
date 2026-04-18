@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { container } from 'tsyringe';
 import { SessionManager, ChatMessage } from './SessionManager';
 import { ContextBuilder } from './ContextBuilder';
 import { PromptEngine } from './PromptEngine';
@@ -547,7 +548,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
    * 订阅主动推荐事件
    */
   private subscribeToRecommendations(): void {
-    const eventBus = new EventBus();
+    // 使用全局单例EventBus，而非创建新实例
+    const eventBus = container.resolve(EventBus);
     
     eventBus.subscribe(CoreEventType.MEMORY_RECOMMEND, (payload) => {
       console.log('[ChatViewProvider] Received MEMORY_RECOMMEND event:', payload);

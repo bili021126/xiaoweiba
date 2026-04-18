@@ -315,9 +315,67 @@ export class MemorySystem {
           memoryId,
           taskType: 'CODE_EXPLAIN'
         }, { source: 'MemorySystem' });
+      } else if (actionId === 'generateCommit') {
+        console.log('[MemorySystem] Recording GENERATE_COMMIT memory...');
+        const memoryId = await this.episodicMemory.record({
+          taskType: 'CHAT_COMMAND',
+          summary: `Generated commit message`,
+          entities: [],
+          outcome: result?.success ? 'SUCCESS' : 'FAILED',
+          modelId: result?.modelId || 'deepseek',
+          durationMs
+        });
+        
+        this.eventBus.publish(CoreEventType.MEMORY_RECORDED, {
+          memoryId,
+          taskType: 'CHAT_COMMAND'
+        }, { source: 'MemorySystem' });
+      } else if (actionId === 'checkNaming') {
+        console.log('[MemorySystem] Recording CHECK_NAMING memory...');
+        const memoryId = await this.episodicMemory.record({
+          taskType: 'CHAT_COMMAND',
+          summary: `Checked naming convention`,
+          entities: [],
+          outcome: result?.success ? 'SUCCESS' : 'FAILED',
+          modelId: result?.modelId || 'deepseek',
+          durationMs
+        });
+        
+        this.eventBus.publish(CoreEventType.MEMORY_RECORDED, {
+          memoryId,
+          taskType: 'CHAT_COMMAND'
+        }, { source: 'MemorySystem' });
+      } else if (actionId === 'generateCode') {
+        console.log('[MemorySystem] Recording GENERATE_CODE memory...');
+        const memoryId = await this.episodicMemory.record({
+          taskType: 'CHAT_COMMAND',
+          summary: `Generated code`,
+          entities: [],
+          outcome: result?.success ? 'SUCCESS' : 'FAILED',
+          modelId: result?.modelId || 'deepseek',
+          durationMs
+        });
+        
+        this.eventBus.publish(CoreEventType.MEMORY_RECORDED, {
+          memoryId,
+          taskType: 'CHAT_COMMAND'
+        }, { source: 'MemorySystem' });
+      } else if (actionId === 'optimizeSQL') {
+        console.log('[MemorySystem] Recording OPTIMIZE_SQL memory...');
+        const memoryId = await this.episodicMemory.record({
+          taskType: 'CHAT_COMMAND',
+          summary: `Optimized SQL query`,
+          entities: [],
+          outcome: result?.success ? 'SUCCESS' : 'FAILED',
+          modelId: result?.modelId || 'deepseek',
+          durationMs
+        });
+        
+        this.eventBus.publish(CoreEventType.MEMORY_RECORDED, {
+          memoryId,
+          taskType: 'CHAT_COMMAND'
+        }, { source: 'MemorySystem' });
       }
-      
-      // TODO: 其他动作类型的记录逻辑
       
     } catch (error) {
       console.error('[MemorySystem] Failed to record action completion:', error);

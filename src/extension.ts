@@ -256,26 +256,35 @@ async function initializeContainer(context: vscode.ExtensionContext): Promise<vo
  */
 function registerCommands(context: vscode.ExtensionContext): void {
   // 阶段 1 核心命令（通过 MemorySystem 统一调度）
-  const explainCodeHandler = new ExplainCodeCommand(llmTool);
+  const commitStyleLearner = container.resolve(CommitStyleLearner);
   
-  // TODO: 以下命令待改造为 BaseCommand
-  // const commitStyleLearner = container.resolve(CommitStyleLearner);
-  // const generateCommitHandler = new GenerateCommitCommand(llmTool, commitStyleLearner);
-  // const exportMemoryHandler = new ExportMemoryCommand();
-  // const importMemoryHandler = new ImportMemoryCommand();
-  // const configureApiKeyHandler = new ConfigureApiKeyCommand();
-  // const checkNamingHandler = new CheckNamingCommand(llmTool);
-  // const codeGenerationHandler = new CodeGenerationCommand(llmTool);
+  // 创建所有 Command 实例
+  const explainCodeHandler = new ExplainCodeCommand(memorySystem, eventBus, llmTool);
+  const generateCommitHandler = new GenerateCommitCommand(memorySystem, eventBus, undefined, llmTool, commitStyleLearner);
+  const checkNamingHandler = new CheckNamingCommand(memorySystem, eventBus, llmTool);
+  const codeGenerationHandler = new CodeGenerationCommand(memorySystem, eventBus, llmTool);
+  const optimizeSQLHandler = new OptimizeSQLCommand(memorySystem, eventBus, llmTool);
   
   // 注册动作到 MemorySystem
   memorySystem.registerAction('explainCode', async (input, context) => {
-    return await explainCodeHandler.execute(input, context);
+    return await explainCodeHandler.execute(input);
   }, '代码解释');
   
-  // TODO: 注册其他动作
-  // memorySystem.registerAction('generateCommit', async (input, context) => {
-  //   return await generateCommitHandler.execute(input, context);
-  // }, '生成提交信息');
+  memorySystem.registerAction('generateCommit', async (input, context) => {
+    return await generateCommitHandler.execute(input);
+  }, '生成提交信息');
+  
+  memorySystem.registerAction('checkNaming', async (input, context) => {
+    return await checkNamingHandler.execute(input);
+  }, '命名检查');
+  
+  memorySystem.registerAction('generateCode', async (input, context) => {
+    return await codeGenerationHandler.execute(input);
+  }, '代码生成');
+  
+  memorySystem.registerAction('optimizeSQL', async (input, context) => {
+    return await optimizeSQLHandler.execute(input);
+  }, 'SQL优化');
   
   // 注册 VS Code 命令（作为入口，调用 MemorySystem）
   const explainCodeCmd = vscode.commands.registerCommand(
@@ -396,8 +405,12 @@ function registerCommands(context: vscode.ExtensionContext): void {
   const optimizeSQLCmd = vscode.commands.registerCommand(
     'xiaoweiba.optimizeSQL',
     async () => {
-      const handler = new OptimizeSQLCommand(llmTool);
-      await handler.execute();
+      const editor = vscode.window.activeTextEditor;
+      await memorySystem.executeAction('optimizeSQL', {
+        selectedCode: editor?.document.getText(editor.selection),
+        filePath: editor?.document.uri.fsPath,
+        language: editor?.document.languageId
+      });
     }
   );
 
