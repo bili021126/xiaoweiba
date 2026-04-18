@@ -55,6 +55,7 @@ import { ImportMemoryCommand } from './commands/ImportMemoryCommand';
 import { ConfigureApiKeyCommand } from './commands/ConfigureApiKeyCommand';
 import { CheckNamingCommand } from './commands/CheckNamingCommand';
 import { CodeGenerationCommand } from './commands/CodeGenerationCommand';
+import { OptimizeSQLCommand } from './commands/OptimizeSQLCommand';
 import { EpisodicMemory } from './core/memory/EpisodicMemory';
 import { PreferenceMemory } from './core/memory/PreferenceMemory';
 import { MemorySystem } from './core/memory/MemorySystem';
@@ -395,8 +396,8 @@ function registerCommands(context: vscode.ExtensionContext): void {
   const optimizeSQLCmd = vscode.commands.registerCommand(
     'xiaoweiba.optimizeSQL',
     async () => {
-      vscode.window.showInformationMessage('SQL 优化功能开发中...');
-      await auditLogger.log('optimize_sql', 'success', 0);
+      const handler = new OptimizeSQLCommand(llmTool);
+      await handler.execute();
     }
   );
 

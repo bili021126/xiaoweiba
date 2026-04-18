@@ -12,6 +12,7 @@ import { getUserFriendlyMessage } from '../utils/ErrorCodes';
 import { LLMResponseCache } from '../core/cache/LLMResponseCache';
 import { EventBus, CoreEventType } from '../core/eventbus/EventBus';
 import { BestPracticeLibrary } from '../core/knowledge/BestPracticeLibrary';
+import { DiffService } from '../tools/DiffService';
 
 export class CodeGenerationCommand {
   private auditLogger: AuditLogger;
@@ -290,11 +291,32 @@ export class CodeGenerationCommand {
   }
 
   /**
-   * 在光标位置插入代码
+   * 在光标位置插入代码（带Diff确认）
    */
   private async insertCodeAtCursor(editor: vscode.TextEditor, code: string): Promise<void> {
     const position = editor.selection.active;
     
+    // 获取当前位置的原始内容（前后各50字符作为上下文）
+    const document = editor.document;
+    const startLine = Math.max(0, position.line - 2);
+    const endLine = Math.min(document.lineCount - 1, position.line + 2);
+    const range = new vscode.Range(startLine, 0, endLine, document.lineAt(endLine).text.length);
+    const originalContext = document.getText(range);
+    
+    // 显示Diff确认对话框
+    const diffService = new DiffService();
+    const confirmed = await diffService.confirmChangeWithWebview(
+      originalContext,
+      code,
+      document.fileName
+    );
+    
+    if (!confirmed) {
+      vscode.window.showInformationMessage('⚠️ 已取消代码插入');
+      return;
+    }
+    
+    // 用户确认后插入代码
     const success = await editor.edit(editBuilder => {
       editBuilder.insert(position, code + '\n');
     });
