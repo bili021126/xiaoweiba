@@ -240,26 +240,36 @@ export class ImportMemoryCommand extends BaseCommand {
         }
 
         // 插入记忆到数据库
-        const stmt = db.prepare(`
-          INSERT INTO episodic_memories 
-          (task_type, summary, entities, outcome, model_id, duration_ms, timestamp, metadata)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `);
+        let stmt: any = null;
+        try {
+          stmt = db.prepare(`
+            INSERT INTO episodic_memories 
+            (task_type, summary, entities, outcome, model_id, duration_ms, timestamp, metadata)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          `);
 
-        stmt.bind([
-          memory.taskType,
-          memory.summary,
-          JSON.stringify(memory.entities || []),
-          memory.outcome,
-          memory.modelId || 'unknown',
-          memory.durationMs || 0,
-          memory.timestamp || Date.now(),
-          JSON.stringify(memory.metadata || {})
-        ]);
-        
-        stmt.step();
-        stmt.free();
-        result.successCount++;
+          stmt.bind([
+            memory.taskType,
+            memory.summary,
+            JSON.stringify(memory.entities || []),
+            memory.outcome,
+            memory.modelId || 'unknown',
+            memory.durationMs || 0,
+            memory.timestamp || Date.now(),
+            JSON.stringify(memory.metadata || {})
+          ]);
+          
+          stmt.step();
+          result.successCount++;
+        } finally {
+          if (stmt) {
+            try {
+              stmt.free();
+            } catch (e) {
+              // 忽略free错误
+            }
+          }
+        }
       } catch (error) {
         result.errorCount++;
         result.errors.push({
@@ -315,21 +325,21 @@ export class ImportMemoryCommand extends BaseCommand {
    * 检查记忆是否已存在
    */
   private async checkMemoryExists(db: any, memory: any): Promise<boolean> {
+    let stmt: any = null;
     try {
       // 优先通过ID检查
       if (memory.id) {
-        const stmt = db.prepare('SELECT COUNT(*) as count FROM episodic_memories WHERE id = ?');
+        stmt = db.prepare('SELECT COUNT(*) as count FROM episodic_memories WHERE id = ?');
         stmt.bind([memory.id]);
         if (stmt.step()) {
           const row = stmt.getAsObject();
-          stmt.free();
           return row.count > 0;
         }
-        stmt.free();
+        return false;
       }
 
       // 其次通过摘要和时间范围搜索相似记忆
-      const stmt = db.prepare(`
+      stmt = db.prepare(`
         SELECT COUNT(*) as count FROM episodic_memories 
         WHERE summary = ? AND task_type = ? AND ABS(timestamp - ?) < 2000
       `);
@@ -337,15 +347,22 @@ export class ImportMemoryCommand extends BaseCommand {
       
       if (stmt.step()) {
         const row = stmt.getAsObject();
-        stmt.free();
         return row.count > 0;
       }
       
-      stmt.free();
       return false;
     } catch (error) {
       console.warn('[ImportMemoryCommand] checkMemoryExists failed:', error);
       return false;
+    } finally {
+      // 确保stmt被释放
+      if (stmt) {
+        try {
+          stmt.free();
+        } catch (e) {
+          // 忽略free错误
+        }
+      }
     }
   }
 

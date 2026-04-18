@@ -33,7 +33,6 @@ interface ExportedMemoryData {
  * 记忆导出命令处理器
  */
 export class ExportMemoryCommand extends BaseCommand {
-  private episodicMemory: EpisodicMemory;
   private databaseManager: DatabaseManager;
   private auditLogger: AuditLogger;
 
@@ -42,7 +41,6 @@ export class ExportMemoryCommand extends BaseCommand {
     eventBus: EventBus
   ) {
     super(memorySystem, eventBus, 'exportMemory');
-    this.episodicMemory = container.resolve(EpisodicMemory);
     this.databaseManager = container.resolve(DatabaseManager);
     this.auditLogger = container.resolve(AuditLogger);
   }
@@ -158,14 +156,12 @@ export class ExportMemoryCommand extends BaseCommand {
    * 检索所有记忆
    */
   private async retrieveAllMemories(): Promise<any[]> {
-    try {
-      // 直接使用episodicMemory.getAll()获取所有记忆
-      const db = this.databaseManager.getDatabase();
-      if (!db) {
-        console.warn('[ExportMemoryCommand] Database not initialized');
-        return [];
-      }
+    const db = this.databaseManager.getDatabase();
+    if (!db) {
+      throw new Error('数据库未初始化，无法导出记忆');
+    }
 
+    try {
       // 查询所有情景记忆
       const stmt = db.prepare('SELECT * FROM episodic_memories ORDER BY timestamp DESC');
       const rows: any[] = [];
