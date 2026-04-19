@@ -21,7 +21,7 @@
 - [**MEMORY_DRIVEN_ARCHITECTURE.md**](MEMORY_DRIVEN_ARCHITECTURE.md) - 记忆驱动架构详细设计（75KB）
 
 ### 实现与进度
-- [**PROGRESS.md**](PROGRESS.md) ⭐ - **项目进度跟踪**（实时更新）
+- [**PROGRESS.md**](PROGRESS.md) ⭐ - **项目进度跟踪**（实时更新，含Phase 3完成记录）
 - [**COMMANDS_DECOUPLING_PROGRESS.md**](COMMANDS_DECOUPLING_PROGRESS.md) - Commands EventBus解耦报告
 
 ### 测试与质量
@@ -59,6 +59,18 @@
 
 ## 📋 文档合并说明
 
+### 已归档的文档（2026-04-19 - Phase 2完成 + Phase 4评审）
+以下Phase 2相关文档已归档到 `archive/2026-04-19/`：
+
+| 原文档 | 状态 | 说明 |
+|--------|------|------|
+| phase*.md (8个) | ✅ 已归档 | Phase 2各阶段完成总结 |
+| AGENT_ARCHITECTURE_PLAN.md | ✅ 已归档 | Agent架构设计计划 |
+| GIT_INTELLIGENCE_ENHANCEMENT_PLAN.md | ✅ 已归档 | Git智能增强计划 |
+| LOOSE_COUPLING_REFACTORING_PLAN.md | ✅ 已归档 | 松耦合重构计划 |
+| implementation-vs-design-comparison.md | ✅ 已归档 | 实现与设计对比 |
+| CODE_REVIEW_DEEP_PHASE4.md | ✅ 已归档 | Phase 4深度代码评审报告（693行） |
+
 ### 已归档的文档（2026-04-18）
 以下历史报告已归档到 `archive/2026-04-18/`：
 
@@ -71,10 +83,18 @@
 | MANUAL-TESTING.md (重复) | ✅ 已归档 |
 | MEMORY_DRIVEN_ARCHITECTURE_DESIGN.md (旧版) | ✅ 已归档 |
 
+### 已归档的文档（2026-04-14 - Phase 3）
+以下Phase 3相关文档已归档到 `archive/2026-04-14/`：
+
+| 原文档 | 状态 | 说明 |
+|--------|------|------|
+| CODE_REVIEW_DEEP_PHASE3.md | ✅ 已归档 | 深度代码评审报告（450行） |
+
 ### 保留的核心文档
 以下文档保留在docs根目录作为主要参考：
 
-- [PROGRESS.md](PROGRESS.md) - 项目进度跟踪（实时更新）
+- [PROGRESS.md](PROGRESS.md) - 项目进度跟踪（实时更新，含Phase 3总结）
+- [PHASE3_COMPLETION_SUMMARY.md](PHASE3_COMPLETION_SUMMARY.md) - Phase 3完成总结（322行）
 - [ISSUES.md](ISSUES.md) - 问题记录与修复
 - [COMMANDS_DECOUPLING_PROGRESS.md](COMMANDS_DECOUPLING_PROGRESS.md) - Commands解耦报告
 - [MEMORY_DRIVEN_ARCHITECTURE.md](MEMORY_DRIVEN_ARCHITECTURE.md) - 架构设计主文档
@@ -146,5 +166,5 @@
 
 ---
 
-**最后更新**: 2026-04-18（Commands EventBus解耦完成）  
+**最后更新**: 2026-04-14（Phase 3完成 - 代码清理与质量提升）  
 **维护者**: 小尾巴团队

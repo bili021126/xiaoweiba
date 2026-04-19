@@ -1,0 +1,204 @@
+/**
+ * 提交信息生成Agent - GenerateCommitCommand的Agent化版本
+ * 
+ * 职责：
+ * 1. 接收generate_commit意图
+ * 2. 获取Git diff
+ * 3. 调用LLM生成提交信息
+ * 4. 应用到Git仓库
+ */
+
+import { injectable, inject } from 'tsyringe';
+import * as vscode from 'vscode';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import { IAgent, AgentResult } from '../core/agent/IAgent';
+import { Intent } from '../core/domain/Intent';
+import { MemoryContext } from '../core/domain/MemoryContext';
+import { ILLMPort } from '../core/ports/ILLMPort';
+import { IMemoryPort } from '../core/ports/IMemoryPort';
+
+const execAsync = promisify(exec);
+
+@injectable()
+export class GenerateCommitAgent implements IAgent {
+  readonly id = 'generate-commit-agent';
+  readonly name = '提交信息生成助手';
+  readonly supportedIntents = ['generate_commit'];
+
+  constructor(
+    @inject('ILLMPort') private llmPort: ILLMPort,
+    @inject('IMemoryPort') private memoryPort: IMemoryPort
+  ) {}
+
+  /**
+   * 执行提交信息生成
+   */
+  async execute(params: {
+    intent: Intent;
+    memoryContext: MemoryContext;
+  }): Promise<AgentResult> {
+    const startTime = Date.now();
+    const { intent, memoryContext } = params;
+
+    try {
+      // 1. 检查工作区
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+      if (!workspaceFolders || workspaceFolders.length === 0) {
+        vscode.window.showWarningMessage('请先打开一个工作区');
+        return { success: false, error: 'No workspace', durationMs: Date.now() - startTime };
+      }
+
+      const workspacePath = workspaceFolders[0].uri.fsPath;
+
+      // 2. 获取 Git diff
+      await vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: '🚀 智能生成提交信息',
+        cancellable: false
+      }, async (progress) => {
+        progress.report({ message: '📊 分析代码变更...', increment: 10 });
+
+        const diff = await this.getGitDiff(workspacePath);
+        
+        if (!diff || diff.trim().length === 0) {
+          vscode.window.showInformationMessage('✅ 没有检测到代码变更');
+          return;
+        }
+
+        progress.report({ message: '🧠 检索历史记忆...', increment: 20 });
+
+        // 3. 调用 LLM 生成提交信息（注入记忆上下文）
+        const commitMessage = await this.generateCommitMessage(diff, memoryContext);
+        
+        progress.report({ message: '✨ 应用提交信息...', increment: 80 });
+
+        // 4. 应用提交信息
+        await this.applyCommitMessage(workspacePath, commitMessage);
+
+        progress.report({ message: '✅ 完成', increment: 100 });
+
+        vscode.window.showInformationMessage(`✅ 提交信息已生成并应用:\n${commitMessage}`);
+      });
+
+      const durationMs = Date.now() - startTime;
+
+      return { 
+        success: true, 
+        durationMs,
+        data: {
+          commitMessage: 'Generated and applied',
+          workspacePath
+        },
+        modelId: this.llmPort.getModelId()
+      };
+
+    } catch (error) {
+      const durationMs = Date.now() - startTime;
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      vscode.window.showErrorMessage(`生成提交信息失败: ${errorMessage}`);
+      
+      return { success: false, error: errorMessage, durationMs };
+    }
+  }
+
+  /**
+   * 检查Agent是否可用
+   */
+  async isAvailable(): Promise<boolean> {
+    return await this.llmPort.isAvailable();
+  }
+
+  /**
+   * 获取Agent能力
+   */
+  getCapabilities() {
+    return [
+      {
+        name: 'generate_commit',
+        description: '根据Git diff智能生成提交信息',
+        priority: 10
+      }
+    ];
+  }
+
+  /**
+   * 获取 Git diff
+   */
+  private async getGitDiff(workspacePath: string): Promise<string> {
+    try {
+      const { stdout } = await execAsync('git diff --cached', { 
+        cwd: workspacePath,
+        maxBuffer: 1024 * 1024 // 1MB
+      });
+      return stdout;
+    } catch (error) {
+      console.error('[GenerateCommitAgent] Failed to get git diff:', error);
+      return '';
+    }
+  }
+
+  /**
+   * 生成提交信息
+   */
+  private async generateCommitMessage(diff: string, context: MemoryContext): Promise<string> {
+    // 添加相关记忆到Prompt
+    let memoryHint = '';
+    if (context.episodicMemories && context.episodicMemories.length > 0) {
+      memoryHint = '\n\n历史提交风格参考：\n';
+      context.episodicMemories.slice(0, 3).forEach((mem, index) => {
+        memoryHint += `${index + 1}. ${mem.summary}\n`;
+      });
+    }
+
+    const prompt = `请为以下Git变更生成简洁的提交信息（Conventional Commits格式）：
+
+\`\`\`diff
+${diff.substring(0, 8000)}
+\`\`\`
+
+要求：
+1. 使用中文
+2. 格式：<type>: <description>
+3. type可选：feat/fix/docs/style/refactor/test/chore
+4. 不超过50个字${memoryHint}
+
+只返回提交信息本身，不要其他解释。`;
+
+    const result = await this.llmPort.call({
+      messages: [
+        { role: 'system', content: '你是一位经验丰富的Git专家，擅长编写规范的提交信息。' },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.3,
+      maxTokens: 200
+    });
+
+    if (!result.success || !result.text) {
+      throw new Error(result.error || 'LLM 调用失败');
+    }
+
+    return result.text.trim();
+  }
+
+  /**
+   * 应用提交信息
+   */
+  private async applyCommitMessage(workspacePath: string, message: string): Promise<void> {
+    try {
+      await execAsync(`git commit -m "${message.replace(/"/g, '\\"')}"`, { 
+        cwd: workspacePath 
+      });
+    } catch (error) {
+      console.error('[GenerateCommitAgent] Failed to apply commit:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 清理资源
+   */
+  async dispose(): Promise<void> {
+    console.log('[GenerateCommitAgent] Disposed');
+  }
+}

@@ -26,7 +26,10 @@ describe('模块协同测试 - 依赖注入验证', () => {
       const mockDbManager = {
         getDatabase: jest.fn(),
         initialize: jest.fn(),
-        close: jest.fn()
+        close: jest.fn(),
+        run: jest.fn(),
+        exec: jest.fn(),
+        transaction: jest.fn((fn) => fn())
       } as any;
       
       const mockAuditLogger = {
@@ -69,7 +72,8 @@ describe('模块协同测试 - 依赖注入验证', () => {
       
       const mockDbManager = {
         getDatabase: jest.fn().mockReturnValue(mockDb),
-        transaction: jest.fn((fn) => fn())
+        transaction: jest.fn((fn) => fn()),
+        run: jest.fn()  // ✅ 添加run方法
       } as any;
       
       const mockAuditLogger = {
@@ -106,7 +110,7 @@ describe('模块协同测试 - 依赖注入验证', () => {
 
       // Assert - 验证调用了数据库操作
       expect(mockDbManager.getDatabase).toHaveBeenCalled();
-      expect(mockDb.run).toHaveBeenCalled();
+      expect(mockDbManager.run).toHaveBeenCalled();  // ✅ EpisodicMemory调用dbManager.run()
     });
   });
 
@@ -121,7 +125,8 @@ describe('模块协同测试 - 依赖注入验证', () => {
       
       const mockDbManager = {
         getDatabase: jest.fn().mockReturnValue(mockDb),
-        transaction: jest.fn((fn) => fn())
+        transaction: jest.fn((fn) => fn()),
+        run: jest.fn()  // ✅ 添加run方法
       } as any;
       
       const mockAuditLogger = {

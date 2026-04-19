@@ -106,8 +106,14 @@ export class DatabaseManager {
       // 创建索引
       this.createIndexes();
 
-      // 保存数据库
-      this.saveDatabase();
+      // ✅ 保存数据库（失败时不阻断初始化，稍后重试）
+      try {
+        this.saveDatabase();
+      } catch (saveError) {
+        console.warn('[DatabaseManager] Initial save failed, will retry on next write:', 
+          saveError instanceof Error ? saveError.message : String(saveError));
+        // 不抛出异常，允许插件继续激活
+      }
 
       console.log('[DatabaseManager] Database initialized successfully at:', this.dbPath);
     } catch (error) {
@@ -140,13 +146,62 @@ export class DatabaseManager {
   }
 
   /**
-   * 保存数据库到磁盘
+   * ✅ 保存数据库到磁盘（带降级策略）
+   * - 优先使用原子重命名（安全）
+   * - 失败后降级为直接覆盖写入（兼容性更好）
    */
   private saveDatabase(): void {
-    if (this.db) {
-      const data = this.db.export();
-      const buffer = Buffer.from(data);
-      fs.writeFileSync(this.dbPath, buffer);
+    if (!this.db) return;
+
+    const data = this.db.export();
+    const buffer = Buffer.from(data);
+    const tempPath = this.dbPath + '.tmp';
+
+    // 1. 写入临时文件
+    try {
+      fs.writeFileSync(tempPath, buffer);
+    } catch (error) {
+      console.error('[DatabaseManager] Failed to write temp file:', error);
+      throw error;
+    }
+
+    // 2. 尝试原子重命名（最多重试3次）
+    const maxRetries = 3;
+    let renameSuccess = false;
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        fs.renameSync(tempPath, this.dbPath);
+        renameSuccess = true;
+        break;
+      } catch (error) {
+        console.warn(`[DatabaseManager] Rename attempt ${i + 1} failed:`, error instanceof Error ? error.message : String(error));
+        if (i < maxRetries - 1) {
+          // 等待100ms后重试（忙等待，避免Atomics兼容性问题）
+          const end = Date.now() + 100;
+          while (Date.now() < end) { /* 忙等待 */ }
+        }
+      }
+    }
+
+    // 3. 降级策略：如果重命名失败，直接覆盖写入
+    if (!renameSuccess) {
+      console.warn('[DatabaseManager] Atomic rename failed, falling back to direct write');
+      try {
+        // 直接写入目标文件（非原子操作，但兼容性更好）
+        fs.writeFileSync(this.dbPath, buffer);
+        
+        // 清理临时文件
+        if (fs.existsSync(tempPath)) {
+          fs.unlinkSync(tempPath);
+        }
+        
+        console.log('[DatabaseManager] Database saved successfully (direct write)');
+      } catch (error) {
+        console.error('[DatabaseManager] Direct write also failed:', error);
+        throw error;
+      }
+    } else {
+      console.log('[DatabaseManager] Database saved successfully (atomic rename)');
     }
   }
 
@@ -176,14 +231,9 @@ export class DatabaseManager {
     }
     
     // ✅ 自动判断是否为写操作，若是则立即持久化
-    const upperSql = sql.trim().toUpperCase();
-    const isWriteOperation = 
-      upperSql.startsWith('INSERT') ||
-      upperSql.startsWith('UPDATE') ||
-      upperSql.startsWith('DELETE') ||
-      upperSql.startsWith('CREATE') ||
-      upperSql.startsWith('ALTER') ||
-      upperSql.startsWith('DROP');
+    // 使用正则表达式匹配，支持注释、空格、REPLACE、TRUNCATE等
+    const writeOpRegex = /^\s*(\/\/.*|\/\*[\s\S]*?\*\/)*\s*(INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|REPLACE|TRUNCATE)\s/i;
+    const isWriteOperation = writeOpRegex.test(sql);
       
     if (isWriteOperation) {
       console.log(`[DatabaseManager] Write operation detected, saving to disk...`);
@@ -296,6 +346,11 @@ export class DatabaseManager {
     db.run(`CREATE INDEX IF NOT EXISTS idx_procedural_project ON procedural_memory(project_fingerprint)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_task_status ON task_state(status)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_task_project ON task_state(project_fingerprint)`);
+    
+    // ✅ 表结构和索引创建完成后立即持久化
+    console.log('[DatabaseManager] Tables and indexes created, saving to disk...');
+    this.saveDatabase();
+    console.log('[DatabaseManager] Database schema saved successfully');
   }
 
   /**
@@ -615,6 +670,17 @@ export class DatabaseManager {
   runMutation(sql: string, params?: any[]): any {
     const db = this.getDatabase();
     db.run(sql, params || []);
+    
+    // ✅ 自动持久化（与run方法保持一致）
+    const writeOpRegex = /^\s*(\/\/.*|\/\*[\s\S]*?\*\/)*\s*(INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|REPLACE|TRUNCATE)\s/i;
+    const isWriteOperation = writeOpRegex.test(sql);
+      
+    if (isWriteOperation) {
+      console.log(`[DatabaseManager] Write operation detected in runMutation, saving to disk...`);
+      this.saveDatabase();
+      console.log(`[DatabaseManager] Database saved successfully`);
+    }
+    
     return { changes: db.getRowsModified() };
   }
 

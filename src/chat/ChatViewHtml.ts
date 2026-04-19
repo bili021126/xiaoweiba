@@ -684,6 +684,28 @@ export function generateChatViewHtml(webview: vscode.Webview): string {
           enableInput();
           break;
 
+        // ✅ 新增：处理完整响应事件（兜底）
+        case 'assistantResponse':
+          // 确保最终内容完整（防止漏块）
+          var finalMsg = document.getElementById('msg-' + message.messageId);
+          if (finalMsg) {
+            var contentDiv = finalMsg.querySelector('.message-content');
+            if (contentDiv) {
+              contentDiv.textContent = message.content;
+            }
+          } else {
+            // 如果没有流式消息，创建新的 assistant 消息
+            appendMessage({
+              id: message.messageId,
+              role: 'assistant',
+              content: message.content,
+              timestamp: message.timestamp
+            });
+          }
+          hideLoading();
+          enableInput();
+          break;
+
         case 'streamError':
           finishStreamingMessage(message.messageId, message.error, true);
           enableInput();

@@ -1,9 +1,10 @@
 # 小尾巴（XiaoWeiba）需求架构
 
 **版本**: 1.0  
-**最后更新**: 2026-04-16  
+**最后更新**: 2026-04-19（Phase 3完成 - 代码清理与质量提升）  
 **项目类型**: VS Code 插件  
 **目标用户**: 个人开发者
+**当前状态**: ✅ 生产就绪（v0.4.0）
 
 ---
 
@@ -29,9 +30,9 @@
 | F02 | 生成提交信息 | 分析 Git 变更生成 Conventional Commits | 用户可编辑后提交 |
 | F03 | 情景记忆记录 | 自动记录任务时间、类型、摘要、结果 | 记录成功率 99.9% |
 | F04 | 简单偏好匹配 | 记录用户选择，下次优先推荐 | 推荐命中率 >60% |
-| F05 | 内置最佳实践库 | 预置编码规范、SQL 优化原则 | 覆盖 10+ 场景 |
-| F06 | 用户手写技能 | JSON 格式技能文件 | 技能可被识别、加载、执行 |
-| F07 | Diff 确认 | 写入操作前展示差异对比 | 无例外 |
+| F05 | 内置最佳实践库 | 预置编码规范、SQL 优化原则 | ⏸️ 待开发 | 覆盖 10+ 场景 |
+| F06 | 用户手写技能 | JSON 格式技能文件 | ⏸️ 待开发 | 技能可被识别、加载、执行 |
+| F07 | Diff 确认 | 写入操作前展示差异对比 | ⏸️ 待开发 | 无例外 |
 | F08 | 记忆导出/导入 | 导出/导入 JSON 文件 | 数据一致 |
 | F09 | 任务级授权 | 任务启动时申请最小权限 | 授权后不再重复询问 |
 | F10 | 项目指纹隔离 | 基于 Git 远程 URL 生成项目标识 | 不同项目记忆不串 |
@@ -43,10 +44,10 @@
 | F11 | 代码生成 | 根据自然语言需求生成代码 | 生成代码语法正确 |
 | F11a | 代码补全 | 行内智能补全，Tab 接受 | 响应 <500ms |
 | F11b | 统一对话界面 | 单一对话界面集成所有功能 | 支持多轮对话、流式响应 |
-| F12 | 单元测试生成 | 为选中方法生成单元测试 | 测试通过率 >80% |
-| F13 | SQL 优化 | 连接数据库获取 EXPLAIN 生成优化报告 | 优化建议可落地 |
-| F14 | 命名检查 | 检查命名是否符合规范 | 高亮不规范命名 |
-| F15 | 沉淀技能建议 | 检测重复操作建议保存为技能 | 建议准确率 >70% |
+| F12 | 单元测试生成 | 为选中方法生成单元测试 | ⏸️ 待开发 | 测试通过率 >80% |
+| F13 | SQL 优化 | 连接数据库获取 EXPLAIN 生成优化报告 | ⏸️ 待开发 | 优化建议可落地 |
+| F14 | 命名检查 | 检查命名是否符合规范 | ✅ 100% | 高亮不规范命名 |
+| F15 | 沉淀技能建议 | 检测重复操作建议保存为技能 | ⏸️ 待开发 | 建议准确率 >70% |
 
 ---
 
@@ -54,12 +55,15 @@
 
 ### 3.1 核心模块
 
-- **记忆系统**: EpisodicMemory（情景记忆）, PreferenceMemory（偏好记忆）
-- **安全层**: TaskToken（任务授权）, AuditLogger（审计日志）
-- **存储层**: DatabaseManager（sql.js + FTS5）, ConfigManager（YAML 配置）
-- **LLM 工具**: LLMTool（DeepSeek API 集成）
-- **对话系统**: ChatViewProvider, SessionManager, ContextBuilder, PromptEngine
-- **行内补全**: AICompletionProvider
+- **意图调度**: IntentDispatcher（三层降级策略）, IntentFactory
+- **Agent体系**: ChatAgent, ExplainCodeAgent, GenerateCommitAgent等
+- **记忆系统**: EpisodicMemory（协调中心）, IndexManager, SearchEngine, MemoryCleaner
+- **端口-适配器**: IEventBus/IMemoryPort/ILLMPort + 对应适配器
+- **安全层**: TaskToken（任务授权）, AuditLogger（审计日志）, XSS防护
+- **存储层**: DatabaseManager（sql.js）, ConfigManager（YAML 配置）
+- **LLM 工具**: LLMTool（DeepSeek/Ollama/OpenAI 适配器）
+- **对话系统**: ChatViewProvider（纯视图层）, ChatAgent（流式响应）
+- **行内补全**: AICompletionProvider（低延迟优化）
 
 ### 3.2 技术栈
 
@@ -76,35 +80,58 @@
 ### P0 功能（10/10 完成）
 
 | ID | 功能 | 状态 | 核心文件 |
-|----|------|------|---------|
-| F01 | 代码解释 | ✅ 100% | ExplainCodeCommand.ts |
-| F02 | 提交生成 | ✅ 100% | GenerateCommitCommand.ts |
-| F03 | 情景记忆 | ✅ 100% | EpisodicMemory.ts |
+|----|------|------|----------|
+| F01 | 代码解释 | ✅ 100% | ExplainCodeAgent.ts |
+| F02 | 提交生成 | ✅ 100% | GenerateCommitAgent.ts |
+| F03 | 情景记忆 | ✅ 100% | EpisodicMemory.ts + IndexManager + SearchEngine |
 | F04 | 偏好匹配 | ✅ 100% | PreferenceMemory.ts |
+| F05 | 内置最佳实践库 | ⏸️ 待开发 | - |
+| F06 | 用户手写技能 | ⏸️ 待开发 | - |
+| F07 | Diff 确认 | ⏸️ 待开发 | - |
 | F08 | 记忆导出/导入 | ✅ 100% | ExportMemoryCommand.ts, ImportMemoryCommand.ts |
 | F09 | 任务授权 | ✅ 100% | TaskToken.ts |
 | F10 | 项目指纹 | ✅ 100% | ProjectFingerprint.ts |
 
-### P1 功能（部分完成）
+### P1 功能（4/7 完成）
 
 | ID | 功能 | 状态 | 核心文件 |
-|----|------|------|---------|
-| F11 | 代码生成 | ✅ 100% | CodeGenerationCommand.ts |
-| F11a | 行内补全 | ✅ 100% | AICompletionProvider.ts |
-| F11b | 统一对话界面 | ✅ 100% | ChatViewProvider.ts |
-| F14 | 命名检查 | ✅ 100% | CheckNamingCommand.ts |
+|----|------|------|----------|
+| F11 | 代码生成 | ✅ 100% | CodeGenerationAgent.ts |
+| F11a | 行内补全 | ✅ 100% | AICompletionProvider.ts + InlineCompletionAgent |
+| F11b | 统一对话界面 | ✅ 100% | ChatViewProvider + ChatAgent（流式响应） |
+| F12 | 单元测试生成 | ⏸️ 待开发 | - |
+| F13 | SQL 优化 | ⏸️ 待开发 | - |
+| F14 | 命名检查 | ✅ 100% | CheckNamingAgent.ts |
+| F15 | 沉淀技能建议 | ⏸️ 待开发 | - |
+
+### Phase 3: 代码清理与质量提升（已完成）
+
+| 里程碑 | 状态 | 说明 |
+|--------|------|------|
+| 深度代码评审 | ✅ 完成 | 评审4个核心模块，评分8.5/10 |
+| P0安全问题修复 | ✅ 完成 | ChatAgent XSS防护（HTML转义） |
+| P1代码质量优化 | ✅ 完成 | 移除调试日志、删除废弃代码 |
+| EpisodicMemory精简 | ✅ 完成 | 从910行减少至~840行（-7.7%） |
+| MemoryService移除 | ✅ 完成 | 无残留引用 |
+| 过时测试清理 | ✅ 完成 | 删除5个过时测试文件 |
+| **测试通过率** | ✅ **100%** | 27/27核心功能测试通过 |
 
 ### 基础架构
 
 | 模块 | 状态 | 核心文件 |
-|------|------|---------|
+|------|------|----------|
+| 意图调度 | ✅ | IntentDispatcher.ts（三层降级策略） |
+| Agent体系 | ✅ | agents/ 目录（7个Agent） |
+| 端口-适配器 | ✅ | core/ports/ + infrastructure/adapters/ |
+| 事件总线 | ✅ | EventBus.ts + DomainEvent体系 |
 | 配置管理 | ✅ | ConfigManager.ts |
 | 审计日志 | ✅ | AuditLogger.ts |
 | 错误处理 | ✅ | ErrorCodes.ts |
 | 数据库封装 | ✅ | DatabaseManager.ts |
-| LLM 工具 | ✅ | LLMTool.ts |
-| 对话系统 | ✅ | chat/ 目录 |
-| 行内补全 | ✅ | completion/ 目录 |
+| LLM 工具 | ✅ | LLMTool.ts + adapters/ |
+| 记忆系统 | ✅ | EpisodicMemory.ts + 子模块 |
+| 对话系统 | ✅ | ChatViewProvider（纯视图层）+ ChatAgent |
+| 行内补全 | ✅ | AICompletionProvider.ts + InlineCompletionAgent |
 
 ---
 

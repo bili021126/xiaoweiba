@@ -17,43 +17,10 @@ import { MemoryCleaner } from './MemoryCleaner';
 // 重新导出类型，保持向后兼容
 export type { TaskType, TaskOutcome, EpisodicMemoryRecord, MemoryQueryOptions, MemoryTier } from './types';
 
-/**
- * 内存索引结构（用于混合检索）
- */
-interface IndexedMemory {
-  id: string;
-  timestamp: number;
-  summary: string;
-  entities: string[];
-  decision?: string;
-  termFreq: Map<string, number>; // 词频（TF）
-}
-
 @injectable()
 export class EpisodicMemory {
   private readonly decayLambda: number;
   private readonly retentionDays: number;
-
-  // ========== 内存索引（混合检索核心） ==========
-  private invertedIndex: Map<string, Map<string, number>> = new Map(); // term -> Map<memoryId, tf>
-  private docTermFreq: Map<string, Map<string, number>> = new Map();   // memoryId -> Map<term, tf>
-  private idfCache: Map<string, number> = new Map();
-  private totalDocs: number = 0;
-  private indexReady: boolean = false;
-  private indexBuildPromise: Promise<void> | null = null;
-
-  // ========== 向量检索（语义增强） ==========
-  private vectorCache: Map<string, Float32Array> = new Map(); // memoryId -> vector
-  private vectorReady: boolean = false;
-  private enableSemanticSearch: boolean = true; // 可配置开关
-  
-  // 评分权重
-  private weights = {
-    keyword: 0.3,
-    time: 0.2,
-    entity: 0.2,
-    vector: 0.3
-  };
 
   // ========== 意图感知与自适应权重 ==========
   private intentAnalyzer: IntentAnalyzer;
@@ -63,13 +30,14 @@ export class EpisodicMemory {
   private tierManager: MemoryTierManager;
   private deduplicator: MemoryDeduplicator;
   
-  // ✅ 新增：重构后的模块
+  // ✅ 重构后的模块
   private indexManager: IndexManager;
   private searchEngine: SearchEngine;
   private memoryCleaner: MemoryCleaner;
 
   // ========== 初始化控制 ==========
   private initPromise: Promise<void> | null = null;
+  private isInitializing = false; // ✅ 初始化标志
 
   constructor(
     @inject(DatabaseManager) private dbManager: DatabaseManager,
@@ -77,10 +45,6 @@ export class EpisodicMemory {
     @inject(ProjectFingerprint) private projectFingerprint: ProjectFingerprint,
     @inject(ConfigManager) private configManager: ConfigManager
   ) {
-    // 为每个实例分配唯一ID，用于调试
-    (this as any).__instanceId = `episodic_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`;
-    console.log(`[EpisodicMemory] Constructor called, instance ID: ${(this as any).__instanceId}`);
-    
     const config = this.configManager.getConfig();
     this.decayLambda = config.memory.decayLambda;
     this.retentionDays = config.memory.retentionDays;
@@ -93,7 +57,7 @@ export class EpisodicMemory {
     this.tierManager = new MemoryTierManager();
     this.deduplicator = new MemoryDeduplicator();
     
-    // ✅ 新增：初始化重构后的模块
+    // ✅ 重构后的模块
     this.indexManager = new IndexManager();
     this.searchEngine = new SearchEngine();
     this.memoryCleaner = new MemoryCleaner(this.dbManager, this.auditLogger);
@@ -107,16 +71,13 @@ export class EpisodicMemory {
   async record(memory: Omit<EpisodicMemoryRecord, 'id' | 'projectFingerprint' | 'timestamp' | 'finalWeight'>): Promise<string> {
     const startTime = Date.now();
     try {
-      console.log('[EpisodicMemory] record() called, checking database...');
-      
-      // 强制检查数据库是否初始化
+      // ✅ 容错处理：数据库未初始化时跳过记录，不阻断功能
       if (!this.dbManager) {
-        console.error('[EpisodicMemory] dbManager is null!');
-        throw new Error('DatabaseManager not injected');
+        console.warn('[EpisodicMemory] DatabaseManager not available, skipping memory record');
+        return '';
       }
       
       const db = this.dbManager.getDatabase();
-      console.log('[EpisodicMemory] Database retrieved successfully');
       const projectFingerprint = await this.projectFingerprint.getCurrentProjectFingerprint();
 
       if (!projectFingerprint) {
@@ -163,10 +124,8 @@ export class EpisodicMemory {
       await this.auditLogger.log('memory_record', 'success', duration, {
         parameters: { id, taskType: memory.taskType, memoryTier }
       });
-
-      console.log(`[EpisodicMemory] Memory recorded successfully: ${id} (${memory.taskType}, ${memoryTier})`);
       
-      // 增量更新内存索引
+      // ✅ 委托给IndexManager进行增量索引更新
       const newMemory: EpisodicMemoryRecord = {
         id,
         projectFingerprint,
@@ -175,7 +134,7 @@ export class EpisodicMemory {
         finalWeight,
         memoryTier
       };
-      this.addToIndex(newMemory);
+      this.indexManager.addMemoryToIndex(newMemory);
       
       return id;
     } catch (error) {
@@ -191,6 +150,12 @@ export class EpisodicMemory {
   async retrieve(options: MemoryQueryOptions = {}): Promise<EpisodicMemoryRecord[]> {
     const startTime = Date.now();
     try {
+      // ✅ 容错处理：数据库未初始化时返回空数组
+      if (!this.dbManager) {
+        console.warn('[EpisodicMemory] DatabaseManager not available, returning empty results');
+        return [];
+      }
+      
       const db = this.dbManager.getDatabase();
       const projectFingerprint = options.projectFingerprint ||
         await this.projectFingerprint.getCurrentProjectFingerprint();
@@ -300,7 +265,6 @@ export class EpisodicMemory {
         }
       });
 
-      console.log(`[EpisodicMemory] Hybrid search found ${deduplicatedMemories.length} memories (from ${memories.length}) in ${duration}ms`);
       return deduplicatedMemories;
     } catch (error) {
       const duration = Date.now() - startTime;
@@ -385,7 +349,27 @@ export class EpisodicMemory {
       return 0;
     }
     
-    // ✅ 委托给MemoryCleaner
+    // ✅ 先查询要删除的记忆ID，同步更新索引
+    const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+    const db = this.dbManager.getDatabase();
+    const selectStmt = db.prepare(
+      'SELECT id FROM episodic_memory WHERE project_fingerprint = ? AND memory_tier = ? AND timestamp < ?'
+    );
+    selectStmt.bind([projectFingerprint, 'SHORT_TERM', sevenDaysAgo]);
+    
+    const idsToRemove: string[] = [];
+    while (selectStmt.step()) {
+      const row = selectStmt.get();
+      idsToRemove.push(row[0] as string);
+    }
+    selectStmt.free();
+    
+    // ✅ 从索引中移除
+    for (const id of idsToRemove) {
+      this.indexManager.removeFromIndex(id);
+    }
+    
+    // ✅ 委托给MemoryCleaner执行数据库删除
     return await this.memoryCleaner.cleanupExpired(projectFingerprint);
   }
 
@@ -473,16 +457,16 @@ export class EpisodicMemory {
    */
   private objectToMemory(row: any): EpisodicMemoryRecord {
     return {
-      id: row.id as string,
-      projectFingerprint: row.project_fingerprint as string,
-      timestamp: row.timestamp as number,
-      taskType: row.task_type as TaskType,
-      summary: row.summary as string,
+      id: row.id ?? '',
+      projectFingerprint: row.project_fingerprint ?? '',
+      timestamp: row.timestamp ?? 0,
+      taskType: row.task_type ?? 'unknown',
+      summary: row.summary ?? '',
       entities: JSON.parse((row.entities as string) || '[]'),
       decision: row.decision as string | undefined,
-      outcome: row.outcome as TaskOutcome,
-      finalWeight: row.final_weight as number,
-      modelId: row.model_id as string,
+      outcome: row.outcome ?? 'success',
+      finalWeight: row.final_weight ?? 0,
+      modelId: row.model_id ?? 'unknown',
       durationMs: (row.latency_ms as number) || 0,
       metadata: row.metadata ? JSON.parse(row.metadata as string) : undefined,  // 新增：读取metadata
       memoryTier: (row.memory_tier as MemoryTier) || 'LONG_TERM'
@@ -591,29 +575,6 @@ export class EpisodicMemory {
    */
   public getCurrentExpert(): string {
     return this.expertSelector.getCurrentExpert();
-  }
-
-  /**
-   * 增量更新索引（record成功后调用）
-   */
-  private addToIndex(memory: EpisodicMemoryRecord): void {
-    if (!this.indexReady) return;
-
-    const text = this.getIndexText(memory);
-    const terms = this.tokenize(text);
-    const tfMap = new Map<string, number>();
-    for (const term of terms) {
-      tfMap.set(term, (tfMap.get(term) || 0) + 1);
-    }
-    this.docTermFreq.set(memory.id, tfMap);
-    for (const [term, tf] of tfMap) {
-      if (!this.invertedIndex.has(term)) this.invertedIndex.set(term, new Map());
-      this.invertedIndex.get(term)!.set(memory.id, tf);
-      // 更新 IDF（因为文档数增加）
-      const newIdf = Math.log((this.totalDocs + 2) / (this.invertedIndex.get(term)!.size + 1)) + 1;
-      this.idfCache.set(term, newIdf);
-    }
-    this.totalDocs++;
   }
 
   /**
@@ -790,50 +751,62 @@ export class EpisodicMemory {
    * 显式初始化（由外部调用，如extension.ts）
    */
   async initialize(): Promise<void> {
-    console.log(`[EpisodicMemory] initialize() called on instance: ${(this as any).__instanceId}`);
     if (this.initPromise) {
-      console.log(`[EpisodicMemory] Already initializing, returning existing promise`);
-      return this.initPromise;
+      return;
     }
     
-    // ✅ 使用IndexManager构建索引
-    this.initPromise = this.buildIndexWithNewManager();
+    // ✅ 设置初始化标志
+    this.isInitializing = true;
+    
+    // ✅ 使用IndexManager构建索引，失败时重置initPromise以允许重试
+    this.initPromise = this.buildIndexWithNewManager().catch(err => {
+      console.error('[EpisodicMemory] Index initialization failed:', err);
+      this.initPromise = null; // ✅ 重置，允许后续重试
+      this.isInitializing = false; // ✅ 重置标志
+      throw err;
+    });
     await this.initPromise;
-    this.indexReady = true;
-    console.log(`[EpisodicMemory] Initialized successfully, indexReady=${this.indexReady}, instance: ${(this as any).__instanceId}`);
+    
+    // ✅ 初始化成功，重置标志
+    this.isInitializing = false;
   }
 
   /**
    * 确保已初始化（检索前自动调用）
    */
   private async ensureInitialized(): Promise<void> {
-    // 如果已经就绪，直接返回
-    if (this.indexReady) {
+    // 如果已经初始化，直接返回
+    if (this.initPromise) {
       return;
     }
-    
-    // 如果正在初始化，等待完成
-    if (this.initPromise) {
+  
+    // ✅ 如果正在初始化，等待完成
+    if (this.isInitializing) {
       console.log(`[EpisodicMemory] Waiting for initialization to complete...`);
       await this.initPromise;
-      console.log(`[EpisodicMemory] Initialization completed, indexReady=${this.indexReady}`);
+      console.log(`[EpisodicMemory] Initialization completed`);
       return;
     }
     
     // 如果从未初始化，立即触发初始化
-    console.log(`[EpisodicMemory] Not initialized yet, triggering lazy initialization...`);
-    await this.initialize();
+    try {
+      await this.initialize();
+    } catch (error) {
+      // ✅ 容错处理：数据库未就绪时不阻断功能
+      console.warn('[EpisodicMemory] Initialization failed, will retry on next access:', 
+        error instanceof Error ? error.message : String(error));
+      // 重置标志，允许下次重试
+      this.isInitializing = false;
+      this.initPromise = null;
+    }
   }
 
   /**
    * 清理资源（插件停用时调用）
    */
   async dispose(): Promise<void> {
-    this.invertedIndex.clear();
-    this.docTermFreq.clear();
-    this.idfCache.clear();
-    this.vectorCache.clear();
-    this.indexReady = false;
+    // ✅ 委托给IndexManager清理
+    this.indexManager.clear();
     this.initPromise = null;
     console.log('[EpisodicMemory] Disposed');
   }
@@ -857,8 +830,42 @@ export class EpisodicMemory {
       return 0;
     }
     
-    // ✅ 委托给MemoryCleaner
-    return await this.memoryCleaner.migrateShortToLongTerm(projectFingerprint);
+    // ✅ 先查询要迁移的记忆ID，同步更新索引
+    const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+    const db = this.dbManager.getDatabase();
+    const selectStmt = db.prepare(
+      `SELECT id FROM episodic_memory 
+       WHERE project_fingerprint = ? 
+         AND memory_tier = 'SHORT_TERM' 
+         AND timestamp < ? 
+         AND final_weight >= 7.0`
+    );
+    selectStmt.bind([projectFingerprint, sevenDaysAgo]);
+    
+    const idsToMigrate: string[] = [];
+    while (selectStmt.step()) {
+      const row = selectStmt.get();
+      idsToMigrate.push(row[0] as string);
+    }
+    selectStmt.free();
+    
+    // ✅ 从索引中移除（迁移后权重变化，需要重新索引）
+    for (const id of idsToMigrate) {
+      this.indexManager.removeFromIndex(id);
+    }
+    
+    // ✅ 委托给MemoryCleaner执行数据库更新
+    const migratedCount = await this.memoryCleaner.migrateShortToLongTerm(projectFingerprint);
+    
+    // ✅ 重新添加已迁移的记忆到索引（LONG_TERM权重不同）
+    for (const id of idsToMigrate) {
+      const memory = await this.getMemoryById(id);
+      if (memory) {
+        this.indexManager.addMemoryToIndex(memory);
+      }
+    }
+    
+    return migratedCount;
   }
 
   /**

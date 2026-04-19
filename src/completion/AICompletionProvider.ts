@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as crypto from 'crypto';
-import { LLMTool } from '../tools/LLMTool';
+import { IntentDispatcher } from '../core/application/IntentDispatcher';
+import { IntentFactory } from '../core/factory/IntentFactory';
 import { ConfigManager } from '../storage/ConfigManager';
 
 /**
@@ -15,6 +16,8 @@ interface CacheEntry {
  * AI代码补全提供器
  * 
  * 实现VS Code的InlineCompletionItemProvider接口，提供行内代码补全
+ * 
+ * 重构后：通过IntentDispatcher调度inline_completion意图，使用dispatchSync低延迟路径
  */
 export class AICompletionProvider implements vscode.InlineCompletionItemProvider {
   private cache: Map<string, CacheEntry> = new Map();
@@ -22,7 +25,7 @@ export class AICompletionProvider implements vscode.InlineCompletionItemProvider
   private lastTriggerTime: number = 0;
 
   constructor(
-    private llmTool: LLMTool,
+    private intentDispatcher: IntentDispatcher,
     private configManager: ConfigManager
   ) {}
 
@@ -62,48 +65,67 @@ export class AICompletionProvider implements vscode.InlineCompletionItemProvider
     }
 
     // 构建Prompt
-    const prompt = this.buildPrompt(document, position);
-    if (!prompt || prompt.trim().length === 0) {
+    const { prefix, language } = this.extractCodeContext(document, position);
+    if (!prefix || prefix.trim().length === 0) {
       return null;
     }
 
-    // 调用LLM
+    // 调用LLM（通过IntentDispatcher.dispatchSync）
     try {
       // 检查取消令牌
       if (token.isCancellationRequested) {
         return null;
       }
 
-      const result = await this.llmTool.call({
-        messages: [{ role: 'user', content: prompt }],
-        maxTokens: config.inlineCompletion.maxTokens || 50,
-        temperature: 0.2 // 低温度，更确定性
+      // ✅ 构建inline_completion意图
+      const intent = IntentFactory.buildInlineCompletionIntent(prefix, {
+        language: language,
+        filePath: document.uri.fsPath
       });
+
+      // ✅ 使用同步调度（低延迟优化）
+      const result = await this.intentDispatcher.dispatchSync(intent);
 
       // 再次检查取消令牌
       if (token.isCancellationRequested) {
         return null;
       }
 
-      if (result.success && result.data && result.data.trim().length > 0) {
-        const completion = result.data.trim();
+      // dispatchSync返回AgentResult，提取completion数据
+      if (result && result.success && result.data && result.data.completion) {
+        const completion = result.data.completion.trim();
         
-        // 清理可能的Markdown代码块标记
-        const cleanedCompletion = this.cleanMarkdown(completion);
-        
-        // 保存到缓存
-        if (config.inlineCompletion.enableCache) {
-          this.saveToCache(cacheKey, cleanedCompletion, config.inlineCompletion.cacheTTLSeconds || 5);
-        }
+        if (completion.length > 0) {
+          // 清理可能的Markdown代码块标记
+          const cleanedCompletion = this.cleanMarkdown(completion);
+          
+          // 保存到缓存
+          if (config.inlineCompletion.enableCache) {
+            this.saveToCache(cacheKey, cleanedCompletion, config.inlineCompletion.cacheTTLSeconds || 5);
+          }
 
-        return [new vscode.InlineCompletionItem(cleanedCompletion)];
+          return [new vscode.InlineCompletionItem(cleanedCompletion)];
+        }
       }
     } catch (error) {
-      console.warn('[AICompletionProvider] 补全失败:', error);
-      // 记录审计日志（可选）
+      // 静默失败，不影响用户体验
     }
 
     return null;
+  }
+
+  /**
+   * 提取代码上下文
+   */
+  private extractCodeContext(document: vscode.TextDocument, position: vscode.Position): { prefix: string; language: string } {
+    // 获取当前行和前两行
+    const startLine = Math.max(0, position.line - 2);
+    const endLine = position.line;
+    const range = new vscode.Range(startLine, 0, endLine, position.character);
+    const prefix = document.getText(range);
+    const language = document.languageId;
+
+    return { prefix, language };
   }
 
   /**
@@ -123,35 +145,6 @@ export class AICompletionProvider implements vscode.InlineCompletionItemProvider
       .substring(0, 16);
 
     return hash;
-  }
-
-  /**
-   * 构建Prompt
-   */
-  private buildPrompt(document: vscode.TextDocument, position: vscode.Position): string {
-    // 获取当前行和前两行
-    const startLine = Math.max(0, position.line - 2);
-    const endLine = position.line;
-    const range = new vscode.Range(startLine, 0, endLine, position.character);
-    const prefix = document.getText(range);
-
-    // 如果前缀太短，不触发补全
-    if (prefix.trim().length < 3) {
-      return '';
-    }
-
-    const language = document.languageId;
-
-    return `请根据以下代码上下文，补全当前行的代码。只返回补全的代码部分，不要重复已有代码，不要添加解释。
-
-语言: ${language}
-
-代码上下文:
-\`\`\`${language}
-${prefix}
-\`\`\`
-
-请补全光标后的代码（只返回代码，不要markdown格式）:`;
   }
 
   /**

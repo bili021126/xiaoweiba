@@ -433,6 +433,12 @@ export class MemorySystem {
     // ✅ EventBus传递data，兼容payload
     const payload = event.payload || event.data;
     
+    // 防御性检查：如果payload为undefined，直接返回
+    if (!payload) {
+      console.warn('[MemorySystem] onActionCompleted received undefined payload, skipping');
+      return;
+    }
+    
     // ✅ 委托给MemoryRecorder
     await this.memoryRecorder.recordTaskCompletion(payload);
   }

@@ -18,6 +18,7 @@ import {
   RequestHandler, 
   EventHandler 
 } from './types';
+import { SystemErrorEvent } from '../events/DomainEvent';
 
 export { CoreEventType };
 
@@ -121,9 +122,20 @@ export class EventBus {
 
       const promises = Array.from(handlers).map(async (handler) => {
         try {
-          await handler(event);
+          // ✅ 添加超时保护，防止handler永远不决议
+          // ✅ 增加超时时间到30秒，适应LLM调用等耗时操作
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error(`Handler timeout after 30s for ${event.type}`)), 30000)
+          );
+          await Promise.race([handler(event), timeoutPromise]);
         } catch (error) {
           console.error(`[EventBus] Handler for ${event.type} failed:`, error);
+          // ✅ 发布系统错误事件（用于监控和告警）
+          this.publish('system.error' as any, {
+            component: 'EventBus',
+            context: `Handler for ${event.type}`,
+            error: error instanceof Error ? error.message : String(error)
+          });
         }
       });
       await Promise.allSettled(promises);

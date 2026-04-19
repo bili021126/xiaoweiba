@@ -37,6 +37,12 @@ export class MemoryRecorder {
    * @param data 任务完成数据
    */
   async recordTaskCompletion(data: TaskCompletionData): Promise<void> {
+    // 防御性检查：如果data为undefined，直接返回
+    if (!data) {
+      console.warn('[MemoryRecorder] recordTaskCompletion called with undefined data, skipping');
+      return;
+    }
+    
     const { actionId, result, durationMs, memoryMetadata } = data;
     
     console.log(`[MemoryRecorder] Recording task completion for: ${actionId}`, {

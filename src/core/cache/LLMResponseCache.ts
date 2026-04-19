@@ -17,27 +17,21 @@ export class LLMResponseCache {
   private cache: Map<string, CacheEntry> = new Map();
   private readonly DEFAULT_TTL = 5 * 60 * 1000; // 5分钟默认TTL
   private readonly MAX_CACHE_SIZE = 100; // 最大缓存条目数
+  private cleanupTimer?: NodeJS.Timeout;
 
-  /**
-   * 生成缓存键
-   */
-  private generateKey(prompt: string, modelId?: string): string {
-    const key = `${modelId || 'default'}:${prompt}`;
-    // 使用简单的hash避免key过长
-    return this.hashString(key);
+  constructor() {
+    // ✅ 启动定期清理定时器（每5分钟清理一次过期条目）
+    this.cleanupTimer = setInterval(() => {
+      this.clearExpired();
+    }, 5 * 60 * 1000);
   }
 
   /**
-   * 简单字符串哈希
+   * ✅ 生成缓存键（直接使用prompt，移除哈希避免碰撞风险）
    */
-  private hashString(str: string): string {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash; // Convert to 32bit integer
-    }
-    return hash.toString(36);
+  private generateKey(prompt: string, modelId?: string): string {
+    // Map支持任意字符串键，无需哈希，避免DJB2碰撞风险
+    return `${modelId || 'default'}:${prompt.substring(0, 500)}`; // 截断超长prompt防止key过大
   }
 
   /**
@@ -137,5 +131,16 @@ export class LLMResponseCache {
       size: this.cache.size,
       keys: Array.from(this.cache.keys()).slice(0, 10) // 只返回前10个key
     };
+  }
+
+  /**
+   * ✅ 清理资源（插件停用时调用）
+   */
+  dispose(): void {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = undefined;
+      console.log('[LLMResponseCache] Cleanup timer stopped');
+    }
   }
 }

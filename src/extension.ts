@@ -47,19 +47,33 @@ import { ConfigManager } from './storage/ConfigManager';
 import { DatabaseManager } from './storage/DatabaseManager';
 import { AuditLogger } from './core/security/AuditLogger';
 import { getUserFriendlyMessage } from './utils/ErrorCodes';
-import { ExplainCodeCommand } from './commands/ExplainCodeCommand';
-import { GenerateCommitCommand } from './commands/GenerateCommitCommand';
-import { CommitStyleLearner } from './core/memory/CommitStyleLearner';
-import { ConfigureApiKeyCommand } from './commands/ConfigureApiKeyCommand';
-import { ExportMemoryCommand } from './commands/ExportMemoryCommand';
-import { ImportMemoryCommand } from './commands/ImportMemoryCommand';
-import { CheckNamingCommand } from './commands/CheckNamingCommand';
-import { CodeGenerationCommand } from './commands/CodeGenerationCommand';
-import { OptimizeSQLCommand } from './commands/OptimizeSQLCommand';
+
+// Phase 2: 导入新架构组件
+import { IntentDispatcher } from './core/application/IntentDispatcher';
+import { MessageFlowManager } from './core/application/MessageFlowManager';  // ✅ 新增
+import { AgentRunner } from './infrastructure/agent/AgentRunner';
+import { AgentRegistryImpl } from './infrastructure/agent/AgentRegistryImpl';  // ✅ 更新路径
+import { MemoryAdapter } from './infrastructure/adapters/MemoryAdapter';
+import { LLMAdapter } from './infrastructure/adapters/LLMAdapter';
+import { EventBusAdapter } from './infrastructure/adapters/EventBusAdapter';  // ✅ 新增
+import { EventBus } from './core/eventbus/EventBus';
+import { IntentFactory } from './core/factory/IntentFactory';  // ✅ 新增：Intent工厂
+
+// Phase 2: 导入所有Agents
+import { ExplainCodeAgent } from './agents/ExplainCodeAgent';
+import { GenerateCommitAgent } from './agents/GenerateCommitAgent';
+import { CodeGenerationAgent } from './agents/CodeGenerationAgent';
+import { CheckNamingAgent } from './agents/CheckNamingAgent';
+import { OptimizeSQLAgent } from './agents/OptimizeSQLAgent';
+import { ConfigureApiKeyAgent } from './agents/ConfigureApiKeyAgent';
+import { ExportMemoryAgent } from './agents/ExportMemoryAgent';
+import { ImportMemoryAgent } from './agents/ImportMemoryAgent';
+import { ChatAgent } from './agents/ChatAgent';  // ✅ 新增
+import { InlineCompletionAgent } from './agents/InlineCompletionAgent';  // ✅ 新增：行内补全Agent
+import { CommitStyleLearner } from './core/memory/CommitStyleLearner';  // ✅ 保留：MemoryAdapter需要
 import { EpisodicMemory } from './core/memory/EpisodicMemory';
 import { PreferenceMemory } from './core/memory/PreferenceMemory';
 import { MemorySystem } from './core/memory/MemorySystem';
-import { EventBus } from './core/eventbus/EventBus';
 import { LLMTool } from './tools/LLMTool';
 import { ChatViewProvider } from './chat/ChatViewProvider';
 import { AICompletionProvider } from './completion/AICompletionProvider';
@@ -70,10 +84,17 @@ let auditLogger: AuditLogger;
 let episodicMemory: EpisodicMemory;
 let preferenceMemory: PreferenceMemory;
 let memorySystem: MemorySystem;
-let eventBus: EventBus;
+let legacyEventBus: EventBus;  // ✅ 重命名以区分
 let llmTool: LLMTool;
 let chatViewProvider: ChatViewProvider;
 let aiCompletionProvider: AICompletionProvider;
+
+// Phase 2: 新架构组件
+let intentDispatcher: IntentDispatcher | undefined;
+let messageFlowManager: MessageFlowManager | undefined;  // ✅ 新增
+let agentRunner: AgentRunner | undefined;
+let memoryAdapter: MemoryAdapter | undefined;
+let llmAdapter: LLMAdapter | undefined;
 
 /**
  * 插件激活入口
@@ -108,39 +129,80 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       console.warn('[Extension] Memory tier migration failed:', error);
     }
     
-    // 关键：将已初始化的DatabaseManager注册为单例，覆盖容器中的实例
+    // ✅ 关键：将已初始化的DatabaseManager注册为单例，覆盖容器中的实例
+    // 注意：不能调用clearInstances()，会清除SecretStorage等关键依赖
+    // 直接registerInstance会覆盖之前的注册
     container.registerInstance(DatabaseManager, databaseManager);
     console.log('[Extension] DatabaseManager registered as singleton');
     console.log('[Extension] Step 3 complete');
 
     console.log('[Extension] Step 4: Initializing core services...');
-    // 预解析核心服务（确保单例）
+    // ✅ 预解析核心服务（确保单例）- 在DatabaseManager注册之后
     episodicMemory = container.resolve(EpisodicMemory);
     preferenceMemory = container.resolve(PreferenceMemory);
-    eventBus = container.resolve(EventBus);
+    const commitStyleLearner = container.resolve(CommitStyleLearner);
+    legacyEventBus = container.resolve(EventBus);  // ✅ 使用legacyEventBus
     memorySystem = container.resolve(MemorySystem);
     llmTool = container.resolve(LLMTool);
+    
+    // ✅ 创建MemoryAdapter并注册为IMemoryPort
+    const eventBusAdapter = new EventBusAdapter(legacyEventBus);
+    memoryAdapter = new MemoryAdapter(episodicMemory, preferenceMemory, commitStyleLearner, eventBusAdapter);
+    container.register('IMemoryPort', { useValue: memoryAdapter });
+    console.log('[Extension] IMemoryPort registered (MemoryAdapter)');
     
     // 初始化记忆系统
     await memorySystem.initialize();
     console.log('[Extension] Core services initialized');
     console.log('[Extension] Step 4 complete');
 
+    // Phase 2: 初始化新架构组件
+    console.log('[Extension] Step 5: Initializing intent-driven architecture...');
+    // memoryAdapter已在Step 4中创建，这里只解析其他服务
+    llmAdapter = container.resolve(LLMAdapter);
+    // ✅ 使用已注册的IAgentRegistry实例，不要重新创建
+    const agentRegistry = container.resolve('IAgentRegistry') as any;
+    agentRunner = container.resolve(AgentRunner);
+    intentDispatcher = container.resolve(IntentDispatcher);
+    
+    // 注册所有Agents到AgentRegistry
+    console.log('[Extension] Registering agents...');
+    const agents = [
+      container.resolve(ExplainCodeAgent),
+      container.resolve(GenerateCommitAgent),
+      container.resolve(CodeGenerationAgent),
+      container.resolve(CheckNamingAgent),
+      container.resolve(OptimizeSQLAgent),
+      container.resolve(ConfigureApiKeyAgent),
+      container.resolve(ExportMemoryAgent),
+      container.resolve(ImportMemoryAgent)
+    ];
+    
+    agents.forEach(agent => {
+      console.log(`[Extension] Registering agent: ${agent.id} (${agent.name})`);
+      agentRegistry.register(agent);
+    });
+    
+    // ✅ 额外注册ChatAgent和InlineCompletionAgent
+    const chatAgent = new ChatAgent(llmAdapter, memoryAdapter, eventBusAdapter);
+    await chatAgent.initialize();
+    agentRegistry.register(chatAgent);
+    console.log(`[Extension] Registered agent: ${chatAgent.id} (${chatAgent.name})`);
+    
+    agentRegistry.register(new InlineCompletionAgent(llmAdapter));
+    console.log(`[Extension] Registered agent: inline-completion-agent`);
+    
+    console.log(`[Extension] Total registered agents: ${agentRegistry.getAll().length}`);
+    console.log('[Extension] Step 5 complete');
+
     // 初始化审计日志
     auditLogger = container.resolve(AuditLogger);
 
-    // 初始化聊天视图提供者
-    chatViewProvider = new ChatViewProvider(
-      context,
-      llmTool,
-      episodicMemory,
-      preferenceMemory,
-      configManager,
-      auditLogger
-    );
+    // ✅ 重构后：ChatViewProvider通过依赖注入创建
+    chatViewProvider = container.resolve(ChatViewProvider);
 
-    // 初始化AI补全提供器
-    aiCompletionProvider = new AICompletionProvider(llmTool, configManager);
+    // ✅ 重构后：AICompletionProvider通过IntentDispatcher调度
+    aiCompletionProvider = new AICompletionProvider(intentDispatcher, configManager);
 
     // 注册命令
     registerCommands(context);
@@ -195,8 +257,11 @@ export async function deactivate(): Promise<void> {
     if (memorySystem) {
       await memorySystem.dispose();
     }
-    if (eventBus) {
-      eventBus.dispose();
+    if (legacyEventBus) {  // ✅ 使用legacyEventBus
+      legacyEventBus.dispose();
+    }
+    if (chatViewProvider) {
+      chatViewProvider.dispose(); // ✅ 取消事件订阅，防止内存泄漏
     }
     if (preferenceMemory) {
       // PreferenceMemory暂无dispose，预留
@@ -204,6 +269,15 @@ export async function deactivate(): Promise<void> {
     if (auditLogger) {
       await auditLogger.log('extension_deactivate', 'success', 0);
     }
+    
+    // Phase 2: 清理新架构组件
+    if (messageFlowManager) {
+      messageFlowManager.dispose();
+    }
+    if (agentRunner) {
+      agentRunner.dispose();
+    }
+    // IntentDispatcher和adapters暂无dispose，预留
   } catch (error) {
     console.error('Extension deactivation failed:', error);
   }
@@ -230,101 +304,186 @@ export function getLLMTool(): LLMTool {
 }
 
 /**
- * 初始化依赖注入容器
+ * 初始化依赖注入容器（组合根）
  */
 async function initializeContainer(context: vscode.ExtensionContext): Promise<void> {
-  // 注册 VS Code 上下文
-  container.registerInstance('extensionContext', context);
+  console.log('[Extension] Step 1: Initializing infrastructure...');
   
-  // 注册 SecretStorage
+  // ✅ 注册SecretStorage（ConfigManager依赖）
   container.registerInstance('SecretStorage', context.secrets);
+  console.log('[Extension] SecretStorage registered');
   
-  // 注册核心服务为单例（确保全局唯一实例）
-  container.registerSingleton(EpisodicMemory);
-  container.registerSingleton(PreferenceMemory);
-  container.registerSingleton(EventBus);
-  container.registerSingleton(MemorySystem);
-  container.registerSingleton(LLMTool);
-  container.registerSingleton(ConfigManager);
-  container.registerSingleton(DatabaseManager);
-  container.registerSingleton(AuditLogger);
-  container.registerSingleton(CommitStyleLearner);
+  // ✅ 注册ExtensionContext（DatabaseManager等模块依赖）
+  container.registerInstance('extensionContext', context);
+  console.log('[Extension] ExtensionContext registered');
+  
+  // 1. ✅ 初始化基础设施
+  const legacyEventBus = new EventBus();
+  container.registerInstance(EventBus, legacyEventBus);
+  
+  // 创建适配器并注册为IEventBus
+  const eventBusAdapter = new EventBusAdapter(legacyEventBus);
+  container.register('IEventBus', { useValue: eventBusAdapter });
+  console.log('[Extension] IEventBus registered (EventBusAdapter)');
+
+  // ⚠️ 注意：不在这里解析EpisodicMemory等依赖DatabaseManager的服务
+  // 它们将在Step 4中DatabaseManager注册之后再解析
+
+  // 解析LLMTool并创建LLMAdapter
+  const llmTool = container.resolve(LLMTool);
+  const llmAdapter = new LLMAdapter(llmTool);
+  container.register('ILLMPort', { useValue: llmAdapter });
+  console.log('[Extension] ILLMPort registered (LLMAdapter)');
+  
+  console.log('[Extension] Step 1 complete');
+  console.log('[Extension] Step 2: Creating adapters and registry...');
+
+  // 2. ✅ 创建 Agent 注册表
+  const agentRegistry = new AgentRegistryImpl();
+  container.register('IAgentRegistry', { useValue: agentRegistry });
+  
+  // ⚠️ Agent注册、IntentDispatcher、MessageFlowManager已移至activate()函数的Step 5之后
+
+  // 5. ✅ 初始化 AgentRunner（自动订阅事件）
+  const agentRunner = new AgentRunner(eventBusAdapter, agentRegistry, auditLogger);
+  container.registerInstance(AgentRunner, agentRunner);
+  console.log('[Extension] AgentRunner initialized (auto-subscribed to events)');
+  
+  console.log('[Extension] Step 3 complete');
+  console.log('[Extension] Dependency injection container initialized successfully');
 }
 
 /**
- * 注册命令
+ * 注册命令（Phase 2: 迁移到IntentDispatcher）
  */
 function registerCommands(context: vscode.ExtensionContext): void {
-  // 阶段 1 核心命令（通过 MemorySystem 统一调度）
-  const commitStyleLearner = container.resolve(CommitStyleLearner);
+  // ✅ 从容器解析IntentDispatcher
+  const intentDispatcher = container.resolve(IntentDispatcher);
   
-  // 创建所有 Command 实例
-  const explainCodeHandler = new ExplainCodeCommand(memorySystem, eventBus, llmTool);
-  const generateCommitHandler = new GenerateCommitCommand(memorySystem, eventBus, undefined, llmTool, commitStyleLearner);
-  const checkNamingHandler = new CheckNamingCommand(memorySystem, eventBus, llmTool);
-  const codeGenerationHandler = new CodeGenerationCommand(memorySystem, eventBus, llmTool);
-  const optimizeSQLHandler = new OptimizeSQLCommand(memorySystem, eventBus, llmTool);
+  console.log('[Extension] Registering commands with IntentDispatcher...');
+
+  // ========== P0 Commands（核心功能）==========
   
-  // 注册动作到 MemorySystem
-  memorySystem.registerAction('explainCode', async (input, context) => {
-    return await explainCodeHandler.execute(input);
-  }, '代码解释');
-  
-  memorySystem.registerAction('generateCommit', async (input, context) => {
-    return await generateCommitHandler.execute(input);
-  }, '生成提交信息');
-  
-  memorySystem.registerAction('checkNaming', async (input, context) => {
-    return await checkNamingHandler.execute(input);
-  }, '命名检查');
-  
-  memorySystem.registerAction('generateCode', async (input, context) => {
-    return await codeGenerationHandler.execute(input);
-  }, '代码生成');
-  
-  memorySystem.registerAction('optimizeSQL', async (input, context) => {
-    return await optimizeSQLHandler.execute(input);
-  }, 'SQL优化');
-  
-  // 创建ConfigureApiKeyCommand实例
-  const configureApiKeyHandler = new ConfigureApiKeyCommand(memorySystem, eventBus);
-  
-  memorySystem.registerAction('configureApiKey', async (input, context) => {
-    return await configureApiKeyHandler.execute(input);
-  }, '配置API Key');
-  
-  // 创建ExportMemoryCommand和ImportMemoryCommand实例
-  const exportMemoryHandler = new ExportMemoryCommand(memorySystem, eventBus);
-  const importMemoryHandler = new ImportMemoryCommand(memorySystem, eventBus);
-  
-  memorySystem.registerAction('exportMemory', async (input, context) => {
-    return await exportMemoryHandler.execute(input);
-  }, '导出记忆');
-  
-  memorySystem.registerAction('importMemory', async (input, context) => {
-    return await importMemoryHandler.execute(input);
-  }, '导入记忆');
-  
-  // 注册 VS Code 命令（作为入口，调用 MemorySystem）
+  // 1. 代码解释命令
   const explainCodeCmd = vscode.commands.registerCommand(
     'xiaoweiba.explainCode',
     async () => {
-      await memorySystem.executeAction('explainCode', {});
+      try {
+        const intent = IntentFactory.buildExplainCodeIntent();
+        await intentDispatcher.dispatch(intent);
+      } catch (error) {
+        vscode.window.showErrorMessage(`代码解释失败: ${error instanceof Error ? error.message : String(error)}`);
+      }
     }
   );
 
-  // ✅ 修复2：注册generateCommit命令
+  // 2. 生成提交信息命令
   const generateCommitCmd = vscode.commands.registerCommand(
     'xiaoweiba.generateCommit',
     async () => {
-      const editor = vscode.window.activeTextEditor;
-      await memorySystem.executeAction('generateCommit', {
-        filePath: editor?.document.uri.fsPath
-      });
+      try {
+        const intent = IntentFactory.buildGenerateCommitIntent();
+        await intentDispatcher.dispatch(intent);
+      } catch (error) {
+        vscode.window.showErrorMessage(`生成提交信息失败: ${error instanceof Error ? error.message : String(error)}`);
+      }
     }
   );
 
-  // 查看提交历史命令
+  // 3. 聊天命令（打开AI助手）
+  const openChatCmd = vscode.commands.registerCommand(
+    'xiaoweiba.openChat',
+    async () => {
+      await vscode.commands.executeCommand('workbench.view.extension.xiaoweiba');
+      await vscode.commands.executeCommand('xiaoweiba.chatView.focus');
+    }
+  );
+
+  // ========== P1 Commands（重要功能）==========
+  
+  // 4. 命名检查命令
+  const checkNamingCmd = vscode.commands.registerCommand(
+    'xiaoweiba.checkNaming',
+    async () => {
+      try {
+        const intent = IntentFactory.buildCheckNamingIntent();
+        await intentDispatcher.dispatch(intent);
+      } catch (error) {
+        vscode.window.showErrorMessage(`命名检查失败: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+  );
+
+  // 5. 代码生成命令
+  const codeGenerationCmd = vscode.commands.registerCommand(
+    'xiaoweiba.generateCode',
+    async () => {
+      try {
+        const intent = IntentFactory.buildGenerateCodeIntent();
+        await intentDispatcher.dispatch(intent);
+      } catch (error) {
+        vscode.window.showErrorMessage(`代码生成失败: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+  );
+
+  // 6. SQL优化命令
+  const optimizeSQLCmd = vscode.commands.registerCommand(
+    'xiaoweiba.optimizeSQL',
+    async () => {
+      try {
+        const intent = IntentFactory.buildOptimizeSQLIntent();
+        await intentDispatcher.dispatch(intent);
+      } catch (error) {
+        vscode.window.showErrorMessage(`SQL优化失败: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+  );
+
+  // ========== P2 Commands（辅助功能）==========
+  
+  // 7. 配置API Key命令
+  const configureApiKeyCmd = vscode.commands.registerCommand(
+    'xiaoweiba.configureApiKey',
+    async () => {
+      try {
+        const intent = IntentFactory.buildConfigureApiKeyIntent();
+        await intentDispatcher.dispatch(intent);
+      } catch (error) {
+        vscode.window.showErrorMessage(`配置API Key失败: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+  );
+
+  // 8. 导出记忆命令
+  const exportMemoryCmd = vscode.commands.registerCommand(
+    'xiaoweiba.exportMemory',
+    async () => {
+      try {
+        const intent = IntentFactory.buildExportMemoryIntent();
+        await intentDispatcher.dispatch(intent);
+      } catch (error) {
+        vscode.window.showErrorMessage(`导出记忆失败: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+  );
+
+  // 9. 导入记忆命令
+  const importMemoryCmd = vscode.commands.registerCommand(
+    'xiaoweiba.importMemory',
+    async () => {
+      try {
+        const intent = IntentFactory.buildImportMemoryIntent();
+        await intentDispatcher.dispatch(intent);
+      } catch (error) {
+        vscode.window.showErrorMessage(`导入记忆失败: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+  );
+
+  // ========== 保留的旧Commands（非Agent相关）==========
+  
+  // 查看提交历史命令（纯Git操作，不需要Agent）
   const showCommitHistoryCmd = vscode.commands.registerCommand(
     'xiaoweiba.showCommitHistory',
     async () => {
@@ -396,59 +555,7 @@ function registerCommands(context: vscode.ExtensionContext): void {
     }
   );
 
-  // ✅ 修复2：注册checkNaming命令
-  const checkNamingCmd = vscode.commands.registerCommand(
-    'xiaoweiba.checkNaming',
-    async () => {
-      await memorySystem.executeAction('checkNaming', {});
-    }
-  );
-
-  // ✅ 修复2：注册codeGeneration命令
-  const codeGenerationCmd = vscode.commands.registerCommand(
-    'xiaoweiba.generateCode',
-    async () => {
-      await memorySystem.executeAction('generateCode', {});
-    }
-  );
-
-  const optimizeSQLCmd = vscode.commands.registerCommand(
-    'xiaoweiba.optimizeSQL',
-    async () => {
-      const editor = vscode.window.activeTextEditor;
-      await memorySystem.executeAction('optimizeSQL', {
-        selectedCode: editor?.document.getText(editor.selection),
-        filePath: editor?.document.uri.fsPath,
-        language: editor?.document.languageId
-      });
-    }
-  );
-
-  // 配置API Key命令
-  const configureApiKeyCmd = vscode.commands.registerCommand(
-    'xiaoweiba.configureApiKey',
-    async () => {
-      await memorySystem.executeAction('configureApiKey', {});
-    }
-  );
-
-  // 导出记忆命令
-  const exportMemoryCmd = vscode.commands.registerCommand(
-    'xiaoweiba.exportMemory',
-    async () => {
-      await memorySystem.executeAction('exportMemory', {});
-    }
-  );
-
-  // 导入记忆命令
-  const importMemoryCmd = vscode.commands.registerCommand(
-    'xiaoweiba.importMemory',
-    async () => {
-      await memorySystem.executeAction('importMemory', {});
-    }
-  );
-
-  // 阶段 2 命令（占位实现）
+  // 修复记忆数据库命令（底层维护操作）
   const repairMemoryCmd = vscode.commands.registerCommand(
     'xiaoweiba.repair-memory',
     async () => {
@@ -469,13 +576,12 @@ function registerCommands(context: vscode.ExtensionContext): void {
     }
   );
 
-  // 打开AI助手命令
-  const openChatCmd = vscode.commands.registerCommand(
-    'xiaoweiba.openChat',
+  // 撤销写权限命令（安全控制）
+  const revokeWritePermissionCmd = vscode.commands.registerCommand(
+    'xiaoweiba.revokeWritePermission',
     async () => {
-      await vscode.commands.executeCommand('workbench.view.extension.xiaoweiba');
-      // 聚焦到聊天视图
-      await vscode.commands.executeCommand('xiaoweiba.chatView.focus');
+      memorySystem.revokeCurrentToken();
+      vscode.window.showInformationMessage('✅ 写权限已撤销');
     }
   );
 
@@ -544,15 +650,6 @@ function registerCommands(context: vscode.ExtensionContext): void {
     console.log(`[Memory-Driven] File opened: ${document.fileName}`);
     await memorySystem.proactiveRecommend(document.fileName);
   });
-
-  // ✅ 修复7：注册撤销写权限命令
-  const revokeWritePermissionCmd = vscode.commands.registerCommand(
-    'xiaoweiba.revokeWritePermission',
-    async () => {
-      memorySystem.revokeCurrentToken();
-      vscode.window.showInformationMessage('✅ 写权限已撤销');
-    }
-  );
 
   // 添加到订阅
   context.subscriptions.push(

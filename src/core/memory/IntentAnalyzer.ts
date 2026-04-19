@@ -36,23 +36,26 @@ export class IntentAnalyzer {
    * @returns 意图向量 {temporal, entity, semantic, distantTemporal}
    */
   analyze(query: string, languageId?: string): IntentVector {
+    // ✅ 截断超长查询，防止正则匹配性能问题（最多1000字符）
+    const truncatedQuery = query.length > 1000 ? query.substring(0, 1000) : query;
+    
     let temporal = 0;
     let entity = 0;
     let semantic = 0;
     let distantTemporal = 0;
   
     // 检测时间敏感性
-    if (this.temporalPatterns.some(p => p.test(query))) {
+    if (this.temporalPatterns.some(p => p.test(truncatedQuery))) {
       temporal = 0.8;
     }
     
     // 检测久远时间意图
-    if (this.distantTemporalPatterns.some(p => p.test(query))) {
+    if (this.distantTemporalPatterns.some(p => p.test(truncatedQuery))) {
       distantTemporal = 0.9;
     }
   
     // 检测实体敏感性
-    if (this.entityPatterns.some(p => p.test(query))) {
+    if (this.entityPatterns.some(p => p.test(truncatedQuery))) {
       entity = 0.7;
     }
   

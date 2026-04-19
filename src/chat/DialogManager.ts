@@ -1,4 +1,4 @@
-import { ChatMessage } from './SessionManager';
+import { ChatMessage } from './types';
 
 /**
  * 对话状态枚举

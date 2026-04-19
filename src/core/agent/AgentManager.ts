@@ -124,8 +124,12 @@ export class AgentManager {
     if (!agent) return false;
     
     try {
-      const available = await agent.isAvailable();
-      return available;
+      // isAvailable是可选方法，如果不存在则认为可用
+      if (agent.isAvailable) {
+        const available = await agent.isAvailable();
+        return available;
+      }
+      return true; // 默认认为可用
     } catch (error) {
       console.error(`[AgentManager] Error checking availability for ${id}:`, error);
       return false;

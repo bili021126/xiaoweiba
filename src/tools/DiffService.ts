@@ -51,6 +51,16 @@ export class DiffService {
     filePath: string
   ): Promise<boolean> {
     return new Promise((resolve) => {
+      // ✅ 防止Promise重复resolve
+      let isResolved = false;
+      
+      const safeResolve = (value: boolean) => {
+        if (!isResolved) {
+          isResolved = true;
+          resolve(value);
+        }
+      };
+      
       const panel = vscode.window.createWebviewPanel(
         'diffPreview',
         '代码差异预览',
@@ -68,16 +78,16 @@ export class DiffService {
       panel.webview.onDidReceiveMessage((message) => {
         if (message.action === 'confirm') {
           panel.dispose();
-          resolve(true);
+          safeResolve(true);
         } else if (message.action === 'cancel') {
           panel.dispose();
-          resolve(false);
+          safeResolve(false);
         }
       });
 
       // 面板关闭时视为取消
       panel.onDidDispose(() => {
-        resolve(false);
+        safeResolve(false);
       });
     });
   }

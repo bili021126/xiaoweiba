@@ -1,3 +1,5 @@
-export { IAgent, AgentCapability, AgentMetadata, AgentResult, AgentInput, AgentFactory, AgentRegistration } from './IAgent';
-export { AgentManager } from './AgentManager';
-export { ChatAgent } from './ChatAgent';
+/**
+ * Agent接口统一导出
+ */
+
+export { IAgent, AgentInput, AgentResult, AgentCapability } from './IAgent';

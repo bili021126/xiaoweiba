@@ -1,7 +1,7 @@
 # 小尾巴（XiaoWeiba）问题记录
 
 **版本**: 1.0  
-**最后更新**: 2026-04-19（P0核心模块重构与P1/P2优化完成）
+**最后更新**: 2026-04-14（P0核心模块重构 + 数据库持久化优化完成）
 
 ---
 
@@ -20,6 +20,17 @@
 ---
 
 ## 已修复问题
+
+### 2026-04-14 - 数据库持久化与Agent注册表修复
+
+| 日期 | 问题 | 严重程度 | 原因 | 修复方案 | 状态 | 相关文件 |
+|------|------|---------|------|---------|------|----------|
+| 2026-04-14 | AgentRegistry多重实例导致意图查找失败 | P0 | initializeContainer中创建实例A，activate中通过container.resolve(AgentRegistryImpl)创建实例B，IntentDispatcher获取的是空实例A | 使用container.resolve('IAgentRegistry')获取已注册的实例，避免重新创建 | ✅ 已修复 | src/extension.ts:164, src/core/application/IntentDispatcher.ts |
+| 2026-04-14 | Windows文件锁导致数据库保存失败（EPERM） | P0 | 原子重命名操作被杀毒软件/OneDrive锁定，3次重试后直接放弃，数据无法持久化 | 实施降级策略：原子重命名失败后降级为直接覆盖写入，确保数据能保存 | ✅ 已修复 | src/storage/DatabaseManager.ts:153-206 |
+| 2026-04-14 | Atomics.wait兼容性问题 | P1 | 某些Node.js环境不支持Atomics.wait | 使用忙等待替代：while (Date.now() < end) { } | ✅ 已优化 | src/storage/DatabaseManager.ts:180-181 |
+| 2026-04-14 | EventBus handler超时时间过短（5秒） | P1 | LLM调用等耗时操作超过5秒被强制中断 | 超时时间从5秒增加到30秒 | ✅ 已优化 | src/core/eventbus/EventBus.ts:127 |
+| 2026-04-14 | EpisodicMemory初始化时序错误 | P0 | initializeContainer中提前解析EpisodicMemory，此时DatabaseManager未初始化 | 将EpisodicMemory解析移至activate的Step 4，在DatabaseManager注册之后 | ✅ 已修复 | src/extension.ts:141-152 |
+| 2026-04-14 | runMutation缺少自动持久化 | P0 | PreferenceMemory的写操作不会触发saveDatabase | 添加与run方法相同的自动持久化逻辑 | ✅ 已修复 | src/storage/DatabaseManager.ts:649-669 |
 
 ### 2026-04-19 - P0核心模块重构与P1/P2优化
 

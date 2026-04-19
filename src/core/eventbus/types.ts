@@ -21,6 +21,19 @@ export enum CoreEventType {
 
   // 系统相关
   CONFIG_UPDATED = 'config.updated',
+  
+  // Agent相关
+  AGENT_REGISTERED = 'agent.registered',
+  
+  // 意图调度相关
+  INTENT_RECEIVED = 'intent.received',
+  AGENT_SELECTED = 'agent.selected',
+  INTENT_DISPATCHED = 'intent.dispatched',
+  INTENT_DISPATCH_FAILED = 'intent.dispatch_failed',
+  
+  // UI响应相关
+  ASSISTANT_RESPONSE = 'assistant.response',
+  STREAM_CHUNK = 'stream.chunk',        // ✅ 新增：流式响应块
 }
 
 /**
@@ -72,6 +85,16 @@ export interface CoreEventPayloadMap {
     };
   };
   [CoreEventType.CONFIG_UPDATED]: { key: string; oldValue: unknown; newValue: unknown };
+  [CoreEventType.AGENT_REGISTERED]: { agentId: string; capabilities: unknown[] };
+  [CoreEventType.INTENT_RECEIVED]: any;
+  [CoreEventType.AGENT_SELECTED]: { intent: any; agentId: string; memoryContext: any };
+  [CoreEventType.INTENT_DISPATCHED]: { intent: any; agentId: string; duration: number };
+  [CoreEventType.INTENT_DISPATCH_FAILED]: { intent: any; error: Error };
+  [CoreEventType.ASSISTANT_RESPONSE]: { messageId: string; content: string; timestamp: number };
+  [CoreEventType.STREAM_CHUNK]: {       // ✅ 新增：流式块载荷
+    messageId: string;
+    chunk: string;
+  };
 }
 
 /**

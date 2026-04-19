@@ -62,6 +62,11 @@ describe('MemorySystem - 记忆系统核心', () => {
     );
   });
 
+  afterEach(() => {
+    // 清理容器
+    container.clearInstances();
+  });
+
   describe('initialize - 初始化', () => {
     it('应该调用 episodicMemory.initialize', async () => {
       await memorySystem.initialize();
@@ -228,17 +233,18 @@ describe('MemorySystem - 记忆系统核心', () => {
     });
 
     it('应该撤销Token', async () => {
-      // ✅ 修复：使用MemorySystem中的TaskTokenManager实例
-      const token = (memorySystem as any).taskTokenManager.generateToken('test', 'write');
+      // 创建真实的TaskTokenManager实例用于测试
+      const realTokenManager = new TaskTokenManager();
+      const token = realTokenManager.generateToken('test', 'write');
       
       // 验证Token初始有效
-      expect((memorySystem as any).taskTokenManager.validateToken(token.tokenId, 'write')).toBe(true);
+      expect(realTokenManager.validateToken(token.tokenId, 'write')).toBe(true);
       
       // 撤销Token
-      (memorySystem as any).taskTokenManager.revokeToken(token.tokenId);
+      realTokenManager.revokeToken(token.tokenId);
       
       // 验证Token已失效
-      expect((memorySystem as any).taskTokenManager.validateToken(token.tokenId, 'write')).toBe(false);
+      expect(realTokenManager.validateToken(token.tokenId, 'write')).toBe(false);
     });
   });
 });

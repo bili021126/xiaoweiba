@@ -72,6 +72,21 @@ export class IndexManager {
   }
 
   /**
+   * 增量添加记忆到索引（公共接口）
+   * @param memory 记忆记录
+   */
+  addMemoryToIndex(memory: EpisodicMemoryRecord): void {
+    this.addToIndex(memory.id, memory.summary);
+    
+    // 索引entities
+    if (memory.entities && memory.entities.length > 0) {
+      for (const entity of memory.entities) {
+        this.addToIndex(memory.id, entity);
+      }
+    }
+  }
+
+  /**
    * 从索引中移除
    * @param memoryId 记忆ID
    */
