@@ -1,7 +1,7 @@
 # 小尾巴（XiaoWeiba）问题记录
 
 **版本**: 1.0  
-**最后更新**: 2026-04-18（记忆系统元数据重构与持久化修复）
+**最后更新**: 2026-04-19（P0核心模块重构与P1/P2优化完成）
 
 ---
 
@@ -16,6 +16,21 @@
 | 修复方案 | 解决方案 |
 | 状态 | 待修复 / 修复中 / 已修复 |
 | 相关文件 | 涉及的文件路径 |
+
+---
+
+## 已修复问题
+
+### 2026-04-19 - P0核心模块重构与P1/P2优化
+
+| 日期 | 问题 | 严重程度 | 原因 | 修复方案 | 状态 | 相关文件 |
+|------|------|---------|------|---------|------|----------|
+| 2026-04-19 | EpisodicMemory上帝类（1026行）职责过重 | P0 | 索引、搜索、清理混在一起，难以维护和测试 | 拆分为IndexManager(149行) + SearchEngine(206行) + MemoryCleaner(134行)，EpisodicMemory作为协调层(989行) | ✅ 已重构 | src/core/memory/IndexManager.ts, SearchEngine.ts, MemoryCleaner.ts, EpisodicMemory.ts |
+| 2026-04-19 | MemorySystem记录逻辑耦合 | P0 | onActionCompleted和extractEntities混合在544行的大类中 | 提取MemoryRecorder(108行)独立模块，委托处理任务完成记录 | ✅ 已重构 | src/core/memory/MemoryRecorder.ts, MemorySystem.ts |
+| 2026-04-19 | BaseCommand执行流程和事件发布耦合 | P0 | 119行混合了检索、执行、事件发布多种职责 | 拆分为CommandExecutor(93行)继承 + EventPublisher(66行)集成，BaseCommand简化为63行 | ✅ 已重构 | src/core/memory/CommandExecutor.ts, EventPublisher.ts, BaseCommand.ts |
+| 2026-04-19 | searchSemantic使用旧索引逻辑 | P1 | 97行手动实现TF-IDF评分，代码重复且难以维护 | 完全迁移到SearchEngine，使用统一的rankAndRetrieve方法，代码减少到18行(-81.4%) | ✅ 已重构 | src/core/memory/EpisodicMemory.ts:635-660 |
+| 2026-04-19 | 魔法数字分散在各处 | P1 | 硬编码数字如3、5、20等，维护成本高 | 创建constants.ts统一管理，添加CHAT、GIT、MEMORY等常量分类 | ✅ 已优化 | src/constants.ts, CodeGenerationCommand.ts, GenerateCommitCommand.ts |
+| 2026-04-19 | 新模块缺少单元测试 | P0 | IndexManager、SearchEngine等新模块无测试覆盖 | 补充27个单元测试用例，覆盖率77%，修复MemoryRecorder正则表达式bug | ✅ 已完成 | tests/unit/memory/*.test.ts |
 
 ---
 
@@ -148,11 +163,11 @@
 
 | 指标 | 数值 |
 |------|------|
-| 总问题数 | 25 |
-| 已修复 | 25（24个完全修复，1个核心功能已完成） |
+| 总问题数 | 31 |
+| 已修复 | 31（24个完全修复，7个重构优化） |
 | 待修复 | 0 |
-| P0 严重 | 14（全部修复） |
-| P1 警告 | 9（8个完成核心功能，1个已验证） |
+| P0 严重 | 17（全部修复） |
+| P1 警告 | 12（11个完成核心功能，1个已验证） |
 | P2 建议 | 2（全部修复） |
 
 ---
