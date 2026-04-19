@@ -4,85 +4,53 @@
  * 设计原则：
  * 1. 所有命令必须继承此类
  * 2. 通过 executeCore 接受 MemoryContext（由 MemorySystem 自动注入）
- * 3. 禁止直接依赖 MemoryService，确保"记忆为核、先记忆后行动"
+ * 3. 禁止直接依赖 MemoryService，确保“记忆为核、先记忆后行动”
  */
 
-import { EventBus, CoreEventType } from '../eventbus/EventBus';
+import { EventBus } from '../eventbus/EventBus';
 import { MemorySystem, MemoryContext } from '../memory/MemorySystem';
+// ✅ 新增：引入重构后的模块
+import { CommandExecutor, CommandInput, CommandResult } from './CommandExecutor';
+import { EventPublisher } from './EventPublisher';
 
-export interface CommandInput {
-  [key: string]: any;
-}
+export { CommandInput, CommandResult }; // 重新导出类型，保持向后兼容
 
-export interface CommandResult {
-  success: boolean;
-  data?: any;
-  error?: string;
-  durationMs?: number;
-  // ✅ 新增：由 Command 提供的记忆元数据
-  memoryMetadata?: {
-    taskType: string;
-    summary: string;
-    entities: string[];
-  };
-}
-
-export abstract class BaseCommand {
-  protected eventBus: EventBus;
-  protected memorySystem: MemorySystem;
+export abstract class BaseCommand extends CommandExecutor {
+  private eventPublisher: EventPublisher;
 
   constructor(
     memorySystem: MemorySystem,
     eventBus: EventBus,
-    public readonly commandId: string
+    commandId: string
   ) {
-    this.memorySystem = memorySystem;
-    this.eventBus = eventBus;
+    super(memorySystem, commandId);
+    // ✅ 新增：初始化事件发布器
+    this.eventPublisher = new EventPublisher(eventBus);
   }
 
   /**
-   * 命令执行的统一入口（由 MemorySystem 调用）
-   * 
-   * @param input 输入参数
-   * @returns 执行结果
+   * ✅ 重写execute方法，添加事件发布逻辑
    */
   async execute(input: CommandInput): Promise<CommandResult> {
     const startTime = Date.now();
+    
     try {
-      // 1. 直接调用 MemorySystem 获取上下文
-      const memoryContext = await this.retrieveMemoryContext(input);
+      // 1. 调用父类的执行流程（检索记忆 + 执行核心逻辑）
+      const result = await super.execute(input);
 
-      // 2. 执行核心逻辑
-      const result = await this.executeCore(input, memoryContext);
-
+      // 2. 发布成功事件
       const durationMs = Date.now() - startTime;
-      result.durationMs = durationMs;
-
-      // 3. 发布完成事件（触发自动记忆记录）
-      console.log(`[BaseCommand] Publishing TASK_COMPLETED for ${this.commandId}, duration: ${durationMs}ms`);
-      this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
-        actionId: this.commandId,
-        result: {
-          success: result.success,
-          data: result.data,
-          error: result.error
-        },
-        durationMs,
-        memoryMetadata: result.memoryMetadata  // ✅ 传递元数据
-      }, { source: this.commandId });
+      this.eventPublisher.publishTaskCompleted(this.commandId, result, durationMs);
 
       return result;
     } catch (error) {
+      // 3. 发布失败事件
       const durationMs = Date.now() - startTime;
-      this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
-        actionId: this.commandId,
-        result: {
-          success: false,
-          error: error instanceof Error ? error.message : String(error)
-        },
+      this.eventPublisher.publishTaskFailed(
+        this.commandId,
+        error instanceof Error ? error : new Error(String(error)),
         durationMs
-        // 失败时不记录记忆元数据
-      }, { source: this.commandId });
+      );
 
       return {
         success: false,
@@ -91,23 +59,4 @@ export abstract class BaseCommand {
       };
     }
   }
-
-  /**
-   * 获取记忆上下文的统一入口。
-   * 未来若需切换为 EventBus 请求模式，只需重写此方法。
-   */
-  protected async retrieveMemoryContext(input: CommandInput): Promise<MemoryContext> {
-    return await this.memorySystem.retrieveRelevant(this.commandId, input);
-  }
-
-  /**
-   * 核心执行逻辑（子类必须实现）
-   * 
-   * @param input 输入参数
-   * @param context 记忆上下文（包含相关记忆和偏好）
-   * @returns 执行结果
-   */
-  protected abstract executeCore(input: CommandInput, context: MemoryContext): Promise<CommandResult>;
-
-  dispose(): void {}
 }

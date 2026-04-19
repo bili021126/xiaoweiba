@@ -14,6 +14,8 @@ import { EpisodicMemory } from './EpisodicMemory';
 import { PreferenceMemory } from './PreferenceMemory';
 import { AuditLogger } from '../security/AuditLogger';
 import { TaskTokenManager, TaskPermissionLevel } from '../security/TaskTokenManager';
+// ✅ 新增：引入重构后的模块
+import { MemoryRecorder } from './MemoryRecorder';
 
 /**
  * 动作处理器类型
@@ -75,6 +77,9 @@ export class MemorySystem {
   private currentTokenId: string | null = null;
   private currentActionId: string | null = null;
   private cleanupTimer: NodeJS.Timeout | null = null;
+  
+  // ✅ 新增：重构后的模块
+  private memoryRecorder: MemoryRecorder;
 
   constructor(
     @inject(EventBus) private eventBus: EventBus,
@@ -82,7 +87,10 @@ export class MemorySystem {
     @inject(PreferenceMemory) private preferenceMemory: PreferenceMemory,
     @inject(AuditLogger) private auditLogger: AuditLogger,
     @inject(TaskTokenManager) private taskTokenManager: TaskTokenManager
-  ) {}
+  ) {
+    // ✅ 新增：初始化重构后的模块
+    this.memoryRecorder = new MemoryRecorder(this.episodicMemory, this.eventBus);
+  }
 
   /**
    * 初始化记忆系统
@@ -418,72 +426,15 @@ export class MemorySystem {
   /**
    * 处理动作完成事件（自动记录到记忆）
    */
+  /**
+   * ✅ 委托给MemoryRecorder记录任务完成
+   */
   private async onActionCompleted(event: any): Promise<void> {
     // ✅ EventBus传递data，兼容payload
     const payload = event.payload || event.data;
-    const { actionId, result, durationMs, memoryMetadata } = payload;
     
-    console.log(`[MemorySystem] onActionCompleted triggered for: ${actionId}`, { 
-      result, 
-      durationMs, 
-      hasMetadata: !!memoryMetadata 
-    });
-    
-    try {
-      // ✅ 如果 Command 提供了元数据，直接使用
-      if (memoryMetadata) {
-        console.log('[MemorySystem] Using memoryMetadata from Command');
-        const memoryId = await this.episodicMemory.record({
-          taskType: memoryMetadata.taskType,
-          summary: memoryMetadata.summary,
-          entities: memoryMetadata.entities,
-          outcome: result?.success ? 'SUCCESS' : 'FAILED',
-          modelId: result?.modelId || 'deepseek',
-          durationMs
-        });
-        
-        console.log(`[MemorySystem] Memory recorded with ID: ${memoryId}`);
-        
-        // 发布情景记忆新增事件
-        this.eventBus.publish(CoreEventType.MEMORY_RECORDED, {
-          memoryId,
-          taskType: memoryMetadata.taskType
-        }, { source: 'MemorySystem' });
-        return;
-      }
-
-      // 降级：对于没有提供元数据的命令（如导入导出），使用简单逻辑或不记录
-      console.log(`[MemorySystem] No memoryMetadata for action: ${actionId}, skipping episodic record`);
-    } catch (error) {
-      console.error('[MemorySystem] Failed to record action completion:', error);
-    }
-  }
-
-  /**
-   * 从代码中提取实体（函数名、类名等）
-   */
-  private extractEntities(code: string): string[] {
-    const entities: string[] = [];
-    
-    // 提取函数名
-    const functionMatches = code.match(/function\s+(\w+)/g);
-    if (functionMatches) {
-      functionMatches.forEach(m => {
-        const name = m.match(/\w+/)?.[1];
-        if (name) entities.push(name);
-      });
-    }
-    
-    // 提取类名
-    const classMatches = code.match(/class\s+(\w+)/g);
-    if (classMatches) {
-      classMatches.forEach(m => {
-        const name = m.match(/\w+/)?.[1];
-        if (name) entities.push(name);
-      });
-    }
-    
-    return [...new Set(entities)]; // 去重
+    // ✅ 委托给MemoryRecorder
+    await this.memoryRecorder.recordTaskCompletion(payload);
   }
 
   /**

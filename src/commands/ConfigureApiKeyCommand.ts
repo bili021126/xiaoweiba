@@ -13,6 +13,9 @@ export class ConfigureApiKeyCommand extends BaseCommand {
   private configManager: ConfigManager;
   private auditLogger: AuditLogger;
 
+  // ✅ 修复：配置API Key不需要记忆上下文
+  protected requiresMemoryContext = false;
+
   constructor(
     memorySystem: MemorySystem,
     eventBus: EventBus

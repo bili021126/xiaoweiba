@@ -17,6 +17,9 @@ export class OptimizeSQLCommand extends BaseCommand {
   private llmTool: LLMTool;
   private auditLogger: AuditLogger;
 
+  // ✅ 修复：SQL优化不需要记忆上下文
+  protected requiresMemoryContext = false;
+
   constructor(
     memorySystem: MemorySystem,
     eventBus: EventBus,
@@ -83,7 +86,17 @@ export class OptimizeSQLCommand extends BaseCommand {
         }
       });
 
-      return { success: true };
+      // ✅ 修复：返回元数据供MemorySystem使用
+      const relativePath = editor ? vscode.workspace.asRelativePath(editor.document.uri.fsPath) : 'unknown';
+      return { 
+        success: true,
+        durationMs,
+        memoryMetadata: {
+          taskType: 'SQL_OPTIMIZE',
+          summary: `优化了 ${relativePath} 中的 SQL 查询`,
+          entities: [relativePath]
+        }
+      };
 
     } catch (error) {
       const durationMs = Date.now() - startTime;

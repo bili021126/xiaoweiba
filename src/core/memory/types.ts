@@ -64,7 +64,8 @@ export type TaskType =
   | 'COMMIT_GENERATE'
   | 'SKILL_EXECUTE'
   | 'WORKFLOW_EXECUTE'
-  | 'CHAT_COMMAND';
+  | 'CHAT_COMMAND'
+  | 'SESSION_SUMMARY';  // ✅ 会话摘要
 
 /**
  * 任务结果枚举

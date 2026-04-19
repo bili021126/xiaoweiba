@@ -15,6 +15,7 @@ import { BestPracticeLibrary } from '../core/knowledge/BestPracticeLibrary';
 import { DiffService } from '../tools/DiffService';
 import { BaseCommand, CommandInput, CommandResult } from '../core/memory/BaseCommand';
 import { MemorySystem, MemoryContext } from '../core/memory/MemorySystem';
+import { CHAT } from '../constants';
 
 export class CodeGenerationCommand extends BaseCommand {
   private auditLogger: AuditLogger;
@@ -132,7 +133,17 @@ export class CodeGenerationCommand extends BaseCommand {
         }
       });
 
-      return { success: true };
+      // ✅ 修复：返回元数据供MemorySystem使用
+      const relativePath = vscode.workspace.asRelativePath(editor.document.uri.fsPath);
+      return { 
+        success: true,
+        durationMs,
+        memoryMetadata: {
+          taskType: 'CODE_GENERATE',
+          summary: `在 ${relativePath} 中生成了代码: ${requirement.substring(0, 50)}${requirement.length > 50 ? '...' : ''}`,
+          entities: [relativePath]
+        }
+      };
 
     } catch (error) {
       const durationMs = Date.now() - startTime;
@@ -164,7 +175,7 @@ export class CodeGenerationCommand extends BaseCommand {
     const relevantPractices = allPractices.filter(p => 
       p.title.toLowerCase().includes(languageId.toLowerCase()) ||
       p.description.toLowerCase().includes(languageId.toLowerCase())
-    ).slice(0, 3); // 最多取3条
+    ).slice(0, CHAT.BEST_PRACTICE_DISPLAY_LIMIT); // 最多取3条
 
     let bestPracticeHint = '';
     if (relevantPractices.length > 0) {
@@ -172,16 +183,22 @@ export class CodeGenerationCommand extends BaseCommand {
         relevantPractices.map((p, i) => `${i + 1}. ${p.title}: ${p.description}`).join('\n');
     }
 
+    // ✅ 修复1：明确语言要求，避免TS/JS混用
+    const languageConstraint = languageId === 'javascript' 
+      ? '\n⚠️ 重要：请仅输出纯 JavaScript 代码（不要使用 TypeScript 语法如类型注解、interface等），确保代码可直接在浏览器或Node.js中运行。'
+      : '';
+
     const prompt = `请根据以下需求生成${languageId}代码：
 
 需求：${requirement}${contextInfo}${bestPracticeHint}
 
 要求：
-1. 代码必须符合${languageId}语言规范
+1. 代码必须符合${languageId}语言规范${languageConstraint}
 2. 包含必要的注释说明
 3. 遵循最佳实践和设计模式
 4. 考虑边界情况和错误处理
 5. 保持代码简洁、可读性强
+6. 确保语法正确，无编译错误
 
 请直接返回代码，使用markdown代码块格式：
 \`\`\`${languageId}
@@ -214,7 +231,18 @@ export class CodeGenerationCommand extends BaseCommand {
     this.cache.set(prompt, result.data);
 
     // 提取代码块
-    return this.extractCodeFromMarkdown(result.data, languageId);
+    const code = this.extractCodeFromMarkdown(result.data, languageId);
+    
+    // ✅ 修复2：语法校验
+    if (languageId === 'javascript' || languageId === 'typescript') {
+      const validation = this.validateSyntax(code, languageId);
+      if (!validation.valid) {
+        console.error('[CodeGenerationCommand] Generated code has syntax errors:', validation.error);
+        throw new Error(`生成的代码包含语法错误：${validation.error}`);
+      }
+    }
+    
+    return code;
   }
 
   /**
@@ -239,6 +267,37 @@ export class CodeGenerationCommand extends BaseCommand {
 
     // 如果没有代码块标记，返回原始内容
     return markdown.trim();
+  }
+
+  /**
+   * ✅ 修复2：语法校验 - 使用 acorn 验证 JavaScript 代码
+   */
+  private validateSyntax(code: string, languageId: string): { valid: boolean; error?: string } {
+    if (languageId !== 'javascript' && languageId !== 'typescript') {
+      // 非JS/TS语言，跳过语法校验
+      return { valid: true };
+    }
+
+    try {
+      const acorn = require('acorn');
+      const parser = languageId === 'typescript' ? require('acorn-typescript') : acorn;
+      
+      // 尝试解析代码
+      parser.parse(code, {
+        ecmaVersion: 2020,
+        sourceType: 'module',
+        allowReturnOutsideFunction: true
+      });
+      
+      return { valid: true };
+    } catch (error: any) {
+      const errorMessage = error.message || '未知语法错误';
+      console.error('[CodeGenerationCommand] Syntax validation failed:', errorMessage);
+      return { 
+        valid: false, 
+        error: `语法错误: ${errorMessage}` 
+      };
+    }
   }
 
   /**

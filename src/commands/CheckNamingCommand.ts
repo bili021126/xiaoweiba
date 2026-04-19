@@ -19,6 +19,9 @@ export class CheckNamingCommand extends BaseCommand {
   private llmTool: LLMTool;
   private cache: LLMResponseCache;
 
+  // ✅ 修复：命名检查不需要记忆上下文
+  protected requiresMemoryContext = false;
+
   constructor(
     memorySystem: MemorySystem,
     eventBus: EventBus,
@@ -95,7 +98,17 @@ export class CheckNamingCommand extends BaseCommand {
         }
       });
 
-      return { success: true };
+      // ✅ 修复：返回元数据供MemorySystem使用
+      const relativePath = vscode.workspace.asRelativePath(editor.document.uri.fsPath);
+      return { 
+        success: true,
+        durationMs,
+        memoryMetadata: {
+          taskType: 'NAMING_CHECK',
+          summary: `在 ${relativePath} 中检查了命名: ${selectedText.substring(0, 30)}`,
+          entities: [relativePath, selectedText]
+        }
+      };
 
     } catch (error) {
       const durationMs = Date.now() - startTime;

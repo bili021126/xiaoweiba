@@ -18,6 +18,7 @@ import { AuditLogger } from '../core/security/AuditLogger';
 import { getUserFriendlyMessage } from '../utils/ErrorCodes';
 import { EventBus, CoreEventType } from '../core/eventbus/EventBus';
 import { EpisodicMemoryRecord } from '../core/memory/types';
+import { GIT } from '../constants';
 import { BaseCommand, CommandInput, CommandResult } from '../core/memory/BaseCommand';
 import { MemorySystem, MemoryContext } from '../core/memory/MemorySystem';
 
@@ -76,6 +77,10 @@ export class GenerateCommitCommand extends BaseCommand {
 
       const workspacePath = workspaceFolders[0].uri.fsPath;
 
+      // 用于保存生成结果的变量
+      let generatedCommitMessage = '';
+      let changedFilesList: string[] = [];
+
       // 2. 获取 Git diff
       await vscode.window.withProgress({
         location: vscode.ProgressLocation.Notification,
@@ -98,6 +103,7 @@ export class GenerateCommitCommand extends BaseCommand {
         
         // 4. 检索相关文件的历史提交
         const changedFiles = await this.getChangedFiles(workspacePath);
+        changedFilesList = changedFiles;  // ✅ 保存到外部变量
         const relevantMemories = await this.retrieveRelevantMemories(changedFiles);
 
         progress.report({ message: '🤖 调用 AI 生成提交信息...', increment: 40 });
@@ -108,6 +114,7 @@ export class GenerateCommitCommand extends BaseCommand {
           preference,
           relevantMemories
         );
+        generatedCommitMessage = commitMessage;  // ✅ 保存到外部变量
         
         progress.report({ message: '✨ 生成完成，准备提交...', increment: 60 });
 
@@ -129,7 +136,16 @@ export class GenerateCommitCommand extends BaseCommand {
         }
       });
 
-      return { success: true };
+      // ✅ 修复：返回元数据供MemorySystem使用
+      return { 
+        success: true,
+        durationMs,
+        memoryMetadata: {
+          taskType: 'COMMIT_GENERATE',
+          summary: `生成了提交信息: ${generatedCommitMessage.substring(0, 50)}${generatedCommitMessage.length > 50 ? '...' : ''}`,
+          entities: changedFilesList.slice(0, GIT.MAX_ENTITIES_IN_METADATA)  // 最多5个文件
+        }
+      };
 
     } catch (error) {
       const durationMs = Date.now() - startTime;
