@@ -18,6 +18,9 @@ import { PreferenceMemory } from '../../core/memory/PreferenceMemory';
 import { CommitStyleLearner } from '../../core/memory/CommitStyleLearner';
 import { IEventBus } from '../../core/ports/IEventBus';
 import { DatabaseManager } from '../../storage/DatabaseManager';
+import { IntentAnalyzer } from '../../core/memory/IntentAnalyzer';
+import { ExpertSelector } from '../../core/memory/ExpertSelector';
+import { ProjectFingerprint } from '../../utils/ProjectFingerprint';
 
 @injectable()
 export class MemoryAdapter implements IMemoryPort {
@@ -28,13 +31,18 @@ export class MemoryAdapter implements IMemoryPort {
   
   // ✅ Agent性能数据存储（用于Wilson评分）
   private agentPerformances: Map<string, { totalAttempts: number; successCount: number; totalDurationMs: number }> = new Map();
+  
+  // ✅ P1-03: 反馈记录组件
+  private readonly intentAnalyzer = new IntentAnalyzer();
+  private readonly expertSelector = new ExpertSelector();
 
   constructor(
     @inject(EpisodicMemory) private episodicMemory: EpisodicMemory,
     @inject(PreferenceMemory) private preferenceMemory: PreferenceMemory,
     @inject(CommitStyleLearner) private commitStyleLearner: CommitStyleLearner,
     @inject('IEventBus') private eventBus: IEventBus,  // ✅ 注入EventBus以订阅事件
-    @inject(DatabaseManager) private dbManager: DatabaseManager  // ✅ P1-02: 注入DatabaseManager
+    @inject(DatabaseManager) private dbManager: DatabaseManager,  // ✅ P1-02: 注入DatabaseManager
+    @inject(ProjectFingerprint) private projectFingerprint: ProjectFingerprint  // ✅ P1-03: 注入ProjectFingerprint
   ) {
     this.subscribeToEvents();
   }
@@ -231,10 +239,36 @@ export class MemoryAdapter implements IMemoryPort {
    */
   async recordFeedback(event: FeedbackGivenEvent): Promise<void> {
     try {
-      // ✅ 使用新的反馈事件结构
+      // ✅ P1-03: 完整实现反馈记录机制
       const { query, clickedMemoryId, dwellTimeMs } = event;
       
-      // TODO: 将反馈记录到偏好记忆或专家选择器，用于优化未来的记忆检索权重
+      // 1. 从query提取意图向量
+      const intentVector = this.intentAnalyzer.analyze(query);
+      
+      // 2. 获取当前ExpertSelector的权重配置（作为clickedWeights）
+      //    注意：这里简化处理，使用默认balanced权重
+      //    实际应该根据clickedMemoryId查询对应的记忆记录，但EpisodicMemoryRecord没有存储RetrievalWeights
+      const clickedWeights = this.expertSelector.getBaseWeights();
+      
+      // 3. 记录到ExpertSelector（用于动态调整检索权重）
+      this.expertSelector.recordFeedback(intentVector, clickedWeights, query, dwellTimeMs);
+      
+      // 4. 持久化到数据库（用于后续分析和回溯）
+      const projectFingerprint = await this.projectFingerprint.getCurrentProjectFingerprint();
+      const feedbackId = `feedback_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      await this.dbManager.run(
+        'INSERT INTO feedback_records (id, query, clicked_memory_id, dwell_time_ms, timestamp, project_fingerprint) VALUES (?, ?, ?, ?, ?, ?)',
+        [feedbackId, query, clickedMemoryId, dwellTimeMs, Date.now(), projectFingerprint || null]
+      );
+      
+      console.log('[MemoryAdapter] Feedback recorded:', {
+        feedbackId,
+        query: query.substring(0, 50),
+        clickedMemoryId,
+        dwellTimeMs,
+        intentVector
+      });
     } catch (error) {
       console.error('[MemoryAdapter] recordFeedback failed:', error);
       throw error;

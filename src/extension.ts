@@ -75,6 +75,7 @@ import { CommitStyleLearner } from './core/memory/CommitStyleLearner';  // ✅ �
 import { EpisodicMemory } from './core/memory/EpisodicMemory';
 import { PreferenceMemory } from './core/memory/PreferenceMemory';
 import { MemorySystem } from './core/memory/MemorySystem';
+import { ProjectFingerprint } from './utils/ProjectFingerprint';  // ✅ P1-03: 反馈记录需要
 import { LLMTool } from './tools/LLMTool';
 import { ChatViewProvider } from './chat/ChatViewProvider';
 import { AICompletionProvider } from './completion/AICompletionProvider';
@@ -146,9 +147,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     memorySystem = container.resolve(MemorySystem);
     llmTool = container.resolve(LLMTool);
     
+    // ✅ P1-03: 创建ProjectFingerprint实例
+    const projectFingerprint = new ProjectFingerprint();
+    
     // ✅ 创建MemoryAdapter并注册为IMemoryPort
     const eventBusAdapter = new EventBusAdapter(legacyEventBus);
-    memoryAdapter = new MemoryAdapter(episodicMemory, preferenceMemory, commitStyleLearner, eventBusAdapter, databaseManager);
+    memoryAdapter = new MemoryAdapter(episodicMemory, preferenceMemory, commitStyleLearner, eventBusAdapter, databaseManager, projectFingerprint);
     container.register('IMemoryPort', { useValue: memoryAdapter });
     console.log('[Extension] IMemoryPort registered (MemoryAdapter)');
     

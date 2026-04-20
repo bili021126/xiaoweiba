@@ -348,6 +348,18 @@ export class DatabaseManager {
         FOREIGN KEY (session_id) REFERENCES chat_sessions(session_id) ON DELETE CASCADE
       )
     `);
+
+    // ✅ P1-03: 反馈记录表（用于优化记忆检索权重）
+    db.run(`
+      CREATE TABLE IF NOT EXISTS feedback_records (
+        id TEXT PRIMARY KEY,
+        query TEXT NOT NULL,
+        clicked_memory_id TEXT NOT NULL,
+        dwell_time_ms INTEGER NOT NULL,
+        timestamp INTEGER NOT NULL,
+        project_fingerprint TEXT
+      )
+    `);
   }
 
   /**
