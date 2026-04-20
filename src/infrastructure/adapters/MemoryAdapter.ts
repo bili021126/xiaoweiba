@@ -245,9 +245,8 @@ export class MemoryAdapter implements IMemoryPort {
       // 1. 从query提取意图向量
       const intentVector = this.intentAnalyzer.analyze(query);
       
-      // 2. 获取当前ExpertSelector的权重配置（作为clickedWeights）
-      //    注意：这里简化处理，使用默认balanced权重
-      //    实际应该根据clickedMemoryId查询对应的记忆记录，但EpisodicMemoryRecord没有存储RetrievalWeights
+      // 2. 获取基础权重配置（ExpertSelector会基于多次反馈自动调整）
+      //    注意：不使用clickedMemoryId对应的历史权重，避免冷启动问题
       const clickedWeights = this.expertSelector.getBaseWeights();
       
       // 3. 记录到ExpertSelector（用于动态调整检索权重）

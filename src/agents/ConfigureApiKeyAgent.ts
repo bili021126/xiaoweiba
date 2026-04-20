@@ -106,6 +106,6 @@ export class ConfigureApiKeyAgent implements IAgent {
    * 清理资源
    */
   async dispose(): Promise<void> {
-    console.log('[ConfigureApiKeyAgent] Disposed');
+    // Agent已清理
   }
 }
