@@ -325,6 +325,29 @@ export class DatabaseManager {
         updated_at INTEGER NOT NULL
       )
     `);
+
+    // ✅ 会话表（P1-02: SessionManagementAgent持久化）
+    db.run(`
+      CREATE TABLE IF NOT EXISTS chat_sessions (
+        session_id TEXT PRIMARY KEY,
+        created_at INTEGER NOT NULL,
+        last_active_at INTEGER NOT NULL,
+        message_count INTEGER NOT NULL DEFAULT 0,
+        metadata TEXT  -- JSON格式：{title, tags, etc.}
+      )
+    `);
+
+    // ✅ 会话消息表
+    db.run(`
+      CREATE TABLE IF NOT EXISTS chat_messages (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        role TEXT NOT NULL,  -- 'user' or 'assistant'
+        content TEXT NOT NULL,
+        timestamp INTEGER NOT NULL,
+        FOREIGN KEY (session_id) REFERENCES chat_sessions(session_id) ON DELETE CASCADE
+      )
+    `);
   }
 
   /**
@@ -346,6 +369,11 @@ export class DatabaseManager {
     db.run(`CREATE INDEX IF NOT EXISTS idx_procedural_project ON procedural_memory(project_fingerprint)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_task_status ON task_state(status)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_task_project ON task_state(project_fingerprint)`);
+    
+    // ✅ 会话表索引（P1-02）
+    db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_last_active ON chat_sessions(last_active_at)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_messages_session ON chat_messages(session_id)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON chat_messages(timestamp)`);
     
     // ✅ 表结构和索引创建完成后立即持久化
     console.log('[DatabaseManager] Tables and indexes created, saving to disk...');

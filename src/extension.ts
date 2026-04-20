@@ -148,7 +148,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     
     // ✅ 创建MemoryAdapter并注册为IMemoryPort
     const eventBusAdapter = new EventBusAdapter(legacyEventBus);
-    memoryAdapter = new MemoryAdapter(episodicMemory, preferenceMemory, commitStyleLearner, eventBusAdapter);
+    memoryAdapter = new MemoryAdapter(episodicMemory, preferenceMemory, commitStyleLearner, eventBusAdapter, databaseManager);
     container.register('IMemoryPort', { useValue: memoryAdapter });
     console.log('[Extension] IMemoryPort registered (MemoryAdapter)');
     

@@ -29,7 +29,12 @@ const mockMemoryPort: jest.Mocked<IMemoryPort> = {
   recordFeedback: jest.fn(),
   recommendForFile: jest.fn(),
   getAgentPerformance: jest.fn(),
-  recordAgentExecution: jest.fn()
+  recordAgentExecution: jest.fn(),
+  // ✅ P1-02: 会话管理方法
+  createSession: jest.fn(),
+  loadSessionHistory: jest.fn(),
+  deleteSession: jest.fn(),
+  saveMessage: jest.fn()
 };
 
 const mockAgentRegistry: jest.Mocked<IAgentRegistry> = {

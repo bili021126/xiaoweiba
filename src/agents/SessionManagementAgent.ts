@@ -89,8 +89,11 @@ export class SessionManagementAgent implements IAgent {
   private async handleNewSession(startTime: number): Promise<AgentResult> {
     const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
-    // TODO: 将来可以持久化到数据库
-    // await this.memoryPort.createSession(sessionId);
+    // ✅ P1-02: 持久化到数据库
+    await this.memoryPort.createSession(sessionId, {
+      title: `会话 ${new Date().toLocaleString()}`,
+      createdAt: Date.now()
+    });
 
     // 发布成功响应
     this.eventBus.publish(new AssistantResponseEvent({
@@ -116,19 +119,19 @@ export class SessionManagementAgent implements IAgent {
       throw new Error('缺少会话ID');
     }
 
-    // TODO: 将来可以从数据库加载会话历史
-    // const history = await this.memoryPort.loadSessionHistory(sessionId);
+    // ✅ P1-02: 从数据库加载会话历史
+    const history = await this.memoryPort.loadSessionHistory(sessionId);
 
-    // 发布成功响应
+    // 发布成功响应（包含历史消息数量）
     this.eventBus.publish(new AssistantResponseEvent({
       messageId: `msg_${Date.now()}_system`,
-      content: `🔄 已切换到会话 (ID: ${sessionId})`,
+      content: `🔄 已切换到会话 (ID: ${sessionId}, ${history.length} 条消息)`,
       timestamp: Date.now()
     }));
 
     return {
       success: true,
-      data: { sessionId },
+      data: { sessionId, messageCount: history.length },
       durationMs: Date.now() - startTime
     };
   }
@@ -143,8 +146,8 @@ export class SessionManagementAgent implements IAgent {
       throw new Error('缺少会话ID');
     }
 
-    // TODO: 将来可以从数据库删除会话
-    // await this.memoryPort.deleteSession(sessionId);
+    // ✅ P1-02: 从数据库删除会话
+    await this.memoryPort.deleteSession(sessionId);
 
     // 发布成功响应
     this.eventBus.publish(new AssistantResponseEvent({

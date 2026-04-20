@@ -6,7 +6,7 @@
  */
 
 import { Intent } from '../domain/Intent';
-import { MemoryContext } from '../domain/MemoryContext';
+import { MemoryContext } from '../../core/domain/MemoryContext';
 import { TaskCompletedEvent, FeedbackGivenEvent } from '../events/DomainEvent';
 
 /**
@@ -72,4 +72,34 @@ export interface IMemoryPort {
    * @param durationMs 耗时
    */
   recordAgentExecution(agentId: string, intentName: string, success: boolean, durationMs: number): Promise<void>;
+
+  // ========== ✅ P1-02: 会话管理 ==========
+
+  /**
+   * 创建新会话
+   * @param sessionId 会话ID
+   * @param metadata 元数据（可选）
+   */
+  createSession(sessionId: string, metadata?: Record<string, any>): Promise<void>;
+
+  /**
+   * 加载会话历史
+   * @param sessionId 会话ID
+   * @returns 消息列表
+   */
+  loadSessionHistory(sessionId: string): Promise<Array<{ role: string; content: string; timestamp: number }>>;
+
+  /**
+   * 删除会话
+   * @param sessionId 会话ID
+   */
+  deleteSession(sessionId: string): Promise<void>;
+
+  /**
+   * 保存消息到会话
+   * @param sessionId 会话ID
+   * @param role 角色（user/assistant）
+   * @param content 内容
+   */
+  saveMessage(sessionId: string, role: string, content: string): Promise<void>;
 }

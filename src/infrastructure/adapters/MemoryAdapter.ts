@@ -17,6 +17,7 @@ import { EpisodicMemory } from '../../core/memory/EpisodicMemory';
 import { PreferenceMemory } from '../../core/memory/PreferenceMemory';
 import { CommitStyleLearner } from '../../core/memory/CommitStyleLearner';
 import { IEventBus } from '../../core/ports/IEventBus';
+import { DatabaseManager } from '../../storage/DatabaseManager';
 
 @injectable()
 export class MemoryAdapter implements IMemoryPort {
@@ -32,7 +33,8 @@ export class MemoryAdapter implements IMemoryPort {
     @inject(EpisodicMemory) private episodicMemory: EpisodicMemory,
     @inject(PreferenceMemory) private preferenceMemory: PreferenceMemory,
     @inject(CommitStyleLearner) private commitStyleLearner: CommitStyleLearner,
-    @inject('IEventBus') private eventBus: IEventBus  // ✅ 注入EventBus以订阅事件
+    @inject('IEventBus') private eventBus: IEventBus,  // ✅ 注入EventBus以订阅事件
+    @inject(DatabaseManager) private dbManager: DatabaseManager  // ✅ P1-02: 注入DatabaseManager
   ) {
     this.subscribeToEvents();
   }
@@ -562,5 +564,113 @@ export class MemoryAdapter implements IMemoryPort {
       seen.add(r.id);
       return true;
     });
+  }
+
+  // ========== ✅ P1-02: 会话管理方法实现 ==========
+
+  /**
+   * 创建新会话
+   */
+  async createSession(sessionId: string, metadata?: Record<string, any>): Promise<void> {
+    try {
+      const db = this.dbManager.getDatabase();
+      const now = Date.now();
+      
+      db.run(
+        `INSERT INTO chat_sessions (session_id, created_at, last_active_at, message_count, metadata)
+         VALUES (?, ?, ?, 0, ?)`,
+        [sessionId, now, now, metadata ? JSON.stringify(metadata) : null]
+      );
+    } catch (error) {
+      console.error('[MemoryAdapter] createSession failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 加载会话历史
+   */
+  async loadSessionHistory(sessionId: string): Promise<Array<{ role: string; content: string; timestamp: number }>> {
+    try {
+      const db = this.dbManager.getDatabase();
+      
+      const stmt = db.prepare(
+        `SELECT role, content, timestamp FROM chat_messages
+         WHERE session_id = ?
+         ORDER BY timestamp ASC`
+      );
+      stmt.bind([sessionId]);
+      
+      const messages: Array<{ role: string; content: string; timestamp: number }> = [];
+      while (stmt.step()) {
+        const row = stmt.getAsObject();
+        messages.push({
+          role: row.role as string,
+          content: row.content as string,
+          timestamp: row.timestamp as number
+        });
+      }
+      stmt.free();
+      
+      return messages;
+    } catch (error) {
+      console.error('[MemoryAdapter] loadSessionHistory failed:', error);
+      return [];
+    }
+  }
+
+  /**
+   * 删除会话
+   */
+  async deleteSession(sessionId: string): Promise<void> {
+    try {
+      const db = this.dbManager.getDatabase();
+      
+      // 外键级联删除会自动删除关联的消息
+      db.run(`DELETE FROM chat_sessions WHERE session_id = ?`, [sessionId]);
+      
+      // 清理内存中的会话历史
+      this.sessionHistories.delete(sessionId);
+    } catch (error) {
+      console.error('[MemoryAdapter] deleteSession failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 保存消息到会话
+   */
+  async saveMessage(sessionId: string, role: string, content: string): Promise<void> {
+    try {
+      const db = this.dbManager.getDatabase();
+      const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const timestamp = Date.now();
+      
+      // 插入消息
+      db.run(
+        `INSERT INTO chat_messages (id, session_id, role, content, timestamp)
+         VALUES (?, ?, ?, ?, ?)`,
+        [messageId, sessionId, role, content, timestamp]
+      );
+      
+      // 更新会话的最后活跃时间和消息计数
+      db.run(
+        `UPDATE chat_sessions 
+         SET last_active_at = ?, message_count = message_count + 1
+         WHERE session_id = ?`,
+        [timestamp, sessionId]
+      );
+      
+      // 同时更新内存中的会话历史
+      const history = this.sessionHistories.get(sessionId) || [];
+      history.push({ role, content });
+      if (history.length > 20) {
+        history.splice(0, history.length - 20);
+      }
+      this.sessionHistories.set(sessionId, history);
+    } catch (error) {
+      console.error('[MemoryAdapter] saveMessage failed:', error);
+      throw error;
+    }
   }
 }
