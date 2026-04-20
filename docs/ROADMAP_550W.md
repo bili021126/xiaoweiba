@@ -165,39 +165,116 @@ CREATE TABLE meta_memory (
 **预计时间**：8-10 周  
 **核心目标**：将重复操作固化为 Skill，实现程序记忆
 
-#### D1: 程序记忆模式检测
+#### D1: Skill 系统架构
+
+**定位**：Skill 是小尾巴的**用户私人可编程扩展**，允许用户定义自动化的工具调用序列。
+
+**核心原则**：
+1. **用户私有**：技能文件存储在本地 `~/.xiaoweiba/skills/`，不上传、不共享
+2. **声明式无逻辑**：JSON 步骤序列，无循环、条件、变量计算，可静态分析
+3. **中文友好**：支持中文键名，降低编写门槛
+4. **原子回滚**：可选事务模式，失败时通过 Git 检查点恢复
+5. **试用期机制**：自动沉淀的技能需经过试用期才能自动应用
+
+**文件结构**：
+```
+~/.xiaoweiba/skills/
+├── user/           # 用户手写技能
+│   └── *.json
+├── auto/           # 自动沉淀技能
+│   └── *.json
+└── marketplace/    # 技能市场下载（远期）
+    └── *.json
+```
+
+#### D2: 程序记忆模式检测
 - 监控用户操作序列
 - 识别高频模式（如：修改代码 → 运行测试 → 提交 Git）
 - 提取通用模板
+- **触发条件**：程序记忆累积分数 ≥ max(6, 周操作数 × 0.5)
+- **LLM 评估**：由独立 LLM 评估合理性，分数 < 0.6 则不推荐
 
-#### D2: Skill 自动生成
+#### D3: Skill JSON Schema
+
+```typescript
+interface SkillDefinition {
+  name: string;                    // 技能名称
+  description: string;             // 描述
+  version: string;                 // 版本号
+  source: 'user' | 'auto';        // 来源：用户手写/自动沉淀
+  projectScoped: boolean;          // 是否项目级
+  tools: ToolType[];               // 使用的工具列表
+  inputs?: SkillInput[];           // 输入参数
+  steps: SkillStep[];              // 执行步骤
+  atomic?: boolean;                // 是否原子执行（失败回滚）
+  trialStatus?: SkillTrialStatus;  // 试用期状态（自动沉淀技能）
+}
+
+interface SkillStep {
+  id: string;
+  tool: ToolType;
+  params: Record<string, any>;     // 支持 var 模板
+  outputAs?: string;               // 输出变量名
+  condition?: 'always' | 'onError' | 'onSuccess';
+}
+
+type ToolType = 
+  | 'read_file' | 'write_file' | 'call_llm' | 'show_diff'
+  | 'execute_sql' | 'execute_command' | 'git_commit' 
+  | 'search_memory' | 'generate_test';
+```
+
+**技能示例（重构函数）**：
 ```json
 {
-  "skillId": "auto-test-commit",
-  "name": "测试并提交",
-  "trigger": "after_code_change",
-  "steps": [
-    {"action": "run_tests", "params": {}},
-    {"action": "generate_commit", "params": {"style": "conventional"}},
-    {"action": "git_commit", "params": {"auto_signoff": true}}
+  "名称": "重构函数",
+  "描述": "重构函数：提取方法、优化命名、添加注释",
+  "版本": "1.0.0",
+  "来源": "user",
+  "工具": ["read_file", "call_llm", "write_file", "show_diff"],
+  "输入": [
+    { "名称": "文件路径", "类型": "file", "必填": true },
+    { "名称": "函数名", "类型": "string", "必填": true }
   ],
-  "confidence_threshold": 0.8
+  "步骤": [
+    { "编号": "1", "工具": "read_file", "参数": { "path": "文件路径" }, "输出为": "文件内容" },
+    { "编号": "2", "工具": "call_llm", "参数": { "prompt": "重构函数名：...\n文件内容" }, "输出为": "重构代码" },
+    { "编号": "3", "工具": "show_diff", "参数": { "original": "文件内容", "modified": "重构代码" } },
+    { "编号": "4", "工具": "write_file", "参数": { "path": "文件路径", "content": "重构代码" }, "条件": "onSuccess" }
+  ],
+  "原子执行": true
 }
 ```
 
-#### D3: 技能试用期机制
-- 新 Skill 进入试用期（7 天）
-- 连续 5 次用户采纳后自动应用
+#### D4: 技能试用期机制
+- 新 Skill 默认 `isTrial: true`
+- 每次执行前询问用户
+- 连续 5 次采纳后自动应用
+- 连续 3 次拒绝则终止试用
 - 用户可随时禁用
 
-#### D4: 工作流引擎基础
+#### D5: 工作流引擎基础
 - 支持条件分支（if tests_pass then commit else fix）
 - 支持并行执行
-- 支持回滚机制
+- 支持回滚机制（Git 检查点）
+
+#### D6: 与现有模块集成
+
+| 模块 | 集成方式 |
+|------|----------|
+| MemorySystem | 技能执行记录为 `SKILL_EXECUTE` 类型记忆 |
+| EventBus | 技能执行开始/完成/失败发布事件 |
+| TaskTokenManager | 技能中若包含写操作，需申请授权 |
+| FileTool / LLMTool | 作为技能步骤的工具实现 |
+| AgentRegistry | Skill 可作为特殊 Agent 注册 |
 
 **验收标准**：
+- [ ] 能解析和执行 JSON 格式的技能定义
+- [ ] 支持中文键名
+- [ ] 原子执行模式下失败能回滚
+- [ ] 试用期机制正常工作
+- [ ] 自动沉淀准确率 > 80%
 - [ ] 能自动识别 3 种以上常见操作模式
-- [ ] Skill 生成准确率 > 80%
 - [ ] 试用期机制正常工作
 
 ---
