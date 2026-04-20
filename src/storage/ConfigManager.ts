@@ -536,7 +536,7 @@ export class ConfigManager {
           // 延迟加载避免多次触发
           setTimeout(() => {
             this.loadConfig().catch((err) => {
-              console.error('Config hot reload failed:', err);
+              // 配置热重载失败，静默处理
             });
           }, 500);
         }

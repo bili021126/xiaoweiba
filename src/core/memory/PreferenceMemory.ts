@@ -5,6 +5,7 @@ import { ProjectFingerprint } from '../../utils/ProjectFingerprint';
 import { ConfigManager } from '../../storage/ConfigManager';
 import { createError } from '../../utils/ErrorCodes';
 import * as crypto from 'crypto';
+import { CONFIDENCE_THRESHOLDS } from '../../constants';
 
 /**
  * 偏好领域类型
@@ -211,7 +212,8 @@ export class PreferenceMemory {
       // 过滤掉冷启动阶段的低置信度偏好
       const filtered = recommendations.filter(rec => {
         if (rec.record.sampleCount < this.coldStartThreshold) {
-          return rec.record.confidence >= 0.7; // 冷启动阶段要求更高置信度
+          // 冷启动阶段要求更高置信度
+          return rec.record.confidence >= CONFIDENCE_THRESHOLDS.COLD_START_HIGH_CONFIDENCE;
         }
         return true;
       });

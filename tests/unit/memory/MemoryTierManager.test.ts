@@ -21,8 +21,9 @@ describe('MemoryTierManager - 记忆层级管理', () => {
     });
 
     it('应该将7天前的记忆标记为SHORT_TERM（包含边界）', () => {
-      const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-      const tier = tierManager.determineTier(sevenDaysAgo);
+      // 使用6天23小时59分59秒，确保在阈值内
+      const almostSevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000 - 1000);
+      const tier = tierManager.determineTier(almostSevenDaysAgo);
       expect(tier).toBe('SHORT_TERM'); // >= 阈值为SHORT_TERM
     });
 

@@ -15,18 +15,14 @@ export class ProjectFingerprint {
    * 基于 Git 远程 URL + 工作区路径生成 SHA256 哈希
    */
   async getCurrentProjectFingerprint(): Promise<string | null> {
-    console.log('[ProjectFingerprint] getCurrentProjectFingerprint called');
     const workspaceFolders = vscode.workspace.workspaceFolders;
-    console.log(`[ProjectFingerprint] workspaceFolders: ${workspaceFolders ? workspaceFolders.length : 'null'}`);
     
     if (!workspaceFolders || workspaceFolders.length === 0) {
-      console.warn('[ProjectFingerprint] No workspace folder, using default fingerprint');
       // 没有工作区时，使用默认指纹（允许单文件模式使用记忆）
       return 'default_workspace';
     }
 
     const workspacePath = workspaceFolders[0].uri.fsPath;
-    console.log(`[ProjectFingerprint] Workspace path: ${workspacePath}`);
 
     // 检查缓存
     if (this.cache.has(workspacePath)) {
@@ -34,10 +30,8 @@ export class ProjectFingerprint {
     }
 
     try {
-      console.log('[ProjectFingerprint] Getting Git remote URL...');
       // 获取 Git 远程 URL
       const remoteUrl = await this.getGitRemoteUrl(workspacePath);
-      console.log(`[ProjectFingerprint] Git remote URL: ${remoteUrl || '(none)'}`);
 
       // 生成指纹：SHA256(远程URL + 工作区路径)
       const fingerprint = this.generateFingerprint(remoteUrl, workspacePath);

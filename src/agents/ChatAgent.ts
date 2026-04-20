@@ -50,7 +50,18 @@ export class ChatAgent implements IAgent {
     const { intent, memoryContext } = params;
 
     try {
-      const userMessage = intent.userInput;
+      // ✅ 添加调试日志
+      console.log('[ChatAgent] Intent:', intent.name, 'UserInput:', intent.userInput, 'CodeContext:', intent.codeContext);
+
+      // ✅ 处理无用户输入的情况（如 explain_code 意图）
+      let userMessage = intent.userInput;
+      
+      if (!userMessage && intent.name === 'explain_code') {
+        // 为代码解释生成默认提示
+        userMessage = '请解释上面的代码';
+        console.log('[ChatAgent] Generated default message for explain_code');
+      }
+      
       if (!userMessage) {
         return {
           success: false,
@@ -60,7 +71,7 @@ export class ChatAgent implements IAgent {
       }
 
       // 1. 构建消息历史（多轮对话）
-      const history = this.buildMessageHistory(memoryContext);
+      const history = this.buildMessageHistory(memoryContext, intent);
       const currentMessage: LLMMessage = { role: 'user' as const, content: userMessage };
       const messages = [...history, currentMessage];
 
@@ -101,7 +112,14 @@ export class ChatAgent implements IAgent {
           messageId,
           content: fullContent
         },
-        durationMs: Date.now() - startTime
+        durationMs: Date.now() - startTime,
+        // ✅ P1-02: 添加记忆元数据（仅对有意义的对话记录）
+        memoryMetadata: this.shouldRecordMemory(intent, userMessage, fullContent) ? {
+          taskType: 'CHAT_COMMAND',
+          summary: `讨论了：${userMessage.substring(0, 50)}${userMessage.length > 50 ? '...' : ''}`,
+          entities: this.extractEntitiesFromMessage(userMessage),
+          outcome: 'SUCCESS'
+        } : undefined
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -124,17 +142,21 @@ export class ChatAgent implements IAgent {
   /**
    * 构建消息历史（从MemoryContext中获取）
    */
-  private buildMessageHistory(memoryContext: MemoryContext): LLMMessage[] {
+  private buildMessageHistory(memoryContext: MemoryContext, intent: Intent): LLMMessage[] {
     // 从记忆上下文中获取会话历史
     const sessionHistory = memoryContext.sessionHistory || [];
     
     // 转换为LLM所需格式，限制最多10条
-    return sessionHistory
+    const history = sessionHistory
       .slice(-10)
       .map(msg => ({
         role: msg.role as 'user' | 'assistant',
         content: msg.content
       }));
+    
+    // ✅ 对于 explain_code 意图，即使没有会话历史，也要确保有用户消息
+    // 这由 execute 方法中的 userMessage 保证，此处只需返回历史即可
+    return history;
   }
 
   /**
@@ -147,6 +169,60 @@ export class ChatAgent implements IAgent {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
+  }
+
+  /**
+   * ✅ P1-02: 判断是否应该记录记忆
+   */
+  private shouldRecordMemory(intent: Intent, userMessage: string, assistantResponse: string): boolean {
+    // 非chat意图（如explain_code）总是记录
+    if (intent.name !== 'chat') {
+      return true;
+    }
+
+    // chat意图：检查是否有意义
+    // 1. 消息长度足够（至少10个字符）
+    if (userMessage.length < 10) {
+      return false;
+    }
+
+    // 2. 不是简单的问候语
+    const greetings = ['你好', 'hello', 'hi', 'hey', '早上好', '晚上好', '再见', 'bye'];
+    const isGreeting = greetings.some(g => userMessage.toLowerCase().includes(g));
+    if (isGreeting && userMessage.length < 20) {
+      return false;
+    }
+
+    // 3. 助手回复有实质内容（至少50个字符）
+    if (assistantResponse.length < 50) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * ✅ P1-02: 从消息中提取实体
+   */
+  private extractEntitiesFromMessage(message: string): string[] {
+    const entities: string[] = [];
+
+    // 提取代码相关的关键词
+    const codeKeywords = ['函数', '类', '方法', '变量', '接口', '类型', '代码', 'algorithm', 'function', 'class', 'method'];
+    codeKeywords.forEach(keyword => {
+      if (message.includes(keyword)) {
+        entities.push(keyword);
+      }
+    });
+
+    // 提取文件名模式（简单匹配）
+    const filePattern = /\b\w+\.(ts|js|py|java|cpp|go|rs)\b/g;
+    const fileMatches = message.match(filePattern);
+    if (fileMatches) {
+      entities.push(...fileMatches);
+    }
+
+    return entities;
   }
 
   /**

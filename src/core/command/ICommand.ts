@@ -8,6 +8,7 @@
  */
 
 import { EventBus, CoreEventType } from '../eventbus/EventBus';
+import { LENGTH_LIMITS } from '../../constants';
 
 /**
  * Command执行结果
@@ -180,8 +181,9 @@ export abstract class BaseCommand implements ICommand {
     const sanitized = { ...input };
     
     // 移除可能包含敏感信息的字段
-    if (sanitized.selectedCode && sanitized.selectedCode.length > 1000) {
-      sanitized.selectedCode = sanitized.selectedCode.substring(0, 1000) + '...';
+    // 截断过长的代码
+    if (sanitized.selectedCode && sanitized.selectedCode.length > LENGTH_LIMITS.MAX_CODE_LENGTH) {
+      sanitized.selectedCode = sanitized.selectedCode.substring(0, LENGTH_LIMITS.MAX_CODE_LENGTH) + '...';
     }
     
     return sanitized;

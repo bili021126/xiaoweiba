@@ -42,21 +42,29 @@ export class EventBusAdapter implements IEventBus {
 
   /**
    * 注册请求处理器
+   * @deprecated LegacyEventBus不支持请求-响应模式，请使用publish/subscribe
    */
   registerRequestHandler<TPayload, TResult>(
     requestType: string,
     handler: RequestHandler<TPayload, TResult>
   ): void {
-    // TODO: 如果LegacyEventBus支持，可以映射到这里
-    console.warn('[EventBusAdapter] registerRequestHandler not fully supported by legacy EventBus');
+    // LegacyEventBus仅支持发布/订阅模式，不支持请求-响应
+    throw new Error(
+      '[EventBusAdapter] LegacyEventBus does not support request-response pattern. ' +
+      'Use publish/subscribe instead. If you need request-response, consider implementing a separate service.'
+    );
   }
 
   /**
    * 发送请求并等待响应
+   * @deprecated LegacyEventBus不支持请求-响应模式，请使用publish/subscribe
    */
   async request<TPayload, TResult>(requestType: string, payload: TPayload): Promise<TResult> {
-    // TODO: 如果LegacyEventBus支持，可以映射到这里
-    throw new Error(`[EventBusAdapter] request not supported for ${requestType}`);
+    // LegacyEventBus仅支持发布/订阅模式，不支持请求-响应
+    throw new Error(
+      `[EventBusAdapter] Request-response pattern not supported for '${requestType}'. ` +
+      'LegacyEventBus only supports publish/subscribe. Consider using a dedicated service for request-response.'
+    );
   }
 
   /**

@@ -41,7 +41,8 @@ const mockAgentRegistry: jest.Mocked<IAgentRegistry> = {
   register: jest.fn(),
   findAgentsForIntent: jest.fn(),
   getAll: jest.fn(),
-  getAgent: jest.fn()
+  getAgent: jest.fn(),
+  unregister: jest.fn()
 };
 
 const mockEventBus: jest.Mocked<IEventBus> = {

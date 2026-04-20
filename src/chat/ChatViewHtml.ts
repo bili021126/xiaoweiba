@@ -474,17 +474,13 @@ export function generateChatViewHtml(webview: vscode.Webview): string {
 
     // 更新消息内容（用于非流式响应）
     function updateMessageContent(messageId, content) {
-      console.log('[ChatView] updateMessageContent called for ID:', messageId);
       const div = document.getElementById('msg-' + messageId);
       if (!div) {
-        console.warn('[ChatView] Message not found for update:', messageId);
-        console.warn('[ChatView] Looking for element with ID: msg-' + messageId);
         return;
       }
       
       const contentDiv = div.querySelector('.message-content');
       if (contentDiv) {
-        console.log('[ChatView] Updating message content, length:', content.length);
         contentDiv.innerHTML = renderMarkdown(content);
       }
       
@@ -719,11 +715,7 @@ export function generateChatViewHtml(webview: vscode.Webview): string {
         case 'commandExecuted':
           // 命令执行完成，恢复输入状态
           enableInput();
-          if (message.success) {
-            console.log('[ChatView] Command executed successfully: ' + message.command);
-          } else {
-            console.error('[ChatView] Command execution failed: ' + message.error);
-          }
+          // 命令执行结果由后端审计日志记录
           break;
 
         case 'loadSession':

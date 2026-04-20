@@ -24,20 +24,16 @@ export class AgentRegistryImpl implements IAgentRegistry {
       console.warn(`[AgentRegistry] Agent ${agent.id} already registered, overwriting`);
     }
     this.agents.set(agent.id, agent);
-    console.log(`[AgentRegistry] Registered agent: ${agent.name} (${agent.id})`);
   }
 
   /**
    * 根据意图查找候选Agents
    */
   findAgentsForIntent(intent: Intent): IAgent[] {
-    console.log(`[AgentRegistry] findAgentsForIntent called for: ${intent.name}`);
     const candidates: IAgent[] = [];
     
     for (const agent of this.agents.values()) {
-      console.log(`[AgentRegistry] Checking agent ${agent.id}, supportedIntents:`, agent.supportedIntents);
       if (agent.supportedIntents.includes(intent.name)) {
-        console.log(`[AgentRegistry] Agent ${agent.id} matches intent ${intent.name}`);
         candidates.push(agent);
       }
     }
@@ -71,6 +67,16 @@ export class AgentRegistryImpl implements IAgentRegistry {
    */
   dispose(): void {
     this.agents.clear();
-    console.log('[AgentRegistry] Disposed');
+  }
+
+  /**
+   * 注销Agent（动态卸载）
+   */
+  unregister(agentId: string): boolean {
+    const existed = this.agents.delete(agentId);
+    if (existed) {
+      // 可选：记录审计日志或通知其他组件
+    }
+    return existed;
   }
 }

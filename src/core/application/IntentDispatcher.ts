@@ -13,6 +13,7 @@ import { injectable, inject } from 'tsyringe';
 import { IMemoryPort } from '../ports/IMemoryPort';
 import { IAgentRegistry } from '../ports/IAgentRegistry';
 import { IEventBus } from '../ports/IEventBus';
+import { AgentResult } from '../agent/IAgent';
 import { 
   IntentReceivedEvent,
   AgentSelectedEvent,
@@ -103,8 +104,9 @@ export class IntentDispatcher {
    * 
    * 跳过事件发布，直接查找Agent并执行，返回结果
    * 适用于对延迟极度敏感的场景（<500ms）
+   * @returns Agent执行结果
    */
-  async dispatchSync(intent: Intent): Promise<any> {
+  async dispatchSync(intent: Intent): Promise<AgentResult> {
     const startTime = Date.now();
 
     try {

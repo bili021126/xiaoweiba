@@ -47,6 +47,7 @@ import { ConfigManager } from './storage/ConfigManager';
 import { DatabaseManager } from './storage/DatabaseManager';
 import { AuditLogger } from './core/security/AuditLogger';
 import { getUserFriendlyMessage } from './utils/ErrorCodes';
+import { LENGTH_LIMITS } from './constants';
 
 // Phase 2: 导入新架构组件
 import { IntentDispatcher } from './core/application/IntentDispatcher';
@@ -622,7 +623,8 @@ function registerCommands(context: vscode.ExtensionContext): void {
       const selection = e.selections[0];
       const selectedText = e.textEditor.document.getText(selection);
       
-      if (selectedText.trim().length > 0 && selectedText.length < 500) {
+      // 检查选中文本长度
+      if (selectedText.trim().length > 0 && selectedText.length < LENGTH_LIMITS.MAX_CODE_LENGTH) {
         // 显示悬浮提示
         vscode.commands.executeCommand('editor.action.showHover');
       }

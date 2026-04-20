@@ -269,10 +269,23 @@ export class IntentFactory {
    */
   static buildGenerateCodeIntent(): Intent {
     const editor = vscode.window.activeTextEditor;
-    
+    let selectedText = '';
+    let userPrompt: string | undefined = undefined;
+
+    if (editor) {
+      const selection = editor.selection;
+      selectedText = editor.document.getText(selection);
+      
+      // ✅ P1-03: 如果选中的是注释，自动提取内容作为需求
+      if (selectedText && this.isComment(selectedText, editor.document.languageId)) {
+        userPrompt = this.extractCommentContent(selectedText);
+        console.log('[IntentFactory] Extracted comment as prompt:', userPrompt);
+      }
+    }
+
     return {
       name: 'generate_code',
-      userInput: undefined,  // 用户需要在Webview中输入需求
+      userInput: userPrompt,  // ✅ 预填充提取的需求（如果有）
       codeContext: editor ? this.extractCodeContext(editor, undefined, 5000) : undefined,
       metadata: {
         timestamp: Date.now(),
@@ -280,6 +293,57 @@ export class IntentFactory {
         sessionId: this.generateSessionId()
       }
     };
+  }
+
+  /**
+   * ✅ P1-03: 判断文本是否为注释
+   */
+  private static isComment(text: string, languageId: string): boolean {
+    const trimmed = text.trim();
+    
+    // C系语言（JavaScript, TypeScript, Java, Go, Rust, C, C++, C#）
+    if (['javascript', 'typescript', 'java', 'go', 'rust', 'c', 'cpp', 'csharp'].includes(languageId)) {
+      return trimmed.startsWith('//') || trimmed.startsWith('/*');
+    }
+    
+    // Python
+    if (languageId === 'python') {
+      return trimmed.startsWith('#') || trimmed.startsWith('"""') || trimmed.startsWith("'''");
+    }
+    
+    // Ruby/Perl
+    if (['ruby', 'perl'].includes(languageId)) {
+      return trimmed.startsWith('#');
+    }
+    
+    // SQL
+    if (languageId === 'sql') {
+      return trimmed.startsWith('--') || trimmed.startsWith('/*');
+    }
+    
+    return false;
+  }
+
+  /**
+   * ✅ P1-03: 提取注释中的实际内容
+   */
+  private static extractCommentContent(comment: string): string {
+    let content = comment.trim();
+    
+    // 移除单行注释符号 // # --
+    content = content.replace(/^[\/\/#-]+\s*/, '');
+    
+    // 移除多行注释符号 /* */
+    content = content.replace(/^\/\*\s*/, '').replace(/\s*\*\/$/, '');
+    
+    // 移除Python三引号
+    content = content.replace(/^"""\s*/, '').replace(/\s*"""$/, '');
+    content = content.replace(/^'''\s*/, '').replace(/\s*'''$/, '');
+    
+    // 移除每行开头的 * （多行注释常见格式）
+    content = content.split('\n').map(line => line.replace(/^\s*\*\s?/, '')).join('\n').trim();
+    
+    return content;
   }
 
   /**

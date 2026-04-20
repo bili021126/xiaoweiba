@@ -30,9 +30,9 @@ describe('BaseCommand - 命令基类', () => {
 
   describe('execute - 统一执行入口', () => {
     it('应该在执行前调用 retrieveMemoryContext', async () => {
-      await command.execute({ test: 'data' });
+      await command.execute({ options: { test: 'data' } });
       
-      expect(mockMemorySystem.retrieveRelevant).toHaveBeenCalledWith('test', { test: 'data' });
+      expect(mockMemorySystem.retrieveRelevant).toHaveBeenCalledWith('test', { options: { test: 'data' } });
     });
 
     it('应该在执行后发布 TASK_COMPLETED 事件', async () => {

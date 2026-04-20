@@ -42,6 +42,7 @@ export class AICompletionProvider implements vscode.InlineCompletionItemProvider
     
     // 检查是否启用了行内补全
     if (!config.inlineCompletion?.enabled) {
+      console.log('[AICompletionProvider] Inline completion disabled in config');
       return null;
     }
 
@@ -60,6 +61,7 @@ export class AICompletionProvider implements vscode.InlineCompletionItemProvider
     if (config.inlineCompletion.enableCache) {
       const cached = this.getFromCache(cacheKey);
       if (cached) {
+        console.log('[AICompletionProvider] Cache hit');
         return [new vscode.InlineCompletionItem(cached)];
       }
     }
@@ -70,12 +72,20 @@ export class AICompletionProvider implements vscode.InlineCompletionItemProvider
       return null;
     }
 
+    // ✅ P1-03: 检查前缀长度（至少3个字符）
+    if (prefix.trim().length < 3) {
+      console.log('[AICompletionProvider] Prefix too short:', prefix.trim().length, 'chars');
+      return null;
+    }
+
     // 调用LLM（通过IntentDispatcher.dispatchSync）
     try {
       // 检查取消令牌
       if (token.isCancellationRequested) {
         return null;
       }
+
+      console.log('[AICompletionProvider] Triggering completion, language:', language, 'prefix length:', prefix.length);
 
       // ✅ 构建inline_completion意图
       const intent = IntentFactory.buildInlineCompletionIntent(prefix, {
@@ -96,6 +106,8 @@ export class AICompletionProvider implements vscode.InlineCompletionItemProvider
         const completion = result.data.completion.trim();
         
         if (completion.length > 0) {
+          console.log('[AICompletionProvider] Completion generated, length:', completion.length);
+          
           // 清理可能的Markdown代码块标记
           const cleanedCompletion = this.cleanMarkdown(completion);
           
@@ -106,9 +118,12 @@ export class AICompletionProvider implements vscode.InlineCompletionItemProvider
 
           return [new vscode.InlineCompletionItem(cleanedCompletion)];
         }
+      } else {
+        console.log('[AICompletionProvider] No completion generated, result:', result);
       }
     } catch (error) {
-      // 静默失败，不影响用户体验
+      // ✅ P1-03: 记录错误，便于排查
+      console.error('[AICompletionProvider] Completion failed:', error);
     }
 
     return null;

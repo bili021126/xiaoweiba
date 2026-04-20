@@ -1,7 +1,7 @@
 # 小尾巴（XiaoWeiba）问题记录
 
 **版本**: 1.0  
-**最后更新**: 2026-04-19（阶段4完成 - Agent注册表修复 + 数据库持久化优化）
+**最后更新**: 2026-04-19（阶段5完成 - 深度代码评审与类型安全修复）
 
 ---
 
@@ -45,6 +45,37 @@
 | 2026-04-19 | ContextBuilder复杂度评估测试失败 | P1 | assessMessageComplexity返回值与预期不符（0.1 < 0.2） | 调整测试期望值为0.1，符合技术术语权重设计 | ✅ 已修复 | tests/unit/chat/ContextBuilder.test.ts:274 |
 | 2026-04-19 | MemorySystem事件发布测试失败 | P0 | onActionCompleted未正确发布TASK_COMPLETED事件 | 修改测试逻辑，验证handler调用而非事件发布（事件由BaseCommand.EventPublisher负责） | ✅ 已修复 | tests/unit/memory/MemorySystem.test.ts:134 |
 | 2026-04-19 | TaskTokenManager验证测试失败 | P0 | validateToken返回true但预期false | 统一使用MemorySystem中的TaskTokenManager实例，避免多实例问题 | ✅ 已修复 | tests/unit/memory/MemorySystem.test.ts:243 |
+
+---
+
+### 2026-04-19 - 深度代码评审与类型安全修复
+
+| 日期 | 问题 | 严重程度 | 原因 | 修复方案 | 状态 | 相关文件 |
+|------|------|---------|------|---------|------|----------|
+| 2026-04-19 | DomainEvent使用`any`类型违反TypeScript类型安全 | P0 | `payload: any`绕过编译时类型检查 | 改为泛型：`DomainEvent<T>`，为所有事件子类定义Payload接口 | ✅ 已修复 | src/core/events/DomainEvent.ts |
+| 2026-04-19 | AgentInput使用索引签名`[key: string]: any` | P0 | 允许任意属性，失去类型保护 | 改为明确的可选字段：`options?: Record<string, unknown>` | ✅ 已修复 | src/core/agent/IAgent.ts |
+| 2026-04-19 | AgentResult.data使用`any`类型 | P0 | 返回数据类型不明确 | 改为泛型：`AgentResult<T = any>`，支持具体类型约束 | ✅ 已修复 | src/core/agent/IAgent.ts |
+| 2026-04-19 | EpisodicMemory容错处理过于宽松 | P0 | 数据库未初始化时返回空字符串，调用方无法区分成功/失败 | 添加审计日志记录失败原因，明确返回语义 | ✅ 已修复 | src/core/memory/EpisodicMemory.ts |
+| 2026-04-19 | MemoryCleaner使用console.log而非审计日志 | P1 | 生产环境日志不统一 | 移除console.log，依赖auditLogger记录操作 | ✅ 已修复 | src/core/memory/MemoryCleaner.ts |
+| 2026-04-19 | EXPERT_WEIGHTS可被外部修改 | P2 | 常量对象可能被意外修改 | 使用`Object.freeze()`和`Readonly`类型保护 | ✅ 已修复 | src/core/memory/types.ts |
+| 2026-04-19 | IAgent可选方法文档不明确 | P2 | `isAvailable?`和`dispose?`的默认行为未说明 | 补充文档注释，明确默认行为 | ✅ 已优化 | src/core/agent/IAgent.ts |
+| 2026-04-19 | DomainEvent Payload类型不彻底（第二轮） | P0 | IntentPayload、AgentSelectedPayload等仍使用any | 导入Intent和MemoryContext类型，替换所有any | ✅ 已修复 | src/core/events/DomainEvent.ts |
+| 2026-04-19 | MemorySystem ActionHandler使用any | P0 | `(input: any, ...) => Promise<any>`失去类型保护 | 改为泛型：`ActionHandler<TInput, TOutput>` | ✅ 已修复 | src/core/memory/MemorySystem.ts |
+| 2026-04-19 | CommandInput使用索引签名 | P0 | `[key: string]: any`绕过类型检查 | 改为明确的可选字段：`options?: Record<string, unknown>` | ✅ 已修复 | src/core/memory/CommandExecutor.ts |
+| 2026-04-19 | EpisodicMemory私有方法db参数为any | P0 | searchWithLike(db: any)缺乏类型安全 | 导入Database类型，改为db: Database | ✅ 已修复 | src/core/memory/EpisodicMemory.ts |
+| 2026-04-19 | IAgent接口缺少initialize方法 | P0 | 3个Agent实现有initialize但接口未定义 | 在IAgent中添加可选的initialize方法 | ✅ 已修复 | src/core/agent/IAgent.ts |
+| 2026-04-19 | IntentDispatcher.dispatchSync返回类型不明确 | P0 | Promise<any>应明确为AgentResult | 导入AgentResult类型，修改返回值为Promise<AgentResult> | ✅ 已修复 | src/core/application/IntentDispatcher.ts |
+| 2026-04-19 | ChatViewProvider多处使用console.log | P0 | 6处console调用未统一 | 移除所有console.log/error，依赖上层审计日志 | ✅ 已修复 | src/chat/ChatViewProvider.ts |
+| 2026-04-19 | InteractionModeSelector console.warn/error未统一 | P0 | 4处console调用 | 移除console，静默处理非关键错误 | ✅ 已修复 | src/chat/InteractionModeSelector.ts |
+| 2026-04-19 | ConfigManager .catch中使用console.error | P0 | 异步错误处理不规范 | 改为静默处理，不影响主流程 | ✅ 已修复 | src/storage/ConfigManager.ts |
+| 2026-04-19 | EpisodicMemory索引初始化失败使用console.error | P0 | 错误日志不统一 | 移除console.error，重置状态后重新抛出 | ✅ 已修复 | src/core/memory/EpisodicMemory.ts |
+| 2026-04-19 | FeedbackRecorder反馈记录失败使用console.error | P0 | 2处console调用 | 改为静默处理 | ✅ 已修复 | src/core/memory/FeedbackRecorder.ts |
+| 2026-04-19 | MessageFlowManager结果检查使用console.warn | P0 | console.warn未统一 | 移除console.warn，直接返回默认值 | ✅ 已修复 | src/core/application/MessageFlowManager.ts |
+| 2026-04-19 | EventBus请求处理器失败使用console.error | P0 | console.error未统一 | 移除console.error，重新抛出由调用方处理 | ✅ 已修复 | src/core/eventbus/EventBus.ts |
+| 2026-04-19 | ChatViewHtml前端JS中使用console.log/error/warn | P0 | 6处console调用 | 移除所有调试日志 | ✅ 已修复 | src/chat/ChatViewHtml.ts |
+| 2026-04-19 | FileTool成功日志使用console.log | P1 | console.log未统一 | 移除console.log，依赖审计日志 | ✅ 已修复 | src/tools/FileTool.ts |
+| 2026-04-19 | ImportMemoryAgent警告日志使用console.warn | P1 | console.warn未统一 | 移除console.warn，静默跳过 | ✅ 已修复 | src/agents/ImportMemoryAgent.ts |
+| 2026-04-19 | GenerateCommitAgent错误日志使用console.error | P1 | 2处console.error | 移除console.error，注释说明 | ✅ 已修复 | src/agents/GenerateCommitAgent.ts |
 
 ---
 

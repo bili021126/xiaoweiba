@@ -97,6 +97,14 @@
       {
         "command": "xiaoweiba.openChat",
         "title": "小尾巴: 打开AI助手"
+      },
+      {
+        "command": "xiaoweiba.showCommitHistory",
+        "title": "小尾巴: 查看提交历史"
+      },
+      {
+        "command": "xiaoweiba.revokeWritePermission",
+        "title": "小尾巴: 撤销写权限"
       }
     ],
     "menus": {
@@ -115,6 +123,16 @@
           "command": "xiaoweiba.generateCode",
           "group": "xiaoweiba@3",
           "when": "editorTextFocus"
+        },
+        {
+          "command": "xiaoweiba.optimizeSQL",
+          "group": "xiaoweiba@4",
+          "when": "editorHasSelection && editorLangId == sql"
+        },
+        {
+          "command": "xiaoweiba.showCommitHistory",
+          "group": "xiaoweiba@5",
+          "when": "editorTextFocus"
         }
       ],
       "editor/title": [
@@ -122,6 +140,10 @@
           "command": "xiaoweiba.explainCode",
           "group": "navigation@1",
           "when": "editorHasSelection"
+        },
+        {
+          "command": "xiaoweiba.openChat",
+          "group": "navigation@2"
         }
       ],
       "scm/title": [
@@ -129,6 +151,48 @@
           "command": "xiaoweiba.generateCommit",
           "group": "navigation@1",
           "when": "scmProvider == git"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "xiaoweiba.explainCode",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "xiaoweiba.generateCommit"
+        },
+        {
+          "command": "xiaoweiba.checkNaming",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "xiaoweiba.generateCode"
+        },
+        {
+          "command": "xiaoweiba.optimizeSQL",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "xiaoweiba.configureApiKey"
+        },
+        {
+          "command": "xiaoweiba.exportMemory"
+        },
+        {
+          "command": "xiaoweiba.importMemory"
+        },
+        {
+          "command": "xiaoweiba.openChat"
+        },
+        {
+          "command": "xiaoweiba.showCommitHistory",
+          "when": "editorTextFocus"
+        },
+        {
+          "command": "xiaoweiba.revokeWritePermission"
+        },
+        {
+          "command": "xiaoweiba.repairMemory"
         }
       ]
     },

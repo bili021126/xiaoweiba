@@ -1,4 +1,5 @@
 import { IntentVector } from './types';
+import { LENGTH_LIMITS, CONFIDENCE_THRESHOLDS } from '../../constants';
 
 /**
  * 意图分析器 - 分析用户查询，输出意图向量
@@ -37,7 +38,10 @@ export class IntentAnalyzer {
    */
   analyze(query: string, languageId?: string): IntentVector {
     // ✅ 截断超长查询，防止正则匹配性能问题（最多1000字符）
-    const truncatedQuery = query.length > 1000 ? query.substring(0, 1000) : query;
+    // 截断过长的查询
+    const truncatedQuery = query.length > LENGTH_LIMITS.MAX_QUERY_LENGTH 
+      ? query.substring(0, LENGTH_LIMITS.MAX_QUERY_LENGTH) 
+      : query;
     
     let temporal = 0;
     let entity = 0;
@@ -99,9 +103,10 @@ export class IntentAnalyzer {
   getDominantIntent(intent: IntentVector): 'temporal' | 'entity' | 'semantic' | 'balanced' {
     const max = Math.max(intent.temporal, intent.entity, intent.semantic);
     
-    if (max === intent.temporal && intent.temporal > 0.5) return 'temporal';
-    if (max === intent.entity && intent.entity > 0.5) return 'entity';
-    if (max === intent.semantic && intent.semantic > 0.5) return 'semantic';
+    // 判断主导意图
+    if (max === intent.temporal && intent.temporal > CONFIDENCE_THRESHOLDS.INTENT_DOMINANCE) return 'temporal';
+    if (max === intent.entity && intent.entity > CONFIDENCE_THRESHOLDS.INTENT_DOMINANCE) return 'entity';
+    if (max === intent.semantic && intent.semantic > CONFIDENCE_THRESHOLDS.INTENT_DOMINANCE) return 'semantic';
     
     return 'balanced';
   }

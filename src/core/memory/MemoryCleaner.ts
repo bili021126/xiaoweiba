@@ -38,7 +38,7 @@ export class MemoryCleaner {
         parameters: { projectFingerprint, cutoffTimestamp: sevenDaysAgo }
       });
       
-      console.log(`[MemoryCleaner] Expired memories cleaned for ${projectFingerprint}`);
+      // 审计日志已记录，无需额外console.log
       return 0; // sql.js无法直接获取删除行数，返回0
     } catch (error) {
       const duration = Date.now() - startTime;
@@ -74,7 +74,7 @@ export class MemoryCleaner {
         parameters: { projectFingerprint, cutoffTimestamp: sevenDaysAgo }
       });
       
-      console.log(`[MemoryCleaner] Memories migrated to LONG_TERM for ${projectFingerprint}`);
+      // 审计日志已记录，无需额外console.log
       return 0; // sql.js无法直接获取更新行数
     } catch (error) {
       const duration = Date.now() - startTime;

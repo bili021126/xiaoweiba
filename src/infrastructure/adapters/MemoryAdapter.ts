@@ -70,7 +70,8 @@ export class MemoryAdapter implements IMemoryPort {
           agentId: payload.agentId,
           result: payload.result,
           durationMs: payload.durationMs,
-          modelId: payload.modelId // ✅ 新增：提取模型ID
+          modelId: payload.modelId, // ✅ 新增：提取模型ID
+          memoryMetadata: payload.memoryMetadata // ✅ P1-02: 提取记忆元数据
         };
         
         await this.recordTaskCompletion(taskEvent as any);
@@ -181,7 +182,36 @@ export class MemoryAdapter implements IMemoryPort {
   async recordTaskCompletion(event: TaskCompletedEvent): Promise<void> {
     try {
       // ✅ 直接使用事件属性（新的事件结构）
-      const { intent, agentId, result, durationMs, modelId } = event;
+      const { intent, agentId, result, durationMs, modelId, memoryMetadata } = event;
+
+      // ✅ P1-02: 如果有memoryMetadata，优先使用它；否则跳过记录
+      if (memoryMetadata) {
+        console.log('[MemoryAdapter] Recording with memoryMetadata:', memoryMetadata.taskType);
+        
+        // 使用提供的元数据记录
+        await this.episodicMemory.record({
+          taskType: memoryMetadata.taskType as any,
+          summary: memoryMetadata.summary,
+          entities: memoryMetadata.entities || [],
+          outcome: memoryMetadata.outcome || (result.success ? 'SUCCESS' : 'FAILED'),
+          modelId: modelId || result.modelId || 'unknown',
+          durationMs: durationMs || 0,
+          metadata: {
+            agentId,
+            intentName: intent.name,
+            timestamp: event.timestamp
+          }
+        });
+        return;
+      }
+
+      // ✅ 如果没有memoryMetadata，检查是否需要自动记录
+      // （仅对特定意图类型自动记录，避免记录无意义的闲聊）
+      const shouldAutoRecord = this.shouldAutoRecord(intent);
+      if (!shouldAutoRecord) {
+        console.log('[MemoryAdapter] Skipping record for intent:', intent.name, '(no memoryMetadata and not auto-recordable)');
+        return;
+      }
 
       // ✅ 如果是chat意图，保存对话历史到sessionHistories
       if (intent.name === 'chat' && result.success) {
@@ -232,6 +262,25 @@ export class MemoryAdapter implements IMemoryPort {
       console.error('[MemoryAdapter] recordTaskCompletion failed:', error);
       throw error;
     }
+  }
+
+  /**
+   * 判断是否应该自动记录（没有memoryMetadata时）
+   */
+  private shouldAutoRecord(intent: Intent): boolean {
+    // 以下意图类型会自动记录（即使没有memoryMetadata）
+    const autoRecordIntents = [
+      'explain_code',
+      'generate_code',
+      'generate_commit',
+      'check_naming',
+      'optimize_sql',
+      'new_session',
+      'switch_session',
+      'delete_session'
+    ];
+    
+    return autoRecordIntents.includes(intent.name);
   }
 
   /**

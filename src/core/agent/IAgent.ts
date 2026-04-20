@@ -51,19 +51,27 @@ export interface AgentInput {
   intent: Intent;
   /** 记忆上下文 */
   memoryContext: MemoryContext;
-  /** 额外参数 */
-  [key: string]: any;
+  /** 额外参数（明确定义的可选字段） */
+  options?: Record<string, unknown>;
 }
 
 /**
- * Agent执行结果
+ * Agent执行结果（泛型）
  */
-export interface AgentResult {
+export interface AgentResult<T = any> {
   success: boolean;
-  data?: any;
+  data?: T;
   error?: string;
   modelId?: string;
   durationMs?: number;
+  
+  // ✅ P1-02: 记忆元数据（用于情景记忆记录）
+  memoryMetadata?: {
+    taskType: string;        // 任务类型（如 'CHAT_COMMAND', 'SESSION_MANAGEMENT'）
+    summary: string;         // 操作摘要
+    entities?: string[];     // 相关实体（文件名、会话ID等）
+    outcome?: 'SUCCESS' | 'FAILED' | 'PARTIAL'; // 执行结果
+  };
 }
 
 /**
@@ -88,6 +96,12 @@ export interface IAgent {
   readonly metadata?: AgentMetadata;
   
   /**
+   * 初始化Agent（可选）
+   * @returns Promise<void>
+   */
+  initialize?(): Promise<void>;
+  
+  /**
    * 获取Agent能力列表
    * @returns 能力列表
    */
@@ -95,7 +109,7 @@ export interface IAgent {
   
   /**
    * 检查Agent是否可用
-   * @returns 是否可用
+   * @returns 是否可用（默认返回true）
    */
   isAvailable?(): Promise<boolean>;
   
@@ -110,7 +124,7 @@ export interface IAgent {
   }): Promise<AgentResult>;
   
   /**
-   * 清理资源
+   * 清理资源（默认空实现）
    */
   dispose?(): Promise<void>;
 }

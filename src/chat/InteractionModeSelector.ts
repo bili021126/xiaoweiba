@@ -1,6 +1,7 @@
 import { InteractionMode } from './DialogManager';
 import { ConfigManager } from '../storage/ConfigManager';
 import * as vscode from 'vscode';
+import { LENGTH_LIMITS, CONFIDENCE_THRESHOLDS } from '../constants';
 
 /**
  * 用户偏好配置
@@ -76,8 +77,9 @@ export class InteractionModeSelector {
     }
 
     // 保存历史记录（保留最近100条）
-    if (this.modeHistory.length > 100) {
-      this.modeHistory = this.modeHistory.slice(-100);
+    // 限制历史记录长度
+    if (this.modeHistory.length > LENGTH_LIMITS.MAX_MODE_HISTORY) {
+      this.modeHistory = this.modeHistory.slice(-LENGTH_LIMITS.MAX_MODE_HISTORY);
     }
   }
 
@@ -154,7 +156,8 @@ export class InteractionModeSelector {
     }
 
     // 高复杂度或存在歧义 -> 深度模式
-    if (complexity > 0.7 || hasAmbiguity) {
+    // 高复杂度或歧义建议使用深度模式
+    if (complexity > CONFIDENCE_THRESHOLDS.DEEP_MODE_COMPLEXITY || hasAmbiguity) {
       return 'DEEP';
     }
 
@@ -207,7 +210,6 @@ export class InteractionModeSelector {
     if (this.context) {
       const stored = this.context.workspaceState.get<UserPreference>(this.STORAGE_KEY);
       if (stored) {
-        console.log('[InteractionModeSelector] Loaded preference from workspaceState');
         return stored;
       }
     }
@@ -222,7 +224,7 @@ export class InteractionModeSelector {
         preferConcise: config.chat?.preferConcise ?? false
       };
     } catch (error) {
-      console.warn('[InteractionModeSelector] Failed to load preference, using defaults');
+      // 使用默认配置，静默失败
       return {
         defaultMode: 'AUTO',
         enableClarification: true,
@@ -240,13 +242,9 @@ export class InteractionModeSelector {
       // 保存到workspaceState（如果context可用）
       if (this.context) {
         this.context.workspaceState.update(this.STORAGE_KEY, this.userPreference);
-        console.log('[InteractionModeSelector] Preference saved to workspaceState');
       }
-      
-      // 同时记录日志
-      console.log('[InteractionModeSelector] Preference updated:', this.userPreference);
     } catch (error) {
-      console.error('[InteractionModeSelector] Failed to save preference:', error);
+      // 保存失败静默处理，不影响主流程
     }
   }
 }

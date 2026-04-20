@@ -1,5 +1,6 @@
 import { EXPERT_WEIGHTS, FeedbackRecord, ExpertState, RetrievalWeights, IntentVector } from './types';
 import * as vscode from 'vscode';
+import { TIME_THRESHOLDS, CONFIDENCE_THRESHOLDS } from '../../constants';
 
 const DEFAULT_WEIGHTS: RetrievalWeights = { k: 0.30, t: 0.20, e: 0.20, v: 0.30 };
 
@@ -169,11 +170,12 @@ export class ExpertSelector {
 
     for (const fb of recentFeedback) {
       const maxVal = Math.max(fb.intent.temporal, fb.intent.entity, fb.intent.semantic);
-      if (maxVal === fb.intent.temporal && fb.intent.temporal > 0.5) {
+      // 检查主导意图
+      if (maxVal === fb.intent.temporal && fb.intent.temporal > CONFIDENCE_THRESHOLDS.INTENT_DOMINANCE) {
         dominantCounts.temporal++;
-      } else if (maxVal === fb.intent.entity && fb.intent.entity > 0.5) {
+      } else if (maxVal === fb.intent.entity && fb.intent.entity > CONFIDENCE_THRESHOLDS.INTENT_DOMINANCE) {
         dominantCounts.entity++;
-      } else if (maxVal === fb.intent.semantic && fb.intent.semantic > 0.5) {
+      } else if (maxVal === fb.intent.semantic && fb.intent.semantic > CONFIDENCE_THRESHOLDS.INTENT_DOMINANCE) {
         dominantCounts.semantic++;
       } else {
         dominantCounts.balanced++;
@@ -349,7 +351,8 @@ export class ExpertSelector {
     const hoursSinceLastCheck = (now - this.lastWeightCheckTime) / (3600 * 1000);
 
     // 24小时内检查
-    if (hoursSinceLastCheck < 24) return;
+    // 24小时内不重复检查
+    if (hoursSinceLastCheck < TIME_THRESHOLDS.EXPERT_CHECK_INTERVAL_HOURS) return;
 
     // 检查任意因子变化是否超过阈值
     let maxDrift = 0;

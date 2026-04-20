@@ -28,7 +28,7 @@ export class FeedbackRecorder {
       this.auditLogger.log('feedback_record', 'success', 0, {
         parameters: { query, clickedMemoryId }
       }).catch(err => {
-        console.error('[FeedbackRecorder] Failed to log feedback:', err);
+        // 反馈记录失败，静默处理
       });
       
       console.log(`[FeedbackRecorder] Feedback recorded for query: "${query}" -> ${clickedMemoryId}`);
@@ -46,7 +46,7 @@ export class FeedbackRecorder {
       
       // 记录审计日志
       this.auditLogger.log('expert_reset', 'success', 0, {}).catch(err => {
-        console.error('[FeedbackRecorder] Failed to log expert reset:', err);
+        // 专家重置日志记录失败，静默处理
       });
       
       console.log('[FeedbackRecorder] Expert system reset');

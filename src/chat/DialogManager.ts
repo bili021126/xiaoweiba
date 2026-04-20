@@ -1,4 +1,5 @@
 import { ChatMessage } from './types';
+import { CONFIDENCE_THRESHOLDS } from '../constants';
 
 /**
  * 对话状态枚举
@@ -101,11 +102,11 @@ export class DialogManager {
     complexity += hasAmbiguity ? 0.4 : 0;        // 歧义因素
     complexity += isExploratory ? 0.3 : 0;       // 探索性因素
 
-    const needsClarification = complexity > 0.5 || hasAmbiguity;
+    const needsClarification = complexity > CONFIDENCE_THRESHOLDS.CLARIFICATION_COMPLEXITY || hasAmbiguity;
     
     // 根据复杂度建议模式
     let suggestedMode: InteractionMode = 'QUICK';
-    if (complexity > 0.7) {
+    if (complexity > CONFIDENCE_THRESHOLDS.DEEP_MODE_COMPLEXITY) {
       suggestedMode = 'DEEP';
     } else if (isExploratory) {
       suggestedMode = 'COACH';

@@ -13,6 +13,8 @@ import { MemoryDeduplicator } from './MemoryDeduplicator';
 import { IndexManager } from './IndexManager';
 import { SearchEngine } from './SearchEngine';
 import { MemoryCleaner } from './MemoryCleaner';
+import type { Database } from 'sql.js';
+import { CONFIDENCE_THRESHOLDS } from '../../constants';
 
 // 重新导出类型，保持向后兼容
 export type { TaskType, TaskOutcome, EpisodicMemoryRecord, MemoryQueryOptions, MemoryTier } from './types';
@@ -67,17 +69,24 @@ export class EpisodicMemory {
 
   /**
    * 记录情景记忆
+   * @returns 记忆ID，失败时返回空字符串（不阻断功能）
    */
   async record(memory: Omit<EpisodicMemoryRecord, 'id' | 'projectFingerprint' | 'timestamp' | 'finalWeight'>): Promise<string> {
     const startTime = Date.now();
     try {
       // ✅ 容错处理：数据库未初始化时跳过记录，不阻断功能
       if (!this.dbManager) {
-        console.warn('[EpisodicMemory] DatabaseManager not available, skipping memory record');
+        await this.auditLogger.log('memory_record', 'failure', 0, {
+          parameters: { reason: 'DatabaseManager not initialized' }
+        });
         return '';
       }
       
       const db = this.dbManager.getDatabase();
+      if (!db) {
+        await this.auditLogger.logError('memory_record', new Error('Database not available'), 0);
+        return '';
+      }
       const projectFingerprint = await this.projectFingerprint.getCurrentProjectFingerprint();
 
       if (!projectFingerprint) {
@@ -152,7 +161,6 @@ export class EpisodicMemory {
     try {
       // ✅ 容错处理：数据库未初始化时返回空数组
       if (!this.dbManager) {
-        console.warn('[EpisodicMemory] DatabaseManager not available, returning empty results');
         return [];
       }
       
@@ -232,18 +240,17 @@ export class EpisodicMemory {
 
       // 1. 时间指代检测
       if (this.isTemporalQuery(query)) {
-        console.log('[EpisodicMemory] Temporal query detected, returning recent memories');
-        const limit = options.limit !== undefined ? Math.max(options.limit, 0) : 3;
+        const limit = options.limit !== undefined ? Math.min(Math.max(options.limit, 0), 20) : 3;
         const recentMemories = await this.getRecentMemoriesFromDB(limit, options.memoryTier);
         // 去重前按 timestamp 降序排序
         const sortedMemories = recentMemories.sort((a, b) => b.timestamp - a.timestamp);
-        return this.deduplicator.deduplicate(sortedMemories);
+        return this.deduplicator.deduplicate(sortedMemories).slice(0, 20); // 最多返回20条
       }
       
       // 1.5 久远时间意图检测：强制检索 LONG_TERM 层级
       const intent = this.intentAnalyzer.analyze(query);
-      if (intent.distantTemporal > 0.5) {
-        console.log('[EpisodicMemory] Distant temporal intent detected, forcing LONG_TERM tier filter');
+      // 远程时间查询使用长期记忆
+      if (intent.distantTemporal > CONFIDENCE_THRESHOLDS.INTENT_DOMINANCE) {
         options.memoryTier = 'LONG_TERM';
       }
 
@@ -255,17 +262,21 @@ export class EpisodicMemory {
       const sortedMemories = memories.sort((a, b) => b.timestamp - a.timestamp);
       const deduplicatedMemories = this.deduplicator.deduplicate(sortedMemories);
       
+      // 4. 限制最大返回数量（防止一次性返回过多记忆）
+      const maxResults = 20;
+      const limitedResults = deduplicatedMemories.slice(0, maxResults);
+      
       const duration = Date.now() - startTime;
       await this.auditLogger.log('memory_search', 'success', duration, {
         parameters: { 
           query, 
-          count: deduplicatedMemories.length,
+          count: limitedResults.length,
           originalCount: memories.length,
           method: 'hybrid' 
         }
       });
 
-      return deduplicatedMemories;
+      return limitedResults;
     } catch (error) {
       const duration = Date.now() - startTime;
       await this.auditLogger.logError('memory_search', error as Error, duration);
@@ -278,7 +289,7 @@ export class EpisodicMemory {
    * 使用 LIKE 查询（关键词匹配）
    */
   private async searchWithLike(
-    db: any,
+    db: Database,
     projectFingerprint: string,
     query: string,
     limit: number,
@@ -345,7 +356,6 @@ export class EpisodicMemory {
   async cleanupExpired(): Promise<number> {
     const projectFingerprint = await this.projectFingerprint.getCurrentProjectFingerprint();
     if (!projectFingerprint) {
-      console.warn('[EpisodicMemory] No project fingerprint, skip cleanup');
       return 0;
     }
     
@@ -397,8 +407,6 @@ export class EpisodicMemory {
     if (!projectFingerprint) {
       return { totalCount: 0, byTaskType: {}, byOutcome: {}, averageWeight: 0, byTier: {} };
     }
-
-    // ✅ 委托给MemoryCleaner获取基础统计
     const cleanerStats = await this.memoryCleaner.getStats(projectFingerprint);
     
     // 补充byOutcome和averageWeight（MemoryCleaner未提供）
@@ -760,9 +768,9 @@ export class EpisodicMemory {
     
     // ✅ 使用IndexManager构建索引，失败时重置initPromise以允许重试
     this.initPromise = this.buildIndexWithNewManager().catch(err => {
-      console.error('[EpisodicMemory] Index initialization failed:', err);
-      this.initPromise = null; // ✅ 重置，允许后续重试
-      this.isInitializing = false; // ✅ 重置标志
+      // 索引初始化失败，重置状态以允许后续重试
+      this.initPromise = null;
+      this.isInitializing = false;
       throw err;
     });
     await this.initPromise;
@@ -782,9 +790,7 @@ export class EpisodicMemory {
   
     // ✅ 如果正在初始化，等待完成
     if (this.isInitializing) {
-      console.log(`[EpisodicMemory] Waiting for initialization to complete...`);
       await this.initPromise;
-      console.log(`[EpisodicMemory] Initialization completed`);
       return;
     }
     
@@ -793,8 +799,6 @@ export class EpisodicMemory {
       await this.initialize();
     } catch (error) {
       // ✅ 容错处理：数据库未就绪时不阻断功能
-      console.warn('[EpisodicMemory] Initialization failed, will retry on next access:', 
-        error instanceof Error ? error.message : String(error));
       // 重置标志，允许下次重试
       this.isInitializing = false;
       this.initPromise = null;
@@ -826,7 +830,6 @@ export class EpisodicMemory {
   async migrateShortToLongTerm(): Promise<number> {
     const projectFingerprint = await this.projectFingerprint.getCurrentProjectFingerprint();
     if (!projectFingerprint) {
-      console.warn('[EpisodicMemory] No project fingerprint, skip migration');
       return 0;
     }
     

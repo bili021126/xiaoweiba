@@ -52,7 +52,7 @@ export class EventBus {
     try {
       return await handler(payload);
     } catch (error) {
-      console.error(`[EventBus] Request handler for ${type} failed:`, error);
+      // 请求处理器失败，重新抛出由调用方处理
       throw error;
     }
   }

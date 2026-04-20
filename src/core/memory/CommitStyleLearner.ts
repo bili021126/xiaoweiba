@@ -9,6 +9,7 @@
 
 import { injectable, inject } from 'tsyringe';
 import { EpisodicMemory, EpisodicMemoryRecord } from './EpisodicMemory';
+import { CONFIDENCE_THRESHOLDS } from '../../constants';
 
 export interface CommitStylePreference {
   domain: 'COMMIT_STYLE';
@@ -70,7 +71,7 @@ export class CommitStyleLearner {
           .slice(0, 3)
           .map(([type]) => type),
         descriptionMaxLength: Math.ceil(analysis.avgDescriptionLength * 1.2),
-        useBulletPoints: analysis.bulletPointUsage > 0.5,
+        useBulletPoints: analysis.bulletPointUsage > CONFIDENCE_THRESHOLDS.INTENT_DOMINANCE,
         language: 'zh',
         customRules: this.extractModulePatterns(analysis.modulePatterns)
       },

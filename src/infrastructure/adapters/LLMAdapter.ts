@@ -24,6 +24,19 @@ export class LLMAdapter implements ILLMPort {
     const startTime = Date.now();
 
     try {
+      // ✅ 验证消息数组非空
+      if (!options.messages || options.messages.length === 0) {
+        throw new Error('消息数组不能为空');
+      }
+
+      // ✅ 验证至少有一个用户消息（除了系统消息）
+      const hasUserMessage = options.messages.some(msg => msg.role === 'user');
+      if (!hasUserMessage) {
+        console.warn('[LLMAdapter] No user message found, adding placeholder');
+        // 添加占位用户消息，避免LLM调用失败
+        options.messages.push({ role: 'user', content: '请回答' });
+      }
+
       // 转换消息格式
       const messages = options.messages.map((msg: any) => ({
         role: msg.role,
@@ -85,6 +98,19 @@ export class LLMAdapter implements ILLMPort {
     const startTime = Date.now();
 
     try {
+      // ✅ 验证消息数组非空
+      if (!options.messages || options.messages.length === 0) {
+        throw new Error('消息数组不能为空');
+      }
+
+      // ✅ 验证至少有一个用户消息（除了系统消息）
+      const hasUserMessage = options.messages.some(msg => msg.role === 'user');
+      if (!hasUserMessage) {
+        console.warn('[LLMAdapter] No user message found in stream call, adding placeholder');
+        // 添加占位用户消息，避免LLM调用失败
+        options.messages.push({ role: 'user', content: '请回答' });
+      }
+
       // 转换消息格式
       const messages = options.messages.map((msg: any) => ({
         role: msg.role,

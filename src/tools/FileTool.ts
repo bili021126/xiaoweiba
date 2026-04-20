@@ -61,7 +61,6 @@ export class FileTool {
         
         // 如果内容相同，直接返回
         if (original === content) {
-          console.log('[FileTool] Content unchanged, skipping write');
           return;
         }
         
@@ -90,7 +89,7 @@ export class FileTool {
         parameters: { path: uri.fsPath, size: content.length }
       });
       
-      console.log(`[FileTool] File written successfully: ${uri.fsPath}`);
+      // 文件写入成功，审计日志已在调用方记录
     } catch (error) {
       const durationMs = Date.now() - startTime;
       await this.auditLogger.logError('file_write', error as Error, durationMs);

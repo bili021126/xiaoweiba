@@ -9,6 +9,7 @@
  */
 
 import { EpisodicMemoryRecord, MemoryQueryOptions } from './types';
+import { TIME_THRESHOLDS } from '../../constants';
 
 export interface SearchResult {
   memory: EpisodicMemoryRecord;
@@ -162,7 +163,8 @@ export class SearchEngine {
     
     // 计算时间距离因子
     const hoursSince = (Date.now() - memoryTimestamp) / (1000 * 60 * 60);
-    const isDistantTemporal = hoursSince > 24;
+    // 判断是否为远程时间查询
+    const isDistantTemporal = hoursSince > TIME_THRESHOLDS.DISTANT_TEMPORAL_HOURS;
     
     if (isCodeQuery) {
       // 代码查询：重视语义和实体

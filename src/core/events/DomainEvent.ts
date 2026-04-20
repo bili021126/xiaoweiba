@@ -1,22 +1,28 @@
 /**
- * 领域事件基类
+ * 领域事件基类（泛型）
  */
-
-export abstract class DomainEvent {
+export abstract class DomainEvent<T = any> {
   constructor(
     public readonly type: string,
     public readonly timestamp: number = Date.now(),
-    public readonly payload: any
+    public readonly payload: T
   ) {}
 }
+
+import { Intent } from '../domain/Intent';
+import { MemoryContext } from '../domain/MemoryContext';
 
 /**
  * 意图接收事件
  */
-export class IntentReceivedEvent extends DomainEvent {
+export interface IntentPayload {
+  intent: Intent;
+}
+
+export class IntentReceivedEvent extends DomainEvent<IntentPayload> {
   static readonly type = 'intent.received';
   
-  constructor(public readonly intent: any) {
+  constructor(public readonly intent: Intent) {
     super(IntentReceivedEvent.type, Date.now(), { intent });
   }
 }
@@ -24,10 +30,20 @@ export class IntentReceivedEvent extends DomainEvent {
 /**
  * Agent选定事件
  */
-export class AgentSelectedEvent extends DomainEvent {
+export interface AgentSelectedPayload {
+  intent: Intent;
+  agentId: string;
+  memoryContext: MemoryContext;
+}
+
+export class AgentSelectedEvent extends DomainEvent<AgentSelectedPayload> {
   static readonly type = 'agent.selected';
   
-  constructor(public readonly intent: any, public readonly agentId: string, public readonly memoryContext: any) {
+  constructor(
+    public readonly intent: Intent,
+    public readonly agentId: string,
+    public readonly memoryContext: MemoryContext
+  ) {
     super(AgentSelectedEvent.type, Date.now(), { intent, agentId, memoryContext });
   }
 }
@@ -35,28 +51,64 @@ export class AgentSelectedEvent extends DomainEvent {
 /**
  * 任务完成事件
  */
-export class TaskCompletedEvent extends DomainEvent {
+export interface TaskCompletedPayload {
+  intent: Intent;
+  agentId: string;
+  result: any; // 结果类型多样化，暂时保留any
+  durationMs: number;
+  modelId?: string;
+  
+  // ✅ P1-02: 记忆元数据（用于情景记忆记录）
+  memoryMetadata?: {
+    taskType: string;
+    summary: string;
+    entities?: string[];
+    outcome?: 'SUCCESS' | 'FAILED' | 'PARTIAL';
+  };
+}
+
+export class TaskCompletedEvent extends DomainEvent<TaskCompletedPayload> {
   static readonly type = 'task.completed';
   
   constructor(
-    public readonly intent: any,
+    public readonly intent: Intent,
     public readonly agentId: string,
     public readonly result: any,
     public readonly durationMs: number,
-    public readonly modelId?: string // ✅ 新增：模型ID
+    public readonly modelId?: string,
+    public readonly memoryMetadata?: {
+      taskType: string;
+      summary: string;
+      entities?: string[];
+      outcome?: 'SUCCESS' | 'FAILED' | 'PARTIAL';
+    }
   ) {
-    super(TaskCompletedEvent.type, Date.now(), { intent, agentId, result, durationMs, modelId });
+    super(TaskCompletedEvent.type, Date.now(), { 
+      intent, 
+      agentId, 
+      result, 
+      durationMs, 
+      modelId,
+      memoryMetadata 
+    });
   }
 }
 
 /**
  * 任务失败事件
  */
-export class TaskFailedEvent extends DomainEvent {
+export interface TaskFailedPayload {
+  intent: Intent;
+  agentId: string;
+  error: Error;
+  durationMs: number;
+}
+
+export class TaskFailedEvent extends DomainEvent<TaskFailedPayload> {
   static readonly type = 'task.failed';
   
   constructor(
-    public readonly intent: any,
+    public readonly intent: Intent,
     public readonly agentId: string,
     public readonly error: Error,
     public readonly durationMs: number
@@ -68,10 +120,20 @@ export class TaskFailedEvent extends DomainEvent {
 /**
  * 意图调度完成事件
  */
-export class IntentDispatchedEvent extends DomainEvent {
+export interface IntentDispatchedPayload {
+  intent: Intent;
+  agentId: string;
+  duration: number;
+}
+
+export class IntentDispatchedEvent extends DomainEvent<IntentDispatchedPayload> {
   static readonly type = 'intent.dispatched';
   
-  constructor(public readonly intent: any, public readonly agentId: string, public readonly duration: number) {
+  constructor(
+    public readonly intent: Intent,
+    public readonly agentId: string,
+    public readonly duration: number
+  ) {
     super(IntentDispatchedEvent.type, Date.now(), { intent, agentId, duration });
   }
 }
@@ -79,10 +141,18 @@ export class IntentDispatchedEvent extends DomainEvent {
 /**
  * 意图调度失败事件
  */
-export class IntentDispatchFailedEvent extends DomainEvent {
+export interface IntentDispatchFailedPayload {
+  intent: Intent;
+  error: Error;
+}
+
+export class IntentDispatchFailedEvent extends DomainEvent<IntentDispatchFailedPayload> {
   static readonly type = 'intent.dispatch_failed';
   
-  constructor(public readonly intent: any, public readonly error: Error) {
+  constructor(
+    public readonly intent: Intent,
+    public readonly error: Error
+  ) {
     super(IntentDispatchFailedEvent.type, Date.now(), { intent, error });
   }
 }
@@ -90,10 +160,15 @@ export class IntentDispatchFailedEvent extends DomainEvent {
 /**
  * 用户聊天意图事件
  */
-export class UserChatIntentEvent extends DomainEvent {
+export interface UserChatPayload {
+  text: string;
+  timestamp: number;
+}
+
+export class UserChatIntentEvent extends DomainEvent<UserChatPayload> {
   static readonly type = 'user.chat_intent';
   
-  constructor(payload: { text: string; timestamp: number }) {
+  constructor(payload: UserChatPayload) {
     super(UserChatIntentEvent.type, Date.now(), payload);
   }
 }
@@ -101,10 +176,16 @@ export class UserChatIntentEvent extends DomainEvent {
 /**
  * AI助手响应事件
  */
-export class AssistantResponseEvent extends DomainEvent {
+export interface AssistantResponsePayload {
+  messageId: string;
+  content: string;
+  timestamp: number;
+}
+
+export class AssistantResponseEvent extends DomainEvent<AssistantResponsePayload> {
   static readonly type = 'assistant.response';
   
-  constructor(payload: { messageId: string; content: string; timestamp: number }) {
+  constructor(payload: AssistantResponsePayload) {
     super(AssistantResponseEvent.type, Date.now(), payload);
   }
 }
@@ -113,7 +194,12 @@ export class AssistantResponseEvent extends DomainEvent {
  * 流式响应块事件
  * 当 AI 逐字生成回复时，每个 chunk 都会发布此事件
  */
-export class StreamChunkEvent extends DomainEvent {
+export interface StreamChunkPayload {
+  messageId: string;
+  chunk: string;
+}
+
+export class StreamChunkEvent extends DomainEvent<StreamChunkPayload> {
   static readonly type = 'stream.chunk';
   
   constructor(
@@ -127,10 +213,14 @@ export class StreamChunkEvent extends DomainEvent {
 /**
  * 消息添加事件
  */
-export class MessageAddedEvent extends DomainEvent {
+export interface MessageAddedPayload {
+  message: any;
+}
+
+export class MessageAddedEvent extends DomainEvent<MessageAddedPayload> {
   static readonly type = 'message.added';
   
-  constructor(payload: { message: any }) {
+  constructor(payload: MessageAddedPayload) {
     super(MessageAddedEvent.type, Date.now(), payload);
   }
 }
@@ -138,7 +228,13 @@ export class MessageAddedEvent extends DomainEvent {
 /**
  * 用户反馈事件
  */
-export class FeedbackGivenEvent extends DomainEvent {
+export interface FeedbackGivenPayload {
+  query: string;
+  clickedMemoryId: string;
+  dwellTimeMs: number;
+}
+
+export class FeedbackGivenEvent extends DomainEvent<FeedbackGivenPayload> {
   static readonly type = 'feedback.given';
   
   constructor(
@@ -153,7 +249,13 @@ export class FeedbackGivenEvent extends DomainEvent {
 /**
  * 系统错误事件（用于监控和告警）
  */
-export class SystemErrorEvent extends DomainEvent {
+export interface SystemErrorPayload {
+  component: string;
+  context?: string;
+  error?: string;
+}
+
+export class SystemErrorEvent extends DomainEvent<SystemErrorPayload> {
   static readonly type = 'system.error';
   
   constructor(
@@ -162,5 +264,33 @@ export class SystemErrorEvent extends DomainEvent {
     public readonly error?: string
   ) {
     super(SystemErrorEvent.type, Date.now(), { component, context, error });
+  }
+}
+
+/**
+ * ✅ P1-02: 会话列表更新事件
+ * 
+ * 当会话创建、删除或切换时发布，通知前端更新会话列表
+ * 
+ * 注意：这是插件事件，必须遵循 plugin.<pluginId>.<event> 格式
+ */
+export interface SessionListUpdatedPayload {
+  action: 'created' | 'deleted' | 'switched';
+  sessionId?: string;
+  timestamp: number;
+}
+
+export class SessionListUpdatedEvent extends DomainEvent<SessionListUpdatedPayload> {
+  static readonly type = 'plugin.xiaoweiba.session_list_updated';
+  
+  constructor(
+    public readonly action: 'created' | 'deleted' | 'switched',
+    public readonly sessionId?: string
+  ) {
+    super(SessionListUpdatedEvent.type, Date.now(), {
+      action,
+      sessionId,
+      timestamp: Date.now()
+    });
   }
 }

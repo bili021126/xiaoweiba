@@ -108,3 +108,45 @@ export const UI = {
   /** 最大显示建议数 */
   MAX_SUGGESTIONS: 5
 } as const;
+
+// ========== 长度限制常量 ==========
+export const LENGTH_LIMITS = {
+  /** 查询文本最大长度（字符） */
+  MAX_QUERY_LENGTH: parseInt(process.env.XIAOWEIBA_MAX_QUERY_LENGTH || '1000', 10),
+  
+  /** 选中代码最大长度（字符） */
+  MAX_CODE_LENGTH: parseInt(process.env.XIAOWEIBA_MAX_CODE_LENGTH || '1000', 10),
+  
+  /** 消息最大长度（字符） */
+  MAX_MESSAGE_LENGTH: parseInt(process.env.XIAOWEIBA_MAX_MESSAGE_LENGTH || '5000', 10),
+  
+  /** 模式历史记录最大条数 */
+  MAX_MODE_HISTORY: parseInt(process.env.XIAOWEIBA_MAX_MODE_HISTORY || '100', 10)
+} as const;
+
+// ========== 时间阈值常量 ==========
+export const TIME_THRESHOLDS = {
+  /** 远程时间查询阈值（小时） */
+  DISTANT_TEMPORAL_HOURS: parseInt(process.env.XIAOWEIBA_DISTANT_TEMPORAL_HOURS || '24', 10),
+  
+  /** 专家系统检查间隔（小时） */
+  EXPERT_CHECK_INTERVAL_HOURS: parseInt(process.env.XIAOWEIBA_EXPERT_CHECK_INTERVAL_HOURS || '24', 10),
+  
+  /** 延迟敏感场景阈值（毫秒） */
+  LATENCY_SENSITIVE_MS: parseInt(process.env.XIAOWEIBA_LATENCY_SENSITIVE_MS || '500', 10)
+} as const;
+
+// ========== 置信度阈值常量 ==========
+export const CONFIDENCE_THRESHOLDS = {
+  /** 对话复杂度阈值（触发澄清） */
+  CLARIFICATION_COMPLEXITY: parseFloat(process.env.XIAOWEIBA_CLARIFICATION_COMPLEXITY || '0.5'),
+  
+  /** 深度模式复杂度阈值 */
+  DEEP_MODE_COMPLEXITY: parseFloat(process.env.XIAOWEIBA_DEEP_MODE_COMPLEXITY || '0.7'),
+  
+  /** 意图主导性阈值 */
+  INTENT_DOMINANCE: parseFloat(process.env.XIAOWEIBA_INTENT_DOMINANCE || '0.5'),
+  
+  /** 冷启动高置信度要求 */
+  COLD_START_HIGH_CONFIDENCE: parseFloat(process.env.XIAOWEIBA_COLD_START_HIGH_CONFIDENCE || '0.7')
+} as const;

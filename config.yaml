@@ -85,3 +85,47 @@ bestPractice:
     - builtin  # builtin / community / custom
   # 仅使用内置知识（禁用外部下载）
   builtinOnly: true
+
+# 长度限制配置
+limits:
+  # 查询文本最大长度（字符）
+  maxQueryLength: ${env:XIAOWEIBA_MAX_QUERY_LENGTH:-1000}
+  # 选中代码最大长度（字符）
+  maxCodeLength: ${env:XIAOWEIBA_MAX_CODE_LENGTH:-1000}
+  # 消息最大长度（字符）
+  maxMessageLength: ${env:XIAOWEIBA_MAX_MESSAGE_LENGTH:-5000}
+  # 模式历史记录最大条数
+  maxModeHistory: ${env:XIAOWEIBA_MAX_MODE_HISTORY:-100}
+
+# 行内补全配置
+inlineCompletion:
+  # 是否启用行内补全
+  enabled: true
+  # 触发延迟（毫秒），避免频繁请求
+  triggerDelayMs: 300
+  # 最大生成token数
+  maxTokens: 50
+  # 是否启用缓存
+  enableCache: true
+  # 缓存有效期（秒）
+  cacheTTLSeconds: 5
+
+# 时间阈值配置
+timeThresholds:
+  # 远程时间查询阈值（小时）
+  distantTemporalHours: ${env:XIAOWEIBA_DISTANT_TEMPORAL_HOURS:-24}
+  # 专家系统检查间隔（小时）
+  expertCheckIntervalHours: ${env:XIAOWEIBA_EXPERT_CHECK_INTERVAL_HOURS:-24}
+  # 延迟敏感场景阈值（毫秒）
+  latencySensitiveMs: ${env:XIAOWEIBA_LATENCY_SENSITIVE_MS:-500}
+
+# 置信度阈值配置
+confidenceThresholds:
+  # 对话复杂度阈值（触发澄清）
+  clarificationComplexity: ${env:XIAOWEIBA_CLARIFICATION_COMPLEXITY:-0.5}
+  # 深度模式复杂度阈值
+  deepModeComplexity: ${env:XIAOWEIBA_DEEP_MODE_COMPLEXITY:-0.7}
+  # 意图主导性阈值
+  intentDominance: ${env:XIAOWEIBA_INTENT_DOMINANCE:-0.5}
+  # 冷启动高置信度要求
+  coldStartHighConfidence: ${env:XIAOWEIBA_COLD_START_HIGH_CONFIDENCE:-0.7}

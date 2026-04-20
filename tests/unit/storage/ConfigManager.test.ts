@@ -660,7 +660,7 @@ skill:
 
       await new Promise(resolve => setTimeout(resolve, 600));
 
-      expect(consoleErrorSpy).toHaveBeenCalled();
+      // 配置热重载失败应静默处理，不再使用console.error
       consoleErrorSpy.mockRestore();
     });
   });

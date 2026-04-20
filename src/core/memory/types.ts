@@ -23,15 +23,15 @@ export interface RetrievalWeights {
 }
 
 /**
- * 预设专家权重配置
+ * 预设专家权重配置（不可变）
  */
-export const EXPERT_WEIGHTS: Record<string, RetrievalWeights> = {
-  balanced:   { k: 0.30, t: 0.20, e: 0.20, v: 0.30 }, // 默认均衡
-  temporal:   { k: 0.20, t: 0.60, e: 0.10, v: 0.10 }, // 时间优先（最近记忆）
-  entity:     { k: 0.50, t: 0.10, e: 0.30, v: 0.10 }, // 实体优先（精确匹配）
-  semantic:   { k: 0.10, t: 0.10, e: 0.20, v: 0.60 }, // 语义优先（向量检索）
-  hybrid:     { k: 0.30, t: 0.20, e: 0.20, v: 0.30 }  // 混合（同balanced，可不同）
-};
+export const EXPERT_WEIGHTS: Readonly<Record<string, Readonly<RetrievalWeights>>> = Object.freeze({
+  balanced:   Object.freeze({ k: 0.30, t: 0.20, e: 0.20, v: 0.30 }), // 默认均衡
+  temporal:   Object.freeze({ k: 0.20, t: 0.60, e: 0.10, v: 0.10 }), // 时间优先（最近记忆）
+  entity:     Object.freeze({ k: 0.50, t: 0.10, e: 0.30, v: 0.10 }), // 实体优先（精确匹配）
+  semantic:   Object.freeze({ k: 0.10, t: 0.10, e: 0.20, v: 0.60 }), // 语义优先（向量检索）
+  hybrid:     Object.freeze({ k: 0.30, t: 0.20, e: 0.20, v: 0.30 })  // 混合（同balanced，可不同）
+});
 
 /**
  * 反馈记录 - 用于专家选择器的学习

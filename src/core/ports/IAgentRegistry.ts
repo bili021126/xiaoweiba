@@ -31,4 +31,11 @@ export interface IAgentRegistry {
    * @returns Agent实例，如果不存在返回undefined
    */
   getAgent(agentId: string): IAgent | undefined;
+
+  /**
+   * 注销Agent（动态卸载）
+   * @param agentId Agent ID
+   * @returns 是否成功注销
+   */
+  unregister(agentId: string): boolean;
 }

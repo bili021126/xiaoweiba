@@ -10,12 +10,13 @@
 import { MemorySystem, MemoryContext } from '../memory/MemorySystem';
 
 export interface CommandInput {
-  [key: string]: any;
+  /** 命令特定参数（明确定义的可选字段） */
+  options?: Record<string, unknown>;
 }
 
-export interface CommandResult {
+export interface CommandResult<T = any> {
   success: boolean;
-  data?: any;
+  data?: T;
   error?: string;
   durationMs?: number;
   memoryMetadata?: {

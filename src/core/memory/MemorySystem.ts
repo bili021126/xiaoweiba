@@ -16,12 +16,15 @@ import { AuditLogger } from '../security/AuditLogger';
 import { TaskTokenManager, TaskPermissionLevel } from '../security/TaskTokenManager';
 
 /**
- * 动作处理器类型
+ * 动作处理器类型（泛型）
  * @param input 输入参数
  * @param memoryContext 记忆上下文（由记忆系统自动注入）
  * @returns 执行结果
  */
-export type ActionHandler = (input: any, memoryContext: MemoryContext) => Promise<any>;
+export type ActionHandler<TInput = any, TOutput = any> = (
+  input: TInput,
+  memoryContext: MemoryContext
+) => Promise<TOutput>;
 
 /**
  * 记忆上下文结构（自动注入到功能模块）
@@ -428,7 +431,7 @@ export class MemorySystem {
     
     // ✅ 直接使用EpisodicMemory.record记录任务完成
     try {
-      const { actionId, result, durationMs, memoryMetadata } = payload;
+      const { actionId, result, durationMs, memoryMetadata, modelId } = payload;
       
       if (!memoryMetadata) {
         console.warn('[MemorySystem] No memoryMetadata in TASK_COMPLETED event, skipping record');
@@ -440,7 +443,7 @@ export class MemorySystem {
         summary: memoryMetadata.summary,
         entities: memoryMetadata.entities,
         outcome: 'success' as any, // 默认成功，失败由错误处理分支记录
-        modelId: 'unknown', // TODO: 从上下文获取实际模型ID
+        modelId: modelId || 'unknown', // ✅ 从事件payload中提取实际模型ID
         durationMs: durationMs || 0,
         metadata: {
           actionId,

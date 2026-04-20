@@ -158,7 +158,6 @@ export class MessageFlowManager {
   private extractContentFromResult(result: any): string {
     // ✅ 防御性检查：result可能为undefined或null
     if (result === undefined || result === null) {
-      console.warn('[MessageFlowManager] Result is null/undefined, returning empty message');
       return '✅ 任务已完成';
     }
 

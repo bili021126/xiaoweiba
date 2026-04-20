@@ -76,7 +76,7 @@ export class ImportMemoryAgent implements IAgent {
           });
           importedCount++;
         } catch (err) {
-          console.warn(`[ImportMemoryAgent] Failed to import memory ${mem.id}:`, err);
+          // 导入失败，静默跳过
           skippedCount++;
         }
       }

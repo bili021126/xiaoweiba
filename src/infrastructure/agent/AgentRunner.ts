@@ -114,7 +114,8 @@ export class AgentRunner {
         agent.id,
         result,
         durationMs,
-        result.modelId // ✅ 传递模型ID
+        result.modelId, // ✅ 传递模型ID
+        result.memoryMetadata // ✅ P1-02: 传递记忆元数据
       ));
 
       console.log(`[AgentRunner] Agent ${agentId} completed successfully in ${durationMs}ms`);

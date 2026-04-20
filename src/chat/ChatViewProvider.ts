@@ -3,7 +3,7 @@ import { inject, injectable } from 'tsyringe';
 import { IEventBus } from '../core/ports/IEventBus';
 import { IntentDispatcher } from '../core/application/IntentDispatcher';
 import { IntentFactory } from '../core/factory/IntentFactory';
-import { AssistantResponseEvent, StreamChunkEvent } from '../core/events/DomainEvent';
+import { AssistantResponseEvent, StreamChunkEvent, SessionListUpdatedEvent } from '../core/events/DomainEvent';
 import { generateChatViewHtml } from './ChatViewHtml';
 import { ChatMessage } from './types';
 
@@ -67,6 +67,21 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
     // TODO: 订阅推荐事件
     // this.unsubscribers.push(this.eventBus.subscribe(MemoryRecommendEvent.type, (event) => { ... }));
+
+    // ✅ P1-02: 订阅会话列表更新事件
+    this.unsubscribers.push(
+      this.eventBus.subscribe(SessionListUpdatedEvent.type, (event) => {
+        const sessionEvent = event as SessionListUpdatedEvent;
+        console.log('[ChatViewProvider] Session list updated:', sessionEvent.action, sessionEvent.sessionId);
+        
+        // 通知前端刷新会话列表
+        this.view?.webview.postMessage({
+          type: 'refreshSessionList',
+          action: sessionEvent.action,
+          sessionId: sessionEvent.sessionId
+        });
+      })
+    );
   }
 
   /**
@@ -77,7 +92,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     _context: vscode.WebviewViewResolveContext,
     _token: vscode.CancellationToken
   ): Promise<void> {
-    console.log('[ChatViewProvider] resolveWebviewView called');
     this.view = webviewView;
 
     try {
@@ -86,9 +100,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         localResourceRoots: [this.context.extensionUri]
       };
 
-      console.log('[ChatViewProvider] Setting webview HTML...');
       webviewView.webview.html = this.getHtmlForWebview(webviewView.webview);
-      console.log('[ChatViewProvider] Webview HTML set successfully');
 
       // 处理来自Webview的消息
       webviewView.webview.onDidReceiveMessage(async (message) => {
@@ -118,7 +130,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         }
       }, 1000);
     } catch (error) {
-      console.error('[ChatViewProvider] Failed to resolve webview:', error);
+      // 审计日志已在extension.ts中记录，此处直接抛出
       throw error;
     }
   }
@@ -178,8 +190,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       // 通知UI清空消息列表
       this.view?.webview.postMessage({ type: 'clearMessages' });
     } catch (error) {
-      console.error('[ChatViewProvider] Failed to create new session:', error);
       vscode.window.showWarningMessage('新建会话失败，请重试');
+      throw error;
     }
   }
 
@@ -197,8 +209,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       // 通知UI重新加载
       this.view?.webview.postMessage({ type: 'reloadSession', sessionId });
     } catch (error) {
-      console.error('[ChatViewProvider] Failed to switch session:', error);
       vscode.window.showWarningMessage('切换会话失败，请重试');
+      throw error;
     }
   }
 
@@ -217,8 +229,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         this.view?.webview.postMessage({ type: 'clearMessages' });
       }
     } catch (error) {
-      console.error('[ChatViewProvider] Failed to delete session:', error);
       vscode.window.showWarningMessage('删除会话失败，请重试');
+      throw error;
     }
   }
 
@@ -243,6 +255,5 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     // 取消所有事件订阅，防止内存泄漏
     this.unsubscribers.forEach(unsub => unsub());
     this.unsubscribers = [];
-    console.log('[ChatViewProvider] Disposed, event subscriptions cancelled');
   }
 }

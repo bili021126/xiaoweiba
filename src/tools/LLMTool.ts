@@ -45,6 +45,12 @@ export class LLMTool implements ILLMTool {
     // 脱敏GitHub Token (ghp_xxx)
     sanitized = sanitized.replace(/(ghp_[a-zA-Z0-9]{36})/g, '[GITHUB_TOKEN_REDACTED]');
     
+    // 脱敏AWS密钥 (AKIA开头)
+    sanitized = sanitized.replace(/(AKIA[A-Z0-9]{16})/g, '[AWS_KEY_REDACTED]');
+    
+    // 脱敏私钥头尾标记
+    sanitized = sanitized.replace(/-----BEGIN (RSA |EC |DSA )?PRIVATE KEY-----[\s\S]*?-----END (RSA |EC |DSA )?PRIVATE KEY-----/g, '[PRIVATE_KEY_REDACTED]');
+    
     return sanitized;
   }
 
@@ -242,7 +248,6 @@ export class LLMTool implements ILLMTool {
       
       // 如果环境变量未配置，尝试从 SecretStorage 获取
       if (!apiKey) {
-        console.log(`[LLMTool] API key not found in environment, trying SecretStorage for ${provider.id}`);
         apiKey = await this.configManager.getApiKey(provider.id) || '';
       }
 
@@ -253,8 +258,6 @@ export class LLMTool implements ILLMTool {
           `未配置 API Key: ${provider.id}，请在 .env 文件中设置 ${envKeyVar} 或通过"配置 API Key"命令设置`
         );
       }
-
-      console.log(`[LLMTool] Using API key from ${apiKey.startsWith('sk-') ? 'environment/SecretStorage' : 'unknown source'} for ${provider.id}`);
 
       const client = new OpenAI({
         baseURL: provider.apiUrl,

@@ -133,7 +133,7 @@ export class GenerateCommitAgent implements IAgent {
       });
       return stdout;
     } catch (error) {
-      console.error('[GenerateCommitAgent] Failed to get git diff:', error);
+      // Git diff获取失败，返回空字符串
       return '';
     }
   }
@@ -190,7 +190,7 @@ ${diff.substring(0, 8000)}
         cwd: workspacePath 
       });
     } catch (error) {
-      console.error('[GenerateCommitAgent] Failed to apply commit:', error);
+      // 提交应用失败，重新抛出由调用方处理
       throw error;
     }
   }

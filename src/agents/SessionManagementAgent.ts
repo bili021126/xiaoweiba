@@ -3,7 +3,7 @@ import { IMemoryPort } from '../core/ports/IMemoryPort';
 import { IEventBus } from '../core/ports/IEventBus';
 import { MemoryContext } from '../core/domain/MemoryContext';
 import { Intent } from '../core/domain/Intent';
-import { AssistantResponseEvent } from '../core/events/DomainEvent';
+import { AssistantResponseEvent, SessionListUpdatedEvent } from '../core/events/DomainEvent';
 import { injectable, inject } from 'tsyringe';
 import * as vscode from 'vscode';
 
@@ -95,6 +95,9 @@ export class SessionManagementAgent implements IAgent {
       createdAt: Date.now()
     });
 
+    // ✅ 发布会话列表更新事件（通知前端刷新列表）
+    this.eventBus.publish(new SessionListUpdatedEvent('created', sessionId));
+
     // 发布成功响应
     this.eventBus.publish(new AssistantResponseEvent({
       messageId: `msg_${Date.now()}_system`,
@@ -105,7 +108,14 @@ export class SessionManagementAgent implements IAgent {
     return {
       success: true,
       data: { sessionId },
-      durationMs: Date.now() - startTime
+      durationMs: Date.now() - startTime,
+      // ✅ P1-02: 添加记忆元数据
+      memoryMetadata: {
+        taskType: 'SESSION_MANAGEMENT',
+        summary: `创建了新会话 ${sessionId}`,
+        entities: [sessionId],
+        outcome: 'SUCCESS'
+      }
     };
   }
 
@@ -122,6 +132,9 @@ export class SessionManagementAgent implements IAgent {
     // ✅ P1-02: 从数据库加载会话历史
     const history = await this.memoryPort.loadSessionHistory(sessionId);
 
+    // ✅ 发布会话列表更新事件（通知前端当前会话已切换）
+    this.eventBus.publish(new SessionListUpdatedEvent('switched', sessionId));
+
     // 发布成功响应（包含历史消息数量）
     this.eventBus.publish(new AssistantResponseEvent({
       messageId: `msg_${Date.now()}_system`,
@@ -132,7 +145,14 @@ export class SessionManagementAgent implements IAgent {
     return {
       success: true,
       data: { sessionId, messageCount: history.length },
-      durationMs: Date.now() - startTime
+      durationMs: Date.now() - startTime,
+      // ✅ P1-02: 添加记忆元数据
+      memoryMetadata: {
+        taskType: 'SESSION_MANAGEMENT',
+        summary: `切换到会话 ${sessionId}（${history.length} 条消息）`,
+        entities: [sessionId],
+        outcome: 'SUCCESS'
+      }
     };
   }
 
@@ -149,6 +169,9 @@ export class SessionManagementAgent implements IAgent {
     // ✅ P1-02: 从数据库删除会话
     await this.memoryPort.deleteSession(sessionId);
 
+    // ✅ 发布会话列表更新事件（通知前端刷新列表）
+    this.eventBus.publish(new SessionListUpdatedEvent('deleted', sessionId));
+
     // 发布成功响应
     this.eventBus.publish(new AssistantResponseEvent({
       messageId: `msg_${Date.now()}_system`,
@@ -159,7 +182,14 @@ export class SessionManagementAgent implements IAgent {
     return {
       success: true,
       data: { sessionId },
-      durationMs: Date.now() - startTime
+      durationMs: Date.now() - startTime,
+      // ✅ P1-02: 添加记忆元数据
+      memoryMetadata: {
+        taskType: 'SESSION_MANAGEMENT',
+        summary: `删除了会话 ${sessionId}`,
+        entities: [sessionId],
+        outcome: 'SUCCESS'
+      }
     };
   }
 
@@ -181,3 +211,5 @@ export class SessionManagementAgent implements IAgent {
     this.initialized = false;
   }
 }
+
+
