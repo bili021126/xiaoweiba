@@ -411,43 +411,238 @@ console.log(`Total registered agents: ${agentRegistry.getAll().length}`);
 
 ## 六、记忆系统集成
 
-### 6.1 记忆系统架构
+### 6.1 记忆分类与职责
 
-```
-┌─────────────────────────────────────────────┐
-│         MemorySystem (协调层)                │
-│  • 初始化IndexManager/SearchEngine          │
-│  • 管理TaskToken                            │
-└──────────────┬──────────────────────────────┘
-               │
-       ┌───────┴────────┐
-       ▼                ▼
-┌──────────────┐ ┌──────────────┐
-│EpisodicMemory│ │PreferenceMem │
-│ (情景记忆)    │ │  (偏好记忆)   │
-└──────┬───────┘ └──────┬───────┘
-       │                │
-       ▼                ▼
-┌─────────────────────────────────────────────┐
-│         DatabaseManager (持久化层)           │
-│  • SQLite (sql.js)                          │
-│  • 降级写入策略（原子重命名 → 直接覆盖）     │
-└─────────────────────────────────────────────┘
-```
+| 类型 | 存储内容 | 存储位置 | 管理模块 | 核心原则 |
+|:---|:---|:---|:---|:---|
+| **操作记忆** | 用户执行的命令（代码解释、提交生成等） | `episodic_memory` 表 | `EpisodicMemory` | 原则一：只记“事”不记“话” |
+| **对话历史** | 当前会话的消息 | `workspaceState` | `SessionManager` | 绝不写入操作记忆库 |
+| **偏好记忆** | 用户习惯（命名风格、提交风格） | `preference_memory` 表 | `PreferenceMemory` | 长期学习用户偏好 |
+| **程序记忆** | 高频操作序列（用于 Skill 沉淀） | `procedural_memory` 表 | 远期实现（550D） | 自编程能力基础 |
 
-### 6.2 记忆检索流程
+**关键设计决策**：
+- ✅ 操作记忆必须有明确的 `taskType`、包含文件路径的 `summary` 和可检索的 `entities`
+- ❌ 禁止 `SessionManager` 或 `ChatViewProvider` 向 `episodic_memory` 写入 `CHAT` 记录
+- ✅ 对话摘要由 `SessionManager` 独立管理，用于多轮对话上下文
+
+### 6.2 操作记忆数据结构
 
 ```typescript
-// MemoryAdapter.retrieveContext()
-async retrieveContext(intent: Intent): Promise<MemoryContext> {
-  // 1. 获取项目指纹
-  const projectFingerprint = await this.projectFingerprint.getCurrentProjectFingerprint();
+interface EpisodicMemoryRecord {
+  id: string;                    // UUID
+  projectFingerprint: string;    // 项目指纹（Git remote URL hash）
+  timestamp: number;             // Unix 时间戳
   
-  // 2. 从情景记忆检索相关记忆
-  const episodicMemories = await this.episodicMemory.retrieve({
-    projectFingerprint,
-    limit: 5,
-    relevanceThreshold: 0.3
+  // 核心字段（原则一：职责边界清晰）
+  taskType: 'CODE_EXPLAIN' | 'COMMIT_GENERATE' | 'CODE_GENERATE' | 
+            'NAMING_CHECK' | 'SQL_OPTIMIZE' | 'API_CONFIG';
+  summary: string;               // 如"解释了 LoginView.vue 中的代码"
+  entities: string[];            // 如 ["src/views/LoginView.vue", "handleLogin"]
+  
+  // 质量标记（原则二：测试驱动真实）
+  outcome: 'SUCCESS' | 'FAILED'; // 只记录成功操作，避免调试噪音
+  
+  // 分层管理
+  memoryTier: 'SHORT_TERM' | 'LONG_TERM'; // 短期/长期记忆
+  
+  // 550B 语义增强
+  vector?: Float32Array;         // 语义向量（Xenova/all-MiniLM-L6-v2）
+}
+```
+
+**设计要点**：
+1. **summary 必须包含上下文**：从 `Explained code` 改为 `解释了 LoginView.vue 中的代码`
+2. **outcome 过滤调试噪音**：只记录 `SUCCESS`，避免污染真实记忆画像
+3. **entities 支持实体检索**：文件路径、函数名等关键实体
+
+### 6.3 记忆记录流程
+
+```text
+用户执行命令
+    ↓
+Agent 执行业务逻辑（如 ExplainCodeAgent.execute）
+    ↓
+Agent 返回 AgentResult（包含 success 状态）
+    ↓
+AgentRunner 发布 TASK_COMPLETED 事件（携带 memoryMetadata）
+    ↓
+MemoryAdapter 订阅事件
+    ├─ 检查 outcome === 'SUCCESS'
+    ├─ 构建 EpisodicMemoryRecord
+    └─ 调用 episodicMemory.record(record)
+    ↓
+EpisodicMemory.record()
+    ├─ 生成记忆 ID 和时间戳
+    ├─ 插入 episodic_memory 表
+    └─ 触发 DatabaseManager.saveDatabase()
+    ↓
+DatabaseManager 自动持久化
+    ├─ 尝试原子重命名（3次重试）
+    └─ 失败则降级为直接覆盖（原则三：数据即时性）
+    ↓
+（550B）EmbeddingService 异步生成向量并更新
+```
+
+**关键代码**：
+```typescript
+// AgentRunner.ts
+async execute(agentId: string, intent: Intent, memoryContext: MemoryContext) {
+  const agent = this.agentRegistry.getAgent(agentId);
+  const result = await agent.execute({ intent, memoryContext });
+  
+  // 发布任务完成事件
+  this.eventBus.publish(new TaskCompletedEvent({
+    taskId: generateId(),
+    agentId,
+    intentName: intent.name,
+    success: result.success,
+    metadata: {
+      taskType: mapIntentToTaskType(intent.name),
+      summary: generateSummary(intent, result),
+      entities: extractEntities(intent),
+      outcome: result.success ? 'SUCCESS' : 'FAILED'
+    }
+  }));
+}
+```
+
+### 6.4 记忆检索策略
+
+#### 6.4.1 混合检索（550A 当前实现）
+
+**三因子加权评分**：
+
+```typescript
+interface RetrievalScores {
+  keywordScore: number;    // TF-IDF 关键词匹配（权重 0.4）
+  timeDecayScore: number;  // 时间衰减 exp(-λ * age)，λ=0.1，半衰期7天（权重 0.3）
+  entityScore: number;     // Jaccard 实体相似度（权重 0.3）
+}
+
+finalScore = 0.4 * keyword + 0.3 * timeDecay + 0.3 * entity
+```
+
+**实现细节**：
+- **关键词匹配**：内存倒排索引（IndexManager）
+- **时间衰减**：`Math.exp(-0.1 * daysSince(timestamp))`
+- **实体匹配**：`intersection(entities1, entities2).length / union(...).length`
+
+#### 6.4.2 语义增强（550B 规划）
+
+**四因子混合检索**：
+
+```typescript
+interface EnhancedRetrievalScores {
+  vectorScore: number;     // 余弦相似度（权重 0.5）⭐ 新增
+  keywordScore: number;    // TF-IDF（权重 0.2）
+  timeDecayScore: number;  // 时间衰减（权重 0.15）
+  entityScore: number;     // 实体匹配（权重 0.15）
+}
+
+finalScore = 0.5 * vector + 0.2 * keyword + 0.15 * timeDecay + 0.15 * entity
+```
+
+**技术选型**：
+- **向量模型**：`Xenova/all-MiniLM-L6-v2`（轻量级，384维，可离线运行）
+- **向量索引**：ChromaDB 或 Faiss（待评估）
+- **性能目标**：检索响应时间 < 500ms
+
+### 6.5 记忆外化：语气养成（原则三：体验优先）
+
+基于**有效操作记忆数量**动态调整 AI 语气：
+
+| 有效记忆数 | 阶段 | 语气特征 | 称呼示例 |
+|-----------|------|---------|----------|
+| < 5 | 生疏期 | 礼貌、完整、谨慎 | “您”、“请问”、“我可以...” |
+| 5 - 20 | 熟悉期 | 自然、简洁、友好 | “你”、“咱们”、“记得...” |
+| > 20 | 亲密期 | 随意、默契、主动 | “上次那个...”、“我建议...” |
+
+**有效记忆定义**：
+- `taskType` 为操作类型（`CODE_EXPLAIN`、`COMMIT_GENERATE` 等）
+- `outcome === 'SUCCESS'`
+- 排除调试产生的 `FAILED` 记录
+
+**实现方式**：
+```typescript
+// ContextBuilder.buildSystemPrompt()
+const effectiveMemories = await this.countEffectiveMemories();
+let toneInstruction = '';
+
+if (effectiveMemories < 5) {
+  toneInstruction = '使用敬语，称呼用户为"您"，语气礼貌谨慎。';
+} else if (effectiveMemories < 20) {
+  toneInstruction = '使用自然语气，称呼用户为"你"，可以适当使用"咱们"。';
+} else {
+  toneInstruction = '使用亲密语气，像老朋友一样交流，可以主动回忆之前的操作。';
+}
+
+return `${basePrompt}\n\n${toneInstruction}`;
+```
+
+### 6.6 对话污染防护（原则一：职责边界）
+
+**禁止行为清单**：
+
+| 禁止行为 | 原因 | 正确做法 |
+|---------|------|----------|
+| SessionManager 写入 episodic_memory | 对话摘要不应污染操作记忆 | 存储在 workspaceState |
+| ChatViewProvider 在命令执行时写记忆 | 命令执行已通过 TASK_COMPLETED 统一记录 | 等待事件触发 |
+| 检索时返回 CHAT 类型记忆 | 用户问“刚才做了什么”应只返回操作记忆 | 过滤 taskType |
+
+**代码示例**：
+```typescript
+// ❌ 错误：对话写入操作记忆
+await this.episodicMemory.record({
+  taskType: 'CHAT',  // 不允许
+  summary: '用户询问了代码解释功能'
+});
+
+// ✅ 正确：只记录操作
+await this.episodicMemory.record({
+  taskType: 'CODE_EXPLAIN',  // 允许
+  summary: '解释了 LoginView.vue 中的 handleLogin 方法',
+  entities: ['src/views/LoginView.vue', 'handleLogin'],
+  outcome: 'SUCCESS'
+});
+```
+
+### 6.7 记忆系统架构图（增强版）
+
+```
+┌──────────────────────────────────────────────────────┐
+│              MemorySystem (协调层)                    │
+│  • 初始化 IndexManager/SearchEngine                  │
+│  • 管理 TaskToken                                    │
+│  • 统计有效记忆数量（语气养成）                       │
+└──────────────┬───────────────────────────────────────┘
+               │
+       ┌───────┴────────┬────────────────┐
+       ▼                ▼                ▼
+┌──────────────┐ ┌──────────────┐ ┌──────────────────┐
+│EpisodicMemory│ │PreferenceMem │ │ SessionManager   │
+│ (情景记忆)    │ │  (偏好记忆)   │ │  (对话历史)       │
+│              │ │              │ │                  │
+│ • 操作记忆    │ │ • 命名风格    │ │ • workspaceState │
+│ • 任务类型    │ │ • 提交风格    │ │ • 多轮上下文     │
+│ • 实体检索    │ │ • 语言偏好    │ │ • 会话摘要       │
+└──────┬───────┘ └──────┬───────┘ └──────────────────┘
+       │                │
+       ▼                ▼
+┌──────────────────────────────────────────────────────┐
+│            DatabaseManager (持久化层)                 │
+│  • SQLite (sql.js)                                   │
+│  • 降级写入策略（原子重命名 → 直接覆盖）              │
+│  • 自动持久化（每次写操作触发）                       │
+└──────────────────────────────────────────────────────┘
+       │
+       ▼ (550B)
+┌──────────────────────────────────────────────────────┐
+│          EmbeddingService (语义增强)                  │
+│  • Xenova/all-MiniLM-L6-v2                           │
+│  • 异步生成向量                                      │
+│  • 更新 episodic_memory.vector                      │
+└──────────────────────────────────────────────────────┘
+```
   });
   
   // 3. 从偏好记忆获取用户偏好
