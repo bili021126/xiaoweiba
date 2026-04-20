@@ -331,6 +331,6 @@ ${code}
    */
   async dispose(): Promise<void> {
     this.cache.clear();
-    console.log('[ExplainCodeAgent] Disposed');
+    // Agent已清理
   }
 }

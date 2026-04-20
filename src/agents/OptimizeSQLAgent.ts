@@ -250,6 +250,6 @@ ${sql}
    */
   async dispose(): Promise<void> {
     this.cache.clear();
-    console.log('[OptimizeSQLAgent] Disposed');
+    // Agent已清理
   }
 }

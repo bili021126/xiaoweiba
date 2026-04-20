@@ -185,6 +185,6 @@ export class CodeGenerationAgent implements IAgent {
    * 清理资源
    */
   async dispose(): Promise<void> {
-    console.log('[CodeGenerationAgent] Disposed');
+    // Agent已清理
   }
 }

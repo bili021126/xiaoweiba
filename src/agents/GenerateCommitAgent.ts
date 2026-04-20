@@ -199,6 +199,6 @@ ${diff.substring(0, 8000)}
    * 清理资源
    */
   async dispose(): Promise<void> {
-    console.log('[GenerateCommitAgent] Disposed');
+    // Agent已清理
   }
 }

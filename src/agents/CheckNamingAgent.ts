@@ -243,6 +243,6 @@ export class CheckNamingAgent implements IAgent {
    */
   async dispose(): Promise<void> {
     this.cache.clear();
-    console.log('[CheckNamingAgent] Disposed');
+    // Agent已清理
   }
 }
