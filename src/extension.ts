@@ -70,6 +70,7 @@ import { ExportMemoryAgent } from './agents/ExportMemoryAgent';
 import { ImportMemoryAgent } from './agents/ImportMemoryAgent';
 import { ChatAgent } from './agents/ChatAgent';  // ✅ 新增
 import { InlineCompletionAgent } from './agents/InlineCompletionAgent';  // ✅ 新增：行内补全Agent
+import { SessionManagementAgent } from './agents/SessionManagementAgent';  // ✅ 新增：会话管理Agent
 import { CommitStyleLearner } from './core/memory/CommitStyleLearner';  // ✅ 保留：MemoryAdapter需要
 import { EpisodicMemory } from './core/memory/EpisodicMemory';
 import { PreferenceMemory } from './core/memory/PreferenceMemory';
@@ -191,6 +192,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     
     agentRegistry.register(new InlineCompletionAgent(llmAdapter));
     console.log(`[Extension] Registered agent: inline-completion-agent`);
+    
+    // ✅ 注册SessionManagementAgent
+    const sessionAgent = container.resolve(SessionManagementAgent);
+    await sessionAgent.initialize();
+    agentRegistry.register(sessionAgent);
+    console.log(`[Extension] Registered agent: ${sessionAgent.id} (${sessionAgent.name})`);
     
     console.log(`[Extension] Total registered agents: ${agentRegistry.getAll().length}`);
     console.log('[Extension] Step 5 complete');

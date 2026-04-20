@@ -365,7 +365,10 @@ export class MemoryAdapter implements IMemoryPort {
       configure_api_key: 'CONFIGURATION',
       export_memory: 'EXPORT_MEMORY',
       import_memory: 'IMPORT_MEMORY',
-      inline_completion: 'INLINE_COMPLETION' // ✅ 新增
+      inline_completion: 'INLINE_COMPLETION', // ✅ 新增
+      new_session: 'SESSION_MANAGEMENT', // ✅ 新增
+      switch_session: 'SESSION_MANAGEMENT', // ✅ 新增
+      delete_session: 'SESSION_MANAGEMENT' // ✅ 新增
     };
     return map[intentName];
   }

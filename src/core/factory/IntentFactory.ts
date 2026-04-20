@@ -217,6 +217,54 @@ export class IntentFactory {
   }
 
   /**
+   * 构建新建会话意图
+   */
+  static buildNewSessionIntent(): Intent {
+    return {
+      name: 'new_session',
+      userInput: undefined,
+      codeContext: undefined,
+      metadata: {
+        timestamp: Date.now(),
+        source: 'chat',
+        sessionId: this.generateSessionId()
+      }
+    };
+  }
+
+  /**
+   * 构建切换会话意图
+   */
+  static buildSwitchSessionIntent(sessionId: string): Intent {
+    return {
+      name: 'switch_session',
+      userInput: sessionId,
+      codeContext: undefined,
+      metadata: {
+        timestamp: Date.now(),
+        source: 'chat',
+        sessionId
+      }
+    };
+  }
+
+  /**
+   * 构建删除会话意图
+   */
+  static buildDeleteSessionIntent(sessionId: string): Intent {
+    return {
+      name: 'delete_session',
+      userInput: sessionId,
+      codeContext: undefined,
+      metadata: {
+        timestamp: Date.now(),
+        source: 'chat',
+        sessionId
+      }
+    };
+  }
+
+  /**
    * 构建代码生成意图
    */
   static buildGenerateCodeIntent(): Intent {

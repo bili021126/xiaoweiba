@@ -10,3 +10,6 @@ export { OptimizeSQLAgent } from './OptimizeSQLAgent';
 export { ConfigureApiKeyAgent } from './ConfigureApiKeyAgent';
 export { ExportMemoryAgent } from './ExportMemoryAgent';
 export { ImportMemoryAgent } from './ImportMemoryAgent';
+export { ChatAgent } from './ChatAgent';
+export { InlineCompletionAgent } from './InlineCompletionAgent';
+export { SessionManagementAgent } from './SessionManagementAgent';

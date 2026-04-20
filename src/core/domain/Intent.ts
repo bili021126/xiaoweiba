@@ -11,7 +11,10 @@ export type IntentName =
   | 'configure_api_key'
   | 'export_memory'
   | 'import_memory'
-  | 'inline_completion'; // ✅ 新增：行内补全
+  | 'inline_completion' // ✅ 新增：行内补全
+  | 'new_session' // ✅ 新增：新建会话
+  | 'switch_session' // ✅ 新增：切换会话
+  | 'delete_session'; // ✅ 新增：删除会话
 
 /**
  * 代码上下文 - 编辑器状态的快照

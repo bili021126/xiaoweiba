@@ -171,16 +171,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
    */
   private async handleNewSession(): Promise<void> {
     try {
-      // TODO: 通过IntentDispatcher调度新建会话意图
-      // await this.intentDispatcher.dispatch(IntentFactory.buildNewSessionIntent());
-      
-      // 临时实现：生成新的sessionId
-      this.currentSessionId = `session_${Date.now()}`;
+      // 通过IntentDispatcher调度新建会话意图
+      const intent = IntentFactory.buildNewSessionIntent();
+      await this.intentDispatcher.dispatch(intent);
       
       // 通知UI清空消息列表
       this.view?.webview.postMessage({ type: 'clearMessages' });
     } catch (error) {
-      // 静默失败，不影响用户体验
+      console.error('[ChatViewProvider] Failed to create new session:', error);
+      vscode.window.showWarningMessage('新建会话失败，请重试');
     }
   }
 
@@ -191,13 +190,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     try {
       this.currentSessionId = sessionId;
       
-      // TODO: 通过IntentDispatcher加载会话历史
-      // await this.intentDispatcher.dispatch(IntentFactory.buildSwitchSessionIntent(sessionId));
+      // 通过IntentDispatcher加载会话历史
+      const intent = IntentFactory.buildSwitchSessionIntent(sessionId);
+      await this.intentDispatcher.dispatch(intent);
       
-      // 临时实现：通知UI重新加载
+      // 通知UI重新加载
       this.view?.webview.postMessage({ type: 'reloadSession', sessionId });
     } catch (error) {
-      // 静默失败
+      console.error('[ChatViewProvider] Failed to switch session:', error);
+      vscode.window.showWarningMessage('切换会话失败，请重试');
     }
   }
 
@@ -206,8 +207,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
    */
   private async handleDeleteSession(sessionId: string): Promise<void> {
     try {
-      // TODO: 通过IntentDispatcher调度删除会话意图
-      // await this.intentDispatcher.dispatch(IntentFactory.buildDeleteSessionIntent(sessionId));
+      // 通过IntentDispatcher调度删除会话意图
+      const intent = IntentFactory.buildDeleteSessionIntent(sessionId);
+      await this.intentDispatcher.dispatch(intent);
       
       // 如果删除的是当前会话，清空
       if (this.currentSessionId === sessionId) {
@@ -215,7 +217,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         this.view?.webview.postMessage({ type: 'clearMessages' });
       }
     } catch (error) {
-      // 静默失败
+      console.error('[ChatViewProvider] Failed to delete session:', error);
+      vscode.window.showWarningMessage('删除会话失败，请重试');
     }
   }
 
