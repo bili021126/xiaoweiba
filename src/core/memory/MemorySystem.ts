@@ -14,8 +14,6 @@ import { EpisodicMemory } from './EpisodicMemory';
 import { PreferenceMemory } from './PreferenceMemory';
 import { AuditLogger } from '../security/AuditLogger';
 import { TaskTokenManager, TaskPermissionLevel } from '../security/TaskTokenManager';
-// ✅ 新增：引入重构后的模块
-import { MemoryRecorder } from './MemoryRecorder';
 
 /**
  * 动作处理器类型
@@ -77,9 +75,6 @@ export class MemorySystem {
   private currentTokenId: string | null = null;
   private currentActionId: string | null = null;
   private cleanupTimer: NodeJS.Timeout | null = null;
-  
-  // ✅ 新增：重构后的模块
-  private memoryRecorder: MemoryRecorder;
 
   constructor(
     @inject(EventBus) private eventBus: EventBus,
@@ -88,8 +83,7 @@ export class MemorySystem {
     @inject(AuditLogger) private auditLogger: AuditLogger,
     @inject(TaskTokenManager) private taskTokenManager: TaskTokenManager
   ) {
-    // ✅ 新增：初始化重构后的模块
-    this.memoryRecorder = new MemoryRecorder(this.episodicMemory, this.eventBus);
+    // 构造函数初始化完成
   }
 
   /**
@@ -426,9 +420,6 @@ export class MemorySystem {
   /**
    * 处理动作完成事件（自动记录到记忆）
    */
-  /**
-   * ✅ 委托给MemoryRecorder记录任务完成
-   */
   private async onActionCompleted(event: any): Promise<void> {
     // ✅ EventBus传递data，兼容payload
     const payload = event.payload || event.data;
@@ -439,8 +430,32 @@ export class MemorySystem {
       return;
     }
     
-    // ✅ 委托给MemoryRecorder
-    await this.memoryRecorder.recordTaskCompletion(payload);
+    // ✅ 直接使用EpisodicMemory.record记录任务完成
+    try {
+      const { actionId, result, durationMs, memoryMetadata } = payload;
+      
+      if (!memoryMetadata) {
+        console.warn('[MemorySystem] No memoryMetadata in TASK_COMPLETED event, skipping record');
+        return;
+      }
+      
+      await this.episodicMemory.record({
+        taskType: memoryMetadata.taskType as any,
+        summary: memoryMetadata.summary,
+        entities: memoryMetadata.entities,
+        outcome: 'success' as any, // 默认成功，失败由错误处理分支记录
+        modelId: 'unknown', // TODO: 从上下文获取实际模型ID
+        durationMs: durationMs || 0,
+        metadata: {
+          actionId,
+          result
+        }
+      });
+      
+      console.log(`[MemorySystem] Recorded memory for action ${actionId}`);
+    } catch (error) {
+      console.error('[MemorySystem] Failed to record memory:', error);
+    }
   }
 
   /**
