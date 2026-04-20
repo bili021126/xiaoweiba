@@ -102,31 +102,23 @@ let llmAdapter: LLMAdapter | undefined;
  * 插件激活入口
  */
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-  console.log('========== [Extension] activate() called ==========');
   const startTime = Date.now();
 
   try {
-    console.log('[Extension] Step 1: Initializing container...');
-    // 初始化依赖注入容器
+    // Step 1: 初始化依赖注入容器
     await initializeContainer(context);
-    console.log('[Extension] Step 1 complete');
 
-    console.log('[Extension] Step 2: Loading config...');
-    // 加载配置
+    // Step 2: 加载配置
     configManager = container.resolve(ConfigManager);
     await configManager.loadConfig();
-    console.log('[Extension] Step 2 complete');
 
-    console.log('[Extension] Step 3: Initializing database...');
-    // 初始化数据库
+    // Step 3: 初始化数据库
     databaseManager = container.resolve(DatabaseManager);
     await databaseManager.initialize();
-    console.log('[Extension] Database initialized successfully');
     
     // 执行数据库迁移（短期/长期记忆分区）
     try {
       databaseManager.migrateAddMemoryTier();
-      console.log('[Extension] Memory tier migration completed');
     } catch (error) {
       console.warn('[Extension] Memory tier migration failed:', error);
     }
@@ -135,11 +127,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // 注意：不能调用clearInstances()，会清除SecretStorage等关键依赖
     // 直接registerInstance会覆盖之前的注册
     container.registerInstance(DatabaseManager, databaseManager);
-    console.log('[Extension] DatabaseManager registered as singleton');
-    console.log('[Extension] Step 3 complete');
 
-    console.log('[Extension] Step 4: Initializing core services...');
-    // ✅ 预解析核心服务（确保单例）- 在DatabaseManager注册之后
+    // Step 4: 初始化核心服务
     episodicMemory = container.resolve(EpisodicMemory);
     preferenceMemory = container.resolve(PreferenceMemory);
     const commitStyleLearner = container.resolve(CommitStyleLearner);
@@ -154,16 +143,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const eventBusAdapter = new EventBusAdapter(legacyEventBus);
     memoryAdapter = new MemoryAdapter(episodicMemory, preferenceMemory, commitStyleLearner, eventBusAdapter, databaseManager, projectFingerprint);
     container.register('IMemoryPort', { useValue: memoryAdapter });
-    console.log('[Extension] IMemoryPort registered (MemoryAdapter)');
     
     // 初始化记忆系统
     await memorySystem.initialize();
-    console.log('[Extension] Core services initialized');
-    console.log('[Extension] Step 4 complete');
 
     // Phase 2: 初始化新架构组件
-    console.log('[Extension] Step 5: Initializing intent-driven architecture...');
-    // memoryAdapter已在Step 4中创建，这里只解析其他服务
+    // Phase 2: 初始化意图驱动架构
     llmAdapter = container.resolve(LLMAdapter);
     // ✅ 使用已注册的IAgentRegistry实例，不要重新创建
     const agentRegistry = container.resolve('IAgentRegistry') as any;
@@ -171,7 +156,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     intentDispatcher = container.resolve(IntentDispatcher);
     
     // 注册所有Agents到AgentRegistry
-    console.log('[Extension] Registering agents...');
     const agents = [
       container.resolve(ExplainCodeAgent),
       container.resolve(GenerateCommitAgent),
@@ -184,7 +168,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ];
     
     agents.forEach(agent => {
-      console.log(`[Extension] Registering agent: ${agent.id} (${agent.name})`);
       agentRegistry.register(agent);
     });
     
@@ -192,19 +175,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const chatAgent = new ChatAgent(llmAdapter, memoryAdapter, eventBusAdapter);
     await chatAgent.initialize();
     agentRegistry.register(chatAgent);
-    console.log(`[Extension] Registered agent: ${chatAgent.id} (${chatAgent.name})`);
     
     agentRegistry.register(new InlineCompletionAgent(llmAdapter));
-    console.log(`[Extension] Registered agent: inline-completion-agent`);
     
     // ✅ 注册SessionManagementAgent
     const sessionAgent = container.resolve(SessionManagementAgent);
     await sessionAgent.initialize();
     agentRegistry.register(sessionAgent);
-    console.log(`[Extension] Registered agent: ${sessionAgent.id} (${sessionAgent.name})`);
-    
-    console.log(`[Extension] Total registered agents: ${agentRegistry.getAll().length}`);
-    console.log('[Extension] Step 5 complete');
 
     // 初始化审计日志
     auditLogger = container.resolve(AuditLogger);

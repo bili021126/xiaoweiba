@@ -196,11 +196,8 @@ ${code}
     if (!disableCache) {
       const cachedResult = this.cache.get(prompt);
       if (cachedResult) {
-        console.log('[ExplainCodeAgent] Using cached result');
         return cachedResult;
       }
-    } else {
-      console.log('[ExplainCodeAgent] Cache disabled by environment variable');
     }
 
     // 通过端口调用LLM
