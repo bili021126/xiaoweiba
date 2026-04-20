@@ -387,10 +387,13 @@ export class DatabaseManager {
     db.run(`CREATE INDEX IF NOT EXISTS idx_messages_session ON chat_messages(session_id)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON chat_messages(timestamp)`);
     
+    // ✅ P1-02: feedback_records表索引
+    db.run(`CREATE INDEX IF NOT EXISTS idx_feedback_timestamp ON feedback_records(timestamp)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_feedback_project ON feedback_records(project_fingerprint)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_feedback_clicked_memory ON feedback_records(clicked_memory_id)`);
+    
     // ✅ 表结构和索引创建完成后立即持久化
-    console.log('[DatabaseManager] Tables and indexes created, saving to disk...');
     this.saveDatabase();
-    console.log('[DatabaseManager] Database schema saved successfully');
   }
 
   /**

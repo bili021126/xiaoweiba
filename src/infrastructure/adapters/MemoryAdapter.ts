@@ -261,14 +261,6 @@ export class MemoryAdapter implements IMemoryPort {
         'INSERT INTO feedback_records (id, query, clicked_memory_id, dwell_time_ms, timestamp, project_fingerprint) VALUES (?, ?, ?, ?, ?, ?)',
         [feedbackId, query, clickedMemoryId, dwellTimeMs, Date.now(), projectFingerprint || null]
       );
-      
-      console.log('[MemoryAdapter] Feedback recorded:', {
-        feedbackId,
-        query: query.substring(0, 50),
-        clickedMemoryId,
-        dwellTimeMs,
-        intentVector
-      });
     } catch (error) {
       console.error('[MemoryAdapter] recordFeedback failed:', error);
       throw error;
