@@ -42,9 +42,10 @@ export class TaskCompletedEvent extends DomainEvent {
     public readonly intent: any,
     public readonly agentId: string,
     public readonly result: any,
-    public readonly durationMs: number
+    public readonly durationMs: number,
+    public readonly modelId?: string // ✅ 新增：模型ID
   ) {
-    super(TaskCompletedEvent.type, Date.now(), { intent, agentId, result, durationMs });
+    super(TaskCompletedEvent.type, Date.now(), { intent, agentId, result, durationMs, modelId });
   }
 }
 

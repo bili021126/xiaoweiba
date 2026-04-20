@@ -36,8 +36,6 @@ export class IndexManager {
    * @param limit 最大索引数量
    */
   buildIndex(memories: EpisodicMemoryRecord[], limit: number = 2000): void {
-    console.log(`[IndexManager] Building index for ${Math.min(memories.length, limit)} memories...`);
-    
     this.index.clear();
     const memoriesToIndex = memories.slice(0, limit);
     
@@ -51,8 +49,6 @@ export class IndexManager {
         }
       }
     }
-    
-    console.log(`[IndexManager] Index built: ${this.index.size} terms indexed`);
   }
 
   /**

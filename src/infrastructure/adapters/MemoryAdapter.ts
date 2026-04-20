@@ -59,7 +59,8 @@ export class MemoryAdapter implements IMemoryPort {
           intent: payload.intent,
           agentId: payload.agentId,
           result: payload.result,
-          durationMs: payload.durationMs
+          durationMs: payload.durationMs,
+          modelId: payload.modelId // ✅ 新增：提取模型ID
         };
         
         await this.recordTaskCompletion(taskEvent as any);
@@ -170,7 +171,7 @@ export class MemoryAdapter implements IMemoryPort {
   async recordTaskCompletion(event: TaskCompletedEvent): Promise<void> {
     try {
       // ✅ 直接使用事件属性（新的事件结构）
-      const { intent, agentId, result, durationMs } = event;
+      const { intent, agentId, result, durationMs, modelId } = event;
 
       // ✅ 如果是chat意图，保存对话历史到sessionHistories
       if (intent.name === 'chat' && result.success) {
@@ -209,7 +210,7 @@ export class MemoryAdapter implements IMemoryPort {
         summary,
         entities,
         outcome: result.success ? 'SUCCESS' : 'FAILED',
-        modelId: result.modelId || 'unknown',
+        modelId: modelId || result.modelId || 'unknown', // ✅ 优先级：event.modelId > result.modelId > 'unknown'
         durationMs: durationMs || 0,
         metadata: {
           agentId,
@@ -217,8 +218,6 @@ export class MemoryAdapter implements IMemoryPort {
           timestamp: event.timestamp
         }
       });
-
-      console.log('[MemoryAdapter] Task completion recorded:', summary);
     } catch (error) {
       console.error('[MemoryAdapter] recordTaskCompletion failed:', error);
       throw error;
@@ -232,12 +231,6 @@ export class MemoryAdapter implements IMemoryPort {
     try {
       // ✅ 使用新的反馈事件结构
       const { query, clickedMemoryId, dwellTimeMs } = event;
-      
-      console.log('[MemoryAdapter] Feedback recorded:', {
-        query,
-        clickedMemoryId,
-        dwellTimeMs
-      });
       
       // TODO: 将反馈记录到偏好记忆或专家选择器，用于优化未来的记忆检索权重
     } catch (error) {

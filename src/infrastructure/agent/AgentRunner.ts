@@ -113,7 +113,8 @@ export class AgentRunner {
         intent,
         agent.id,
         result,
-        durationMs
+        durationMs,
+        result.modelId // ✅ 传递模型ID
       ));
 
       console.log(`[AgentRunner] Agent ${agentId} completed successfully in ${durationMs}ms`);

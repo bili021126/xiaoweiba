@@ -45,9 +45,7 @@ export class IntentDispatcher {
       const memoryContext = await this.memoryPort.retrieveContext(intent);
 
       // 3. 查找能处理此意图的Agent
-      console.log(`[IntentDispatcher] Looking for agents for intent: ${intent.name}`);
       const candidates = this.agentRegistry.findAgentsForIntent(intent);
-      console.log(`[IntentDispatcher] Found ${candidates.length} candidates:`, candidates.map(a => a.id));
       
       if (candidates.length === 0) {
         // ✅ 降级策略1：尝试使用默认ChatAgent

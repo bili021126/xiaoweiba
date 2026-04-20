@@ -92,19 +92,15 @@ export class MemorySystem {
   async initialize(): Promise<void> {
     if (this.initialized) return;
     
-    console.log('[MemorySystem] Initializing...');
-    
     // 初始化情景记忆索引
     await this.episodicMemory.initialize();
     
     // 订阅模块动作完成事件（用于自动记录）
     this.eventBus.subscribe(CoreEventType.TASK_COMPLETED, async (event) => {
-      console.log(`[MemorySystem] Received TASK_COMPLETED event:`, event);
       await this.onActionCompleted(event);
     });
     
     this.initialized = true;
-    console.log('[MemorySystem] Initialized successfully');
     
     // ✅ 修复7：启动定期清理过期Token
     this.startCleanupTimer();
