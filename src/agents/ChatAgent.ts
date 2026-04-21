@@ -6,6 +6,7 @@ import { MemoryContext } from '../core/domain/MemoryContext';
 import { Intent } from '../core/domain/Intent';
 import { AssistantResponseEvent, StreamChunkEvent } from '../core/events/DomainEvent';
 import { injectable, inject } from 'tsyringe';
+import { PromptComposer } from '../core/application/PromptComposer'; // ✅ L1: 引入提示词编排器
 
 /**
  * 聊天Agent实现
@@ -30,7 +31,8 @@ export class ChatAgent implements IAgent {
   constructor(
     @inject('ILLMPort') private llmPort: ILLMPort,  // ✅ 使用端口接口
     @inject('IMemoryPort') private memoryPort: IMemoryPort,  // ✅ 使用端口接口
-    @inject('IEventBus') private eventBus: IEventBus  // ✅ 注入全局单例
+    @inject('IEventBus') private eventBus: IEventBus,  // ✅ 注入全局单例
+    @inject(PromptComposer) private promptComposer: PromptComposer // ✅ L1: 注入提示词编排器
   ) {}
 
   async initialize(): Promise<void> {
@@ -66,6 +68,24 @@ export class ChatAgent implements IAgent {
         return {
           success: false,
           error: '缺少用户输入',
+          durationMs: Date.now() - startTime
+        };
+      }
+
+      // ✅ P1-04: 处理无意义输入
+      const trimmedMessage = userMessage.trim();
+      if (trimmedMessage.length < 2 || /^\d+$/.test(trimmedMessage)) {
+        const friendlyHint = '👋 请输入更具体的问题，我会尽力帮你解答。例如：\n- "解释一下这段代码"\n- "如何优化这个函数？"\n- "帮我生成一个提交信息"';
+        
+        this.eventBus.publish(new AssistantResponseEvent({
+          messageId: `msg_${Date.now()}_hint`,
+          content: friendlyHint,
+          timestamp: Date.now()
+        }));
+        
+        return {
+          success: true,
+          data: { content: friendlyHint },
           durationMs: Date.now() - startTime
         };
       }
@@ -229,45 +249,8 @@ export class ChatAgent implements IAgent {
    * 构建系统提示
    */
   private buildSystemPrompt(intent: Intent, memoryContext: MemoryContext): string {
-    const parts: string[] = [];
-
-    // 1. 基础角色设定
-    parts.push('你是小尾巴，一个智能编程助手。回答要简洁、准确、有帮助。');
-
-    // 2. 编辑器上下文（如果有）
-    if (intent.codeContext) {
-      parts.push('\n## 当前编辑器上下文');
-      // ✅ 添加默认值防止undefined
-      parts.push(`- 文件：${this.escapeHtml(intent.codeContext.filePath || '未知文件')}`);
-      parts.push(`- 语言：${this.escapeHtml(intent.codeContext.language || 'unknown')}`);
-      if (intent.codeContext.selectedCode) {
-        parts.push(`- 选中代码：\n\`\`\`${this.escapeHtml(intent.codeContext.language || 'unknown')}\n${this.escapeHtml(intent.codeContext.selectedCode)}\n\`\`\``);
-      }
-    }
-
-    // 3. 相关情景记忆
-    if (memoryContext.episodicMemories && memoryContext.episodicMemories.length > 0) {
-      parts.push('\n## 相关历史操作');
-      memoryContext.episodicMemories.slice(0, 3).forEach(mem => {
-        parts.push(`- ${this.escapeHtml(mem.summary)}`);
-      });
-    }
-
-    // 4. 用户偏好
-    if (memoryContext.preferenceRecommendations && memoryContext.preferenceRecommendations.length > 0) {
-      parts.push('\n## 用户偏好');
-      memoryContext.preferenceRecommendations.slice(0, 2).forEach(pref => {
-        parts.push(`- ${this.escapeHtml(pref.domain)}: ${JSON.stringify(pref.pattern)} (置信度: ${(pref.confidence * 100).toFixed(0)}%)`);
-      });
-    }
-
-    // 5. 回答指令
-    parts.push('\n## 回答要求');
-    parts.push('- 如果问题涉及代码，请提供代码示例');
-    parts.push('- 回答要简洁，避免冗长');
-    parts.push('- 如果引用了历史记忆，请自然提及');
-
-    return parts.join('\n');
+    // ✅ L1: 委托给 PromptComposer，保持 Agent 精简
+    return this.promptComposer.buildSystemPrompt(intent, memoryContext);
   }
 
   async isAvailable(): Promise<boolean> {

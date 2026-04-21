@@ -52,6 +52,7 @@ export class AgentSelectedEvent extends DomainEvent<AgentSelectedPayload> {
  * 任务完成事件
  */
 export interface TaskCompletedPayload {
+  actionId?: string; // ✅ P1-04: 动作ID（用于记忆追踪）
   intent: Intent;
   agentId: string;
   result: any; // 结果类型多样化，暂时保留any
@@ -81,9 +82,11 @@ export class TaskCompletedEvent extends DomainEvent<TaskCompletedPayload> {
       summary: string;
       entities?: string[];
       outcome?: 'SUCCESS' | 'FAILED' | 'PARTIAL';
-    }
+    },
+    public readonly actionId?: string // ✅ P1-04: 添加 actionId 参数
   ) {
     super(TaskCompletedEvent.type, Date.now(), { 
+      actionId, // ✅ P1-04: 传递 actionId
       intent, 
       agentId, 
       result, 
@@ -91,6 +94,35 @@ export class TaskCompletedEvent extends DomainEvent<TaskCompletedPayload> {
       modelId,
       memoryMetadata 
     });
+  }
+}
+
+/**
+ * ✅ P1-04: 会话历史加载事件（用于前端渲染）
+ */
+export interface SessionHistoryPayload {
+  sessionId: string;
+  messages: Array<{
+    id: string;
+    role: 'user' | 'assistant';
+    content: string;
+    timestamp: number;
+  }>;
+}
+
+export class SessionHistoryLoadedEvent extends DomainEvent<SessionHistoryPayload> {
+  static readonly type = 'session.history.loaded';
+  
+  constructor(
+    public readonly sessionId: string,
+    public readonly messages: Array<{
+      id: string;
+      role: 'user' | 'assistant';
+      content: string;
+      timestamp: number;
+    }>
+  ) {
+    super(SessionHistoryLoadedEvent.type, Date.now(), { sessionId, messages });
   }
 }
 

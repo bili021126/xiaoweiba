@@ -719,10 +719,12 @@ export function generateChatViewHtml(webview: vscode.Webview): string {
           break;
 
         case 'loadSession':
+          // ✅ P1-04: 加载会话历史并渲染
           const container = document.getElementById('messagesContainer');
-          container.innerHTML = '';
-          if (message.session && message.session.messages) {
+          if (container && message.session && message.session.messages) {
+            container.innerHTML = '';
             message.session.messages.forEach(msg => appendMessage(msg));
+            console.log('[Frontend] Session loaded:', message.session.id, 'messages:', message.session.messages.length);
           }
           break;
 

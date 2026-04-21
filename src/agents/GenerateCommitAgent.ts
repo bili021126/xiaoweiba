@@ -17,6 +17,8 @@ import { Intent } from '../core/domain/Intent';
 import { MemoryContext } from '../core/domain/MemoryContext';
 import { ILLMPort } from '../core/ports/ILLMPort';
 import { IMemoryPort } from '../core/ports/IMemoryPort';
+import { IEventBus } from '../core/ports/IEventBus'; // ✅ P1-04: 引入事件总线
+import { AssistantResponseEvent } from '../core/events/DomainEvent'; // ✅ P1-04: 引入响应事件
 
 const execAsync = promisify(exec);
 
@@ -28,7 +30,8 @@ export class GenerateCommitAgent implements IAgent {
 
   constructor(
     @inject('ILLMPort') private llmPort: ILLMPort,
-    @inject('IMemoryPort') private memoryPort: IMemoryPort
+    @inject('IMemoryPort') private memoryPort: IMemoryPort,
+    @inject('IEventBus') private eventBus: IEventBus // ✅ P1-04: 注入事件总线
   ) {}
 
   /**
@@ -52,6 +55,8 @@ export class GenerateCommitAgent implements IAgent {
       const workspacePath = workspaceFolders[0].uri.fsPath;
 
       // 2. 获取 Git diff
+      let commitMessage = ''; // ✅ P1-04: 提升作用域
+      
       await vscode.window.withProgress({
         location: vscode.ProgressLocation.Notification,
         title: '🚀 智能生成提交信息',
@@ -69,7 +74,7 @@ export class GenerateCommitAgent implements IAgent {
         progress.report({ message: '🧠 检索历史记忆...', increment: 20 });
 
         // 3. 调用 LLM 生成提交信息（注入记忆上下文）
-        const commitMessage = await this.generateCommitMessage(diff, memoryContext);
+        commitMessage = await this.generateCommitMessage(diff, memoryContext);
         
         progress.report({ message: '✨ 应用提交信息...', increment: 80 });
 
@@ -78,7 +83,14 @@ export class GenerateCommitAgent implements IAgent {
 
         progress.report({ message: '✅ 完成', increment: 100 });
 
-        vscode.window.showInformationMessage(`✅ 提交信息已生成并应用:\n${commitMessage}`);
+        // ✅ P1-04: 通过 EventBus 发布提交信息到聊天窗口
+        this.eventBus.publish(new AssistantResponseEvent({
+          messageId: `msg_${Date.now()}_commit`,
+          content: `✅ **提交信息已生成并应用**\n\n\`\`\`\n${commitMessage}\n\`\`\``,
+          timestamp: Date.now()
+        }));
+
+        vscode.window.showInformationMessage(`✅ 提交信息已生成并应用`);
       });
 
       const durationMs = Date.now() - startTime;
@@ -87,10 +99,17 @@ export class GenerateCommitAgent implements IAgent {
         success: true, 
         durationMs,
         data: {
-          commitMessage: 'Generated and applied',
+          commitMessage, // ✅ P1-04: 返回真实的提交信息
           workspacePath
         },
-        modelId: this.llmPort.getModelId()
+        modelId: this.llmPort.getModelId(),
+        // ✅ P1-04: 添加记忆元数据
+        memoryMetadata: {
+          taskType: 'COMMIT_GENERATE',
+          summary: `生成并应用了Git提交信息：${commitMessage.substring(0, 50)}`,
+          entities: ['Git', 'Commit'],
+          outcome: 'SUCCESS'
+        }
       };
 
     } catch (error) {

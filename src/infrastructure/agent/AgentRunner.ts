@@ -108,6 +108,9 @@ export class AgentRunner {
 
       const durationMs = Date.now() - startTime;
 
+      // ✅ P1-04: 生成 actionId（用于记忆追踪）
+      const actionId = `action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
       // 4. ✅ 只发布事件，让 MemoryAdapter 订阅处理（解耦）
       this.eventBus.publish(new TaskCompletedEvent(
         intent,
@@ -115,7 +118,8 @@ export class AgentRunner {
         result,
         durationMs,
         result.modelId, // ✅ 传递模型ID
-        result.memoryMetadata // ✅ P1-02: 传递记忆元数据
+        result.memoryMetadata, // ✅ P1-02: 传递记忆元数据
+        actionId // ✅ P1-04: 传递 actionId
       ));
 
       console.log(`[AgentRunner] Agent ${agentId} completed successfully in ${durationMs}ms`);

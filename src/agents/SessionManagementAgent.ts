@@ -3,7 +3,7 @@ import { IMemoryPort } from '../core/ports/IMemoryPort';
 import { IEventBus } from '../core/ports/IEventBus';
 import { MemoryContext } from '../core/domain/MemoryContext';
 import { Intent } from '../core/domain/Intent';
-import { AssistantResponseEvent, SessionListUpdatedEvent } from '../core/events/DomainEvent';
+import { AssistantResponseEvent, SessionListUpdatedEvent, SessionHistoryLoadedEvent } from '../core/events/DomainEvent'; // ✅ P1-04: 引入新事件
 import { injectable, inject } from 'tsyringe';
 import * as vscode from 'vscode';
 
@@ -125,12 +125,27 @@ export class SessionManagementAgent implements IAgent {
   private async handleSwitchSession(intent: Intent, startTime: number): Promise<AgentResult> {
     const sessionId = intent.userInput;
     
+    console.log('[SessionManagementAgent] Handling switch session:', sessionId);
+    
     if (!sessionId) {
       throw new Error('缺少会话ID');
     }
 
     // ✅ P1-02: 从数据库加载会话历史
+    console.log('[SessionManagementAgent] Loading session history from database...');
     const history = await this.memoryPort.loadSessionHistory(sessionId);
+    console.log('[SessionManagementAgent] Loaded', history.length, 'messages');
+
+    // ✅ P1-04: 发布会话历史加载事件（携带完整历史供前端渲染）
+    const messages = history.map((msg, index) => ({
+      id: `msg_${msg.timestamp}_${index}`,
+      role: msg.role as 'user' | 'assistant',
+      content: msg.content,
+      timestamp: msg.timestamp
+    }));
+    
+    console.log('[SessionManagementAgent] Publishing SessionHistoryLoadedEvent with', messages.length, 'messages');
+    this.eventBus.publish(new SessionHistoryLoadedEvent(sessionId, messages));
 
     // ✅ 发布会话列表更新事件（通知前端当前会话已切换）
     this.eventBus.publish(new SessionListUpdatedEvent('switched', sessionId));

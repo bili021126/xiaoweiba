@@ -3,7 +3,8 @@ import { inject, injectable } from 'tsyringe';
 import { IEventBus } from '../core/ports/IEventBus';
 import { IntentDispatcher } from '../core/application/IntentDispatcher';
 import { IntentFactory } from '../core/factory/IntentFactory';
-import { AssistantResponseEvent, StreamChunkEvent, SessionListUpdatedEvent } from '../core/events/DomainEvent';
+import { ContextEnricher } from '../core/application/ContextEnricher';
+import { AssistantResponseEvent, StreamChunkEvent, SessionListUpdatedEvent, SessionHistoryLoadedEvent } from '../core/events/DomainEvent'; // ✅ P1-04: 引入新事件
 import { generateChatViewHtml } from './ChatViewHtml';
 import { ChatMessage } from './types';
 
@@ -28,6 +29,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   constructor(
     @inject('IEventBus') private eventBus: IEventBus,
     @inject(IntentDispatcher) private intentDispatcher: IntentDispatcher,
+    @inject(ContextEnricher) private contextEnricher: ContextEnricher,
     @inject('extensionContext') private context: vscode.ExtensionContext
   ) {
     this.subscribeToDomainEvents();
@@ -71,15 +73,43 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     // ✅ P1-02: 订阅会话列表更新事件
     this.unsubscribers.push(
       this.eventBus.subscribe(SessionListUpdatedEvent.type, (event) => {
-        const sessionEvent = event as SessionListUpdatedEvent;
-        console.log('[ChatViewProvider] Session list updated:', sessionEvent.action, sessionEvent.sessionId);
+        // ✅ P1-04: EventBusAdapter 将 DomainEvent 转换为 BaseEvent，需要从 payload 中提取数据
+        const sessionEvent = event as any;
+        const payload = sessionEvent.payload || sessionEvent;
+        
+        console.log('[ChatViewProvider] Session list updated:', payload.action, payload.sessionId);
         
         // 通知前端刷新会话列表
         this.view?.webview.postMessage({
           type: 'refreshSessionList',
-          action: sessionEvent.action,
-          sessionId: sessionEvent.sessionId
+          action: payload.action,
+          sessionId: payload.sessionId
         });
+      })
+    );
+
+    // ✅ P1-04: 订阅会话历史加载事件（用于渲染完整历史）
+    this.unsubscribers.push(
+      this.eventBus.subscribe(SessionHistoryLoadedEvent.type, (event) => {
+        const historyEvent = event as any;
+        const payload = historyEvent.payload || historyEvent;
+        
+        console.log('[ChatViewProvider] SessionHistoryLoadedEvent received');
+        console.log('[ChatViewProvider] Session ID:', payload.sessionId);
+        console.log('[ChatViewProvider] Messages count:', payload.messages?.length || 0);
+        
+        // 通知前端加载会话历史
+        const messageData = {
+          type: 'loadSession',
+          session: {
+            id: payload.sessionId,
+            messages: payload.messages
+          }
+        };
+        
+        console.log('[ChatViewProvider] Sending loadSession to webview...');
+        this.view?.webview.postMessage(messageData);
+        console.log('[ChatViewProvider] loadSession message sent');
       })
     );
   }
@@ -161,12 +191,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       // 2. 显示加载状态
       this.view?.webview.postMessage({ type: 'setLoading', loading: true });
 
-      // 3. 构建聊天意图
-      const intent = IntentFactory.buildChatIntent(text, {
+      // 3. ✅ L1: 构建聊天意图（已内置上下文采集和意图分析）
+      const intent = await IntentFactory.buildChatIntent(text, {
         sessionId: this.currentSessionId
       });
 
-      // 4. 调度意图
+      // 5. 调度意图
       await this.intentDispatcher.dispatch(intent);
     } catch (error) {
       this.view?.webview.postMessage({
@@ -200,15 +230,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
    */
   private async handleSwitchSession(sessionId: string): Promise<void> {
     try {
+      console.log('[ChatViewProvider] Handling switchSession:', sessionId);
       this.currentSessionId = sessionId;
       
-      // 通过IntentDispatcher加载会话历史
+      // ✅ P1-04: 通过IntentDispatcher处理切换逻辑
+      // SessionManagementAgent 会发布 SessionHistoryLoadedEvent，由 ChatViewProvider 订阅并转发给前端
       const intent = IntentFactory.buildSwitchSessionIntent(sessionId);
+      console.log('[ChatViewProvider] Dispatching switch_session intent...');
       await this.intentDispatcher.dispatch(intent);
-      
-      // 通知UI重新加载
-      this.view?.webview.postMessage({ type: 'reloadSession', sessionId });
+      console.log('[ChatViewProvider] Switch session completed');
     } catch (error) {
+      console.error('[ChatViewProvider] Switch session error:', error);
       vscode.window.showWarningMessage('切换会话失败，请重试');
       throw error;
     }

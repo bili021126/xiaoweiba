@@ -9,6 +9,8 @@
 
 import * as vscode from 'vscode';
 import { Intent, IntentName, CodeContext } from '../../core/domain/Intent';
+import { ContextEnricher } from '../application/ContextEnricher'; // ✅ L1: 引入上下文增强器
+import { IntentAnalyzer } from '../memory/IntentAnalyzer'; // ✅ L1: 引入意图分析器
 
 export class IntentFactory {
   /**
@@ -60,9 +62,64 @@ export class IntentFactory {
 
   /**
    * 构建聊天意图
+   * ✅ P1-04: 增加命令识别逻辑，避免将明确命令误判为普通聊天
    */
-  static buildChatIntent(userInput: string, options?: { sessionId?: string }): Intent {
+  static async buildChatIntent(userInput: string, options?: { sessionId?: string }): Promise<Intent> {
     const editor = vscode.window.activeTextEditor;
+    
+    // ✅ P1-04: 命令识别 - 优先匹配明确的命令关键词
+    const trimmedInput = userInput.trim().toLowerCase();
+    
+    // 生成提交信息相关命令
+    if (trimmedInput.startsWith('/commit') || 
+        trimmedInput.includes('生成提交') || 
+        trimmedInput.includes('commit message') ||
+        trimmedInput.includes('git commit')) {
+      console.log('[IntentFactory] Detected commit command, routing to generate_commit agent');
+      return this.buildGenerateCommitIntent();
+    }
+    
+    // 解释代码相关命令
+    if (trimmedInput.startsWith('/explain') || 
+        trimmedInput.includes('解释代码') || 
+        trimmedInput.includes('explain code')) {
+      console.log('[IntentFactory] Detected explain command, routing to explain_code agent');
+      return this.buildExplainCodeIntent();
+    }
+    
+    // 优化SQL相关命令
+    if (trimmedInput.startsWith('/sql') || 
+        trimmedInput.includes('优化sql') || 
+        trimmedInput.includes('optimize sql')) {
+      console.log('[IntentFactory] Detected SQL optimize command');
+      return this.buildOptimizeSQLIntent();
+    }
+    
+    // 检查命名相关命令
+    if (trimmedInput.startsWith('/naming') || 
+        trimmedInput.includes('检查命名') || 
+        trimmedInput.includes('check naming')) {
+      console.log('[IntentFactory] Detected naming check command');
+      return this.buildCheckNamingIntent();
+    }
+    
+    // 新建会话命令
+    if (trimmedInput.startsWith('/new') || 
+        trimmedInput === '新建会话' || 
+        trimmedInput.includes('new session')) {
+      console.log('[IntentFactory] Detected new session command');
+      return this.buildNewSessionIntent();
+    }
+    
+    // ✅ L1: 初始化分析器和增强器
+    const intentAnalyzer = new IntentAnalyzer();
+    const contextEnricher = new ContextEnricher();
+    
+    // ✅ L1: 分析意图向量
+    const intentVector = intentAnalyzer.analyze(userInput, editor?.document.languageId);
+    
+    // ✅ L1: 采集丰富上下文
+    const enrichedContext = await contextEnricher.capture();
     
     return {
       name: 'chat',
@@ -71,7 +128,11 @@ export class IntentFactory {
       metadata: {
         timestamp: Date.now(),
         source: 'chat',
-        sessionId: options?.sessionId || this.generateSessionId()
+        sessionId: options?.sessionId || this.generateSessionId(),
+        intentVector, // ✅ L1: 注入意图向量
+        complexity: this.assessComplexity(userInput), // ✅ L1: 注入复杂度
+        requiresCodeContext: this.needsCodeContext(userInput), // ✅ L1: 注入代码需求标记
+        enrichedContext // ✅ L1: 注入增强上下文
       }
     };
   }
@@ -373,5 +434,19 @@ export class IntentFactory {
    */
   private static generateSessionId(): string {
     return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  // ✅ L1: 辅助方法 - 评估查询复杂度
+  private static assessComplexity(input: string): 'simple' | 'moderate' | 'complex' {
+    const wordCount = input.split(/\s+/).length;
+    if (wordCount < 5) return 'simple';
+    if (wordCount < 15) return 'moderate';
+    return 'complex';
+  }
+
+  // ✅ L1: 辅助方法 - 判断是否需要代码上下文
+  private static needsCodeContext(input: string): boolean {
+    const codeKeywords = ['代码', '函数', '类', '变量', '解释', '重构', 'bug', '错误', '实现'];
+    return codeKeywords.some(keyword => input.includes(keyword));
   }
 }
