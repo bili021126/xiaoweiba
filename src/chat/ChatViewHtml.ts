@@ -582,7 +582,11 @@ export function generateChatViewHtml(webview: vscode.Webview): string {
         <div class="chat-header-left">
           <h1 class="chat-title" id="chatTitle">小尾巴AI助手</h1>
         </div>
-        <button id="deleteSessionBtn" style="padding: 6px 12px; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">🗑️ 删除</button>
+        <!-- ✅ 网络状态指示器（占位符，后续可连接真实状态） -->
+        <div id="networkStatus" style="display: flex; align-items: center; gap: 6px; padding: 4px 10px; background: var(--vscode-editor-inactiveSelectionBackground); border-radius: 6px; font-size: 12px; color: var(--vscode-descriptionForeground); cursor: default;" title="连接状态">
+          <span style="width: 8px; height: 8px; border-radius: 50%; background: #4ec9b0; animation: pulse-dot 2s infinite;"></span>
+          <span>在线</span>
+        </div>
       </header>
 
       <!-- 消息容器 -->
@@ -803,17 +807,7 @@ export function generateChatViewHtml(webview: vscode.Webview): string {
       });
     }
 
-    // 删除会话
-    const deleteSessionBtn = document.getElementById('deleteSessionBtn');
-    if (deleteSessionBtn) {
-      deleteSessionBtn.addEventListener('click', () => {
-        // ✅ DeepSeek 风格：从侧边栏获取当前激活的会话
-        const activeItem = document.querySelector('.session-item.active');
-        if (activeItem && activeItem.dataset.sessionId) {
-          vscode.postMessage({ type: 'deleteSession', sessionId: activeItem.dataset.sessionId });
-        }
-      });
-    }
+    // ✅ 删除按钮已移除，改为在每个会话项上直接删除
 
     // 自动调整textarea高度
     if (messageInput) {
