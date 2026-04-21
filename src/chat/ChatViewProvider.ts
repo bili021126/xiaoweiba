@@ -264,10 +264,30 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       const intent = IntentFactory.buildDeleteSessionIntent(sessionId);
       await this.intentDispatcher.dispatch(intent);
       
-      // 如果删除的是当前会话，清空
+      // 如果删除的是当前会话，清空并尝试切换到第一个可用会话
       if (this.currentSessionId === sessionId) {
         this.currentSessionId = undefined;
         this.view?.webview.postMessage({ type: 'clearMessages' });
+        
+        // ✅ DeepSeek 风格：删除当前会话后，自动切换到第一个可用会话
+        setTimeout(async () => {
+          try {
+            const sessions = await this.memoryPort.listSessions();
+            if (sessions.length > 0) {
+              // 切换到第一个会话
+              const firstSession = sessions[0];
+              this.currentSessionId = firstSession.id;
+              
+              // 触发切换逻辑
+              const switchIntent = IntentFactory.buildSwitchSessionIntent(firstSession.id);
+              await this.intentDispatcher.dispatch(switchIntent);
+              
+              console.log('[ChatViewProvider] Auto-switched to session:', firstSession.id);
+            }
+          } catch (error) {
+            console.error('[ChatViewProvider] Failed to auto-switch session:', error);
+          }
+        }, 100);
       }
     } catch (error) {
       vscode.window.showWarningMessage('删除会话失败，请重试');

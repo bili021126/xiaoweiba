@@ -865,6 +865,15 @@ export function generateChatViewHtml(webview: vscode.Webview): string {
           }
           break;
 
+        case 'clearMessages':
+          // ✅ 清空消息列表（删除当前会话时触发）
+          const msgContainer = document.getElementById('messagesContainer');
+          if (msgContainer) {
+            msgContainer.innerHTML = '';
+            console.log('[Frontend] Messages cleared');
+          }
+          break;
+
         case 'updateSessionList':
           updateSessionList(message.sessions, message.currentSessionId);
           break;

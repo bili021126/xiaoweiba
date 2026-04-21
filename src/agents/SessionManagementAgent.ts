@@ -193,10 +193,10 @@ export class SessionManagementAgent implements IAgent {
     // ✅ 发布会话列表更新事件（通知前端刷新列表）
     this.eventBus.publish(new SessionListUpdatedEvent('deleted', sessionId));
 
-    // 发布成功响应
+    // ✅ DeepSeek 风格：简洁的成功提示，不暴露技术 ID
     this.eventBus.publish(new AssistantResponseEvent({
       messageId: `msg_${Date.now()}_system`,
-      content: `🗑️ 已删除会话 (ID: ${sessionId})`,
+      content: `🗑️ 已删除会话`,
       timestamp: Date.now()
     }));
 
