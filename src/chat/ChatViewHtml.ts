@@ -869,6 +869,13 @@ export function generateChatViewHtml(webview: vscode.Webview): string {
           updateSessionList(message.sessions, message.currentSessionId);
           break;
 
+        // ✅ DeepSeek 风格：会话列表变化，请求后端发送完整列表
+        case 'sessionListChanged':
+          console.log('[Frontend] Session list changed, requesting full list...');
+          // TODO: 通过 postMessage 请求后端发送完整列表
+          // vscode.postMessage({ type: 'requestSessionList' });
+          break;
+
         case 'hideLoading':
           hideLoading();
           break;

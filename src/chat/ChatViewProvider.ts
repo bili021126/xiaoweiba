@@ -4,6 +4,7 @@ import { IEventBus } from '../core/ports/IEventBus';
 import { IntentDispatcher } from '../core/application/IntentDispatcher';
 import { IntentFactory } from '../core/factory/IntentFactory';
 import { ContextEnricher } from '../core/application/ContextEnricher';
+import { IMemoryPort } from '../core/ports/IMemoryPort'; // ✅ DeepSeek 风格：注入 MemoryPort
 import { AssistantResponseEvent, StreamChunkEvent, SessionListUpdatedEvent, SessionHistoryLoadedEvent } from '../core/events/DomainEvent'; // ✅ P1-04: 引入新事件
 import { generateChatViewHtml } from './ChatViewHtml';
 import { ChatMessage } from './types';
@@ -30,6 +31,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     @inject('IEventBus') private eventBus: IEventBus,
     @inject(IntentDispatcher) private intentDispatcher: IntentDispatcher,
     @inject(ContextEnricher) private contextEnricher: ContextEnricher,
+    @inject('IMemoryPort') private memoryPort: IMemoryPort, // ✅ DeepSeek 风格：注入 MemoryPort
     @inject('extensionContext') private context: vscode.ExtensionContext
   ) {
     this.subscribeToDomainEvents();
@@ -73,18 +75,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     // ✅ P1-02: 订阅会话列表更新事件
     this.unsubscribers.push(
       this.eventBus.subscribe(SessionListUpdatedEvent.type, (event) => {
-        // ✅ P1-04: EventBusAdapter 将 DomainEvent 转换为 BaseEvent，需要从 payload 中提取数据
         const sessionEvent = event as any;
         const payload = sessionEvent.payload || sessionEvent;
         
         console.log('[ChatViewProvider] Session list updated:', payload.action, payload.sessionId);
         
-        // 通知前端刷新会话列表
-        this.view?.webview.postMessage({
-          type: 'refreshSessionList',
-          action: payload.action,
-          sessionId: payload.sessionId
-        });
+        // TODO: 等待 IMemoryPort 添加 listSessions 方法后实现自动刷新
+        // 目前用户需要手动刷新或通过切换会话来触发列表更新
       })
     );
 
