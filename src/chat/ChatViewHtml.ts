@@ -35,66 +35,82 @@ export function generateChatViewHtml(webview: vscode.Webview): string {
       display: flex;
       height: 100vh;
       width: 100vw;
+      position: relative;
     }
 
-    /* 左侧边栏 - 会话列表 */
+    /* 左侧边栏 - 悬浮式设计 */
     .sidebar {
-      width: 260px;
-      min-width: 260px;
+      width: 48px;
+      min-width: 48px;
       background: var(--vscode-sideBar-background);
       border-right: 1px solid var(--vscode-panel-border);
       display: flex;
       flex-direction: column;
-      transition: all 0.3s ease;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       position: relative;
+      overflow: hidden;
+      z-index: 10;
     }
 
-    .sidebar.collapsed {
-      width: 0;
-      min-width: 0;
-      overflow: hidden;
-      border-right: none;
+    .sidebar:hover {
+      width: 260px;
+      min-width: 260px;
+      box-shadow: 4px 0 12px rgba(0, 0, 0, 0.15);
     }
 
     .sidebar-header {
-      padding: 16px;
+      padding: 12px;
       border-bottom: 1px solid var(--vscode-panel-border);
       display: flex;
       justify-content: space-between;
       align-items: center;
+      white-space: nowrap;
+      opacity: 0;
+      transition: opacity 0.2s ease 0.1s;
+    }
+
+    .sidebar:hover .sidebar-header {
+      opacity: 1;
     }
 
     .sidebar-header h3 {
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 600;
       margin: 0;
+      flex: 1;
     }
 
     .new-session-btn {
-      padding: 6px 12px;
+      padding: 4px 10px;
       background: var(--vscode-button-background);
       color: var(--vscode-button-foreground);
       border: none;
-      border-radius: 6px;
+      border-radius: 4px;
       cursor: pointer;
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 500;
       transition: all 0.2s ease;
+      white-space: nowrap;
     }
 
     .new-session-btn:hover {
       background: var(--vscode-button-hoverBackground);
-      transform: translateY(-1px);
     }
 
     .session-list {
       flex: 1;
       overflow-y: auto;
-      padding: 8px;
+      padding: 8px 4px;
+      opacity: 0;
+      transition: opacity 0.2s ease 0.1s;
+    }
+
+    .sidebar:hover .session-list {
+      opacity: 1;
     }
 
     .session-item {
-      padding: 10px 12px;
+      padding: 8px 12px;
       margin-bottom: 4px;
       border-radius: 6px;
       cursor: pointer;
@@ -103,7 +119,22 @@ export function generateChatViewHtml(webview: vscode.Webview): string {
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      opacity: 0;
+      transform: translateX(-10px);
+      transition: all 0.2s ease;
     }
+
+    .sidebar:hover .session-item {
+      opacity: 1;
+      transform: translateX(0);
+    }
+
+    /* 为每个会话项添加延迟，实现级联动画 */
+    .sidebar:hover .session-item:nth-child(1) { transition-delay: 0.05s; }
+    .sidebar:hover .session-item:nth-child(2) { transition-delay: 0.1s; }
+    .sidebar:hover .session-item:nth-child(3) { transition-delay: 0.15s; }
+    .sidebar:hover .session-item:nth-child(4) { transition-delay: 0.2s; }
+    .sidebar:hover .session-item:nth-child(5) { transition-delay: 0.25s; }
 
     .session-item:hover {
       background: var(--vscode-list-hoverBackground);
@@ -112,6 +143,35 @@ export function generateChatViewHtml(webview: vscode.Webview): string {
     .session-item.active {
       background: var(--vscode-list-activeSelectionBackground);
       color: var(--vscode-list-activeSelectionForeground);
+      position: relative;
+    }
+
+    .session-item.active::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 3px;
+      height: 70%;
+      background: var(--vscode-list-activeSelectionForeground);
+      border-radius: 0 2px 2px 0;
+    }
+
+    /* ✅ 侧边栏图标（默认显示） */
+    .sidebar-icon {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 20px;
+      opacity: 1;
+      transition: opacity 0.2s ease;
+      pointer-events: none;
+    }
+
+    .sidebar:hover .sidebar-icon {
+      opacity: 0;
     }
 
     /* 主聊天区域 */
@@ -463,10 +523,13 @@ export function generateChatViewHtml(webview: vscode.Webview): string {
   
   <!-- ✅ DeepSeek 风格：左右分栏布局 -->
   <div class="app-container">
-    <!-- 左侧边栏：会话列表 -->
+    <!-- 左侧边栏：悬浮式会话列表 -->
     <aside class="sidebar" id="sidebar">
+      <!-- 默认显示的图标 -->
+      <div class="sidebar-icon">💬</div>
+      
       <div class="sidebar-header">
-        <h3>💬 会话</h3>
+        <h3>会话</h3>
         <button class="new-session-btn" id="newSessionBtn">+ 新建</button>
       </div>
       <div class="session-list" id="sessionList">
@@ -479,7 +542,6 @@ export function generateChatViewHtml(webview: vscode.Webview): string {
       <!-- 顶部工具栏 -->
       <header class="chat-header">
         <div class="chat-header-left">
-          <button class="toggle-sidebar-btn" id="toggleSidebarBtn" title="切换侧边栏">☰</button>
           <h1 class="chat-title" id="chatTitle">小尾巴AI助手</h1>
         </div>
         <button id="deleteSessionBtn" style="padding: 6px 12px; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">🗑️ 删除</button>
@@ -825,24 +887,13 @@ export function generateChatViewHtml(webview: vscode.Webview): string {
         item.className = 'session-item' + (session.id === currentSessionId ? ' active' : '');
         item.textContent = session.title || '新会话';
         item.dataset.sessionId = session.id;
+        item.title = session.title || '新会话'; // 添加 tooltip
         
         item.addEventListener('click', () => {
           vscode.postMessage({ type: 'switchSession', sessionId: session.id });
         });
         
         sessionList.appendChild(item);
-      });
-    }
-
-    // ✅ DeepSeek 风格：侧边栏切换
-    const toggleSidebarBtn = document.getElementById('toggleSidebarBtn');
-    if (toggleSidebarBtn) {
-      toggleSidebarBtn.addEventListener('click', () => {
-        const sidebar = document.getElementById('sidebar');
-        if (sidebar) {
-          sidebar.classList.toggle('collapsed');
-          toggleSidebarBtn.textContent = sidebar.classList.contains('collapsed') ? '☰' : '✕';
-        }
       });
     }
   </script>
