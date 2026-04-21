@@ -96,6 +96,12 @@ export interface IMemoryPort {
   deleteSession(sessionId: string): Promise<void>;
 
   /**
+   * 列出所有会话（按最后活跃时间倒序）
+   * @returns 会话列表
+   */
+  listSessions(): Promise<Array<{ id: string; title: string; lastActiveAt: number; messageCount: number }>>;
+
+  /**
    * 保存消息到会话
    * @param sessionId 会话ID
    * @param role 角色（user/assistant）

@@ -91,6 +91,45 @@ export class SessionManager {
   }
 
   /**
+   * 列出所有会话（按最后活跃时间倒序）
+   */
+  async listSessions(): Promise<Array<{ id: string; title: string; lastActiveAt: number; messageCount: number }>> {
+    try {
+      const db = this.dbManager.getDatabase();
+      const result = db.exec(
+        `SELECT session_id, metadata, last_active_at, message_count 
+         FROM chat_sessions 
+         ORDER BY last_active_at DESC`
+      );
+      
+      if (!result || result.length === 0) {
+        return [];
+      }
+
+      const columns = result[0].columns;
+      const values = result[0].values;
+      
+      const idIndex = columns.indexOf('session_id');
+      const metadataIndex = columns.indexOf('metadata');
+      const lastActiveIndex = columns.indexOf('last_active_at');
+      const messageCountIndex = columns.indexOf('message_count');
+      
+      return values.map(row => {
+        const metadata = JSON.parse((row[metadataIndex] as string) || '{}');
+        return {
+          id: row[idIndex] as string,
+          title: metadata.title || '未命名会话',
+          lastActiveAt: row[lastActiveIndex] as number,
+          messageCount: row[messageCountIndex] as number
+        };
+      });
+    } catch (error) {
+      console.error('[SessionManager] listSessions failed:', error);
+      return [];
+    }
+  }
+
+  /**
    * 保存消息到会话
    */
   async saveMessage(sessionId: string, role: string, content: string): Promise<void> {

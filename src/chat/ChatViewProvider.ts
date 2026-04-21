@@ -74,14 +74,26 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
     // ✅ P1-02: 订阅会话列表更新事件
     this.unsubscribers.push(
-      this.eventBus.subscribe(SessionListUpdatedEvent.type, (event) => {
+      this.eventBus.subscribe(SessionListUpdatedEvent.type, async (event) => {
         const sessionEvent = event as any;
         const payload = sessionEvent.payload || sessionEvent;
         
         console.log('[ChatViewProvider] Session list updated:', payload.action, payload.sessionId);
         
-        // TODO: 等待 IMemoryPort 添加 listSessions 方法后实现自动刷新
-        // 目前用户需要手动刷新或通过切换会话来触发列表更新
+        try {
+          // ✅ 通过 IMemoryPort 获取完整的会话列表
+          const sessions = await this.memoryPort.listSessions();
+          
+          this.view?.webview.postMessage({
+            type: 'updateSessionList',
+            sessions,
+            currentSessionId: payload.sessionId
+          });
+          
+          console.log('[ChatViewProvider] Sent session list to frontend:', sessions.length, 'sessions');
+        } catch (error) {
+          console.error('[ChatViewProvider] Failed to send session list:', error);
+        }
       })
     );
 

@@ -381,6 +381,14 @@ export class MemoryAdapter implements IMemoryPort {
   }
 
   /**
+   * 列出所有会话（按最后活跃时间倒序）
+   */
+  async listSessions(): Promise<Array<{ id: string; title: string; lastActiveAt: number; messageCount: number }>> {
+    // ✅ 瘦身：委托给 SessionManager
+    return await this.sessionManager.listSessions();
+  }
+
+  /**
    * 保存消息到会话
    */
   async saveMessage(sessionId: string, role: string, content: string): Promise<void> {
