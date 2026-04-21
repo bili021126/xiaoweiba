@@ -468,6 +468,21 @@ export function generateChatViewHtml(webview: vscode.Webview): string {
       to { transform: rotate(360deg); }
     }
 
+    /* ✅ 网络搜索按钮样式 */
+    #webSearchToggle {
+      opacity: 0.6;
+    }
+
+    #webSearchToggle:hover {
+      opacity: 1;
+      background: var(--vscode-button-background);
+      color: var(--vscode-button-foreground);
+    }
+
+    #webSearchToggle:active {
+      transform: scale(0.95);
+    }
+
     .memory-indicator {
       display: flex;
       align-items: center;
@@ -582,11 +597,11 @@ export function generateChatViewHtml(webview: vscode.Webview): string {
         <div class="chat-header-left">
           <h1 class="chat-title" id="chatTitle">小尾巴AI助手</h1>
         </div>
-        <!-- ✅ 网络状态指示器（占位符，后续可连接真实状态） -->
-        <div id="networkStatus" style="display: flex; align-items: center; gap: 6px; padding: 4px 10px; background: var(--vscode-editor-inactiveSelectionBackground); border-radius: 6px; font-size: 12px; color: var(--vscode-descriptionForeground); cursor: default;" title="连接状态">
-          <span style="width: 8px; height: 8px; border-radius: 50%; background: #4ec9b0; animation: pulse-dot 2s infinite;"></span>
-          <span>在线</span>
-        </div>
+        <!-- ✅ 网络搜索开关（暂未实现，占位符） -->
+        <button id="webSearchToggle" style="display: flex; align-items: center; gap: 6px; padding: 4px 10px; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); border: none; border-radius: 6px; cursor: pointer; font-size: 12px; transition: all 0.2s ease;" title="网络搜索（暂未启用）">
+          <span style="font-size: 14px;">🌐</span>
+          <span>搜索</span>
+        </button>
       </header>
 
       <!-- 消息容器 -->
@@ -804,6 +819,16 @@ export function generateChatViewHtml(webview: vscode.Webview): string {
     if (newSessionBtn) {
       newSessionBtn.addEventListener('click', () => {
         vscode.postMessage({ type: 'newSession' });
+      });
+    }
+
+    // ✅ 网络搜索开关（暂未实现）
+    const webSearchToggle = document.getElementById('webSearchToggle');
+    if (webSearchToggle) {
+      webSearchToggle.addEventListener('click', () => {
+        // TODO: 实现网络搜索功能
+        vscode.window?.showInformationMessage && vscode.window.showInformationMessage('网络搜索功能暂未启用');
+        console.log('[Frontend] Web search toggle clicked (not implemented yet)');
       });
     }
 
