@@ -423,6 +423,14 @@ export class MemorySystem {
     // ✅ EventBus传递data，兼容payload
     const payload = event.payload || event.data;
     
+    // ✅ P1-04: 添加详细调试日志
+    console.log('[MemorySystem] onActionCompleted received event:', {
+      hasPayload: !!event.payload,
+      hasData: !!event.data,
+      payloadKeys: payload ? Object.keys(payload) : 'N/A',
+      memoryMetadata: payload?.memoryMetadata ? 'present' : 'missing'
+    });
+    
     // 防御性检查：如果payload为undefined，直接返回
     if (!payload) {
       console.warn('[MemorySystem] onActionCompleted received undefined payload, skipping');
@@ -435,6 +443,7 @@ export class MemorySystem {
       
       if (!memoryMetadata) {
         console.warn('[MemorySystem] No memoryMetadata in TASK_COMPLETED event, skipping record');
+        console.warn('[MemorySystem] Available payload keys:', Object.keys(payload));
         return;
       }
       

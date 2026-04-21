@@ -122,7 +122,13 @@ suite('代码解释全链路集成测试', () => {
       databaseManager,
       auditLogger,
       mockFingerprint,
-      configManager
+      configManager,
+      {} as any, // VectorIndexManager
+      {} as any, // SemanticRetriever
+      {} as any, // QueryExecutor
+      {} as any, // WeightCalculator
+      {} as any, // IndexSyncService
+      {} as any  // HybridRetriever ✅ L2: 新增
     );
     container.registerInstance('EpisodicMemory', episodicMemory);
     

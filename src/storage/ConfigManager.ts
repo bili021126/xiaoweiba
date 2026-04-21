@@ -26,6 +26,11 @@ export interface MemoryConfig {
   retentionDays: number;
   decayLambda: number;
   coldStartTrust: number;
+  
+  // ✅ L2 新增：向量检索配置
+  enableVectorSearch?: boolean;
+  embeddingProvider?: 'openai' | 'ollama' | 'local';
+  embeddingModel?: string;
 }
 
 export interface SkillConfig {
@@ -124,7 +129,10 @@ const DEFAULT_CONFIG: XiaoWeibaConfig = {
   memory: {
     retentionDays: 90,
     decayLambda: 0.1, // λ=0.1，半衰期约7天
-    coldStartTrust: 20
+    coldStartTrust: 20,
+    enableVectorSearch: true, // ✅ L2: 默认开启本地向量搜索
+    embeddingProvider: 'local',
+    embeddingModel: 'Xenova/all-MiniLM-L6-v2'
   },
   skill: {
     userDir: '.xiaoweiba/skills/user',

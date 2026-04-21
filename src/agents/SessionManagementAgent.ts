@@ -88,31 +88,35 @@ export class SessionManagementAgent implements IAgent {
    */
   private async handleNewSession(startTime: number): Promise<AgentResult> {
     const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const now = new Date();
+    const friendlyTitle = `新会话 ${now.getMonth() + 1}/${now.getDate()} ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}`;
     
-    // ✅ P1-02: 持久化到数据库
+    // ✅ P1-02: 持久化到数据库（使用友好标题）
     await this.memoryPort.createSession(sessionId, {
-      title: `会话 ${new Date().toLocaleString()}`,
+      title: friendlyTitle,
       createdAt: Date.now()
     });
+
+    console.log('[SessionManagementAgent] Created session:', sessionId, 'with title:', friendlyTitle);
 
     // ✅ 发布会话列表更新事件（通知前端刷新列表）
     this.eventBus.publish(new SessionListUpdatedEvent('created', sessionId));
 
-    // 发布成功响应
+    // ✅ DeepSeek 风格：简洁的成功提示，不暴露技术 ID
     this.eventBus.publish(new AssistantResponseEvent({
       messageId: `msg_${Date.now()}_system`,
-      content: `✅ 已创建新会话 (ID: ${sessionId})`,
+      content: `✨ 已创建新会话`,
       timestamp: Date.now()
     }));
 
     return {
       success: true,
-      data: { sessionId },
+      data: { sessionId, title: friendlyTitle },
       durationMs: Date.now() - startTime,
       // ✅ P1-02: 添加记忆元数据
       memoryMetadata: {
         taskType: 'SESSION_MANAGEMENT',
-        summary: `创建了新会话 ${sessionId}`,
+        summary: `创建了新会话：${friendlyTitle}`,
         entities: [sessionId],
         outcome: 'SUCCESS'
       }
@@ -150,10 +154,12 @@ export class SessionManagementAgent implements IAgent {
     // ✅ 发布会话列表更新事件（通知前端当前会话已切换）
     this.eventBus.publish(new SessionListUpdatedEvent('switched', sessionId));
 
-    // 发布成功响应（包含历史消息数量）
+    // ✅ DeepSeek 风格：简洁提示，显示消息数量
     this.eventBus.publish(new AssistantResponseEvent({
       messageId: `msg_${Date.now()}_system`,
-      content: `🔄 已切换到会话 (ID: ${sessionId}, ${history.length} 条消息)`,
+      content: history.length > 0 
+        ? `🔄 已切换会话（${history.length} 条消息）`
+        : `🔄 已切换到新会话`,
       timestamp: Date.now()
     }));
 

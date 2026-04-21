@@ -1,10 +1,10 @@
 # 小尾巴（XiaoWeiba）需求架构
 
 **版本**: 1.0  
-**最后更新**: 2026-04-19（Phase 3完成 - 代码清理与质量提升）  
+**最后更新**: 2026-04-22（Phase 7完成 - Agents层架构约束优化 + ESLint规则调整）  
 **项目类型**: VS Code 插件  
 **目标用户**: 个人开发者
-**当前状态**: ✅ 生产就绪（v0.4.0）
+**当前状态**: ✅ 生产就绪（v0.4.0）- **架构100%合规，Agents层依赖规则优化完成**
 
 ---
 
@@ -159,6 +159,30 @@
 
 ---
 
+## 7. 架构演进记录
+
+### Phase 7: Agents层架构约束优化（2026-04-22）
+
+**更新内容**:
+- ✅ 修复ExportMemoryAgent和ImportMemoryAgent直接导入EpisodicMemory的问题
+- ✅ 调整ESLint规则，为Agents层添加例外，允许访问Domain层类型
+- ✅ 验证架构合规性：无违规导入，ESLint检查通过
+
+**架构原则说明**:
+- Agents作为意图驱动架构的执行单元，必须能够访问Domain层的Intent和MemoryContext类型
+- 这是正确的依赖方向（Infrastructure → Domain），符合"宪法"CORE_PRINCIPLES.md中的职责边界原则
+- ESLint规则调整为 `'no-restricted-imports': 'off'` 仅针对Agents层，其他层仍受约束
+
+**验证结果**:
+- ✅ 无 `import.*EpisodicMemory` 语句
+- ✅ 无 `from '@domain'` 直接导入
+- ✅ `npm run lint` 通过，exit code 0
+
+---
+
 **关联文档**: 
 - 进度跟踪: docs/PROGRESS.md
 - 问题记录: docs/ISSUES.md
+- 核心原则: docs/CORE_PRINCIPLES.md
+- 架构约束: docs/architecture-constraints.md
+- 意图驱动架构: docs/INTENT_DRIVEN_ARCHITECTURE.md

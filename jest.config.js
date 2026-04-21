@@ -5,7 +5,8 @@ module.exports = {
   testMatch: [
     '**/unit/**/*.test.ts',
     '**/integration/**/*.test.ts',
-    '**/performance/**/*.test.ts'
+    '**/performance/**/*.test.ts',
+    '**/e2e/**/*.test.ts'
   ],
   testPathIgnorePatterns: [
     '/node_modules/',
@@ -30,6 +31,9 @@ module.exports = {
       }
     ]
   },
+  transformIgnorePatterns: [
+    'node_modules/(?!( @xenova/transformers)/)'
+  ],
   collectCoverageFrom: [
     'src/**/*.ts',
     '!src/**/*.d.ts',
@@ -46,7 +50,8 @@ module.exports = {
   coverageReporters: ['text', 'lcov', 'clover'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
-    '^vscode$': '<rootDir>/tests/__mocks__/vscode.ts'
+    '^vscode$': '<rootDir>/tests/__mocks__/vscode.ts',
+    '^@xenova/transformers$': '<rootDir>/tests/__mocks__/xenova-transformers.js'
   },
   setupFilesAfterEnv: ['<rootDir>/tests/setup.ts']
 };

@@ -110,4 +110,11 @@ export interface MemoryQueryOptions {
   sortOrder?: 'ASC' | 'DESC';
   sinceTimestamp?: number;
   memoryTier?: MemoryTier; // 按层级过滤
+  
+  // ✅ L2: 意图向量（用于动态调整检索权重）
+  intentVector?: { temporal: number; entity: number; semantic: number; distantTemporal: number };
+  
+  // ✅ L2: 混合检索权重配置
+  vectorWeight?: number;    // 语义检索权重 (默认 0.7)
+  keywordWeight?: number;   // 关键词检索权重 (默认 0.3)
 }

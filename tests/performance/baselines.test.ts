@@ -89,7 +89,13 @@ bestPractice:
       databaseManager,
       auditLogger,
       projectFingerprint,
-      configManager
+      configManager,
+      {} as any, // VectorIndexManager
+      {} as any, // SemanticRetriever
+      {} as any, // QueryExecutor
+      {} as any, // WeightCalculator
+      {} as any, // IndexSyncService
+      {} as any  // HybridRetriever ✅ L2: 新增
     );
 
     benchmarkRunner = createBenchmarkRunner();
@@ -136,7 +142,9 @@ bestPractice:
           entities: ['test-entity'],
           decision: 'SUCCESS',
           outcome: 'SUCCESS',
-          taskType: 'CODE_EXPLAIN'
+          taskType: 'CODE_EXPLAIN',
+          modelId: 'test-model',
+          durationMs: 100
         });
       },
       {
@@ -161,9 +169,10 @@ bestPractice:
         summary: `Query test memory ${i}`,
         entities: ['test-entity'],
         decision: 'SUCCESS',
+        outcome: 'SUCCESS',
         taskType: 'CODE_EXPLAIN',
-        timestamp: Date.now(),
-        weight: 8
+        modelId: 'test-model',
+        durationMs: 100
       });
     }
 
@@ -197,9 +206,10 @@ bestPractice:
         summary: `Search test memory ${i} about TypeScript and JavaScript`,
         entities: ['typescript', 'javascript'],
         decision: i % 2 === 0 ? 'SUCCESS' : 'PARTIAL',
+        outcome: i % 2 === 0 ? 'SUCCESS' : 'PARTIAL',
         taskType: 'CODE_EXPLAIN',
-        timestamp: Date.now(),
-        weight: 8
+        modelId: 'test-model',
+        durationMs: 100
       });
     }
 
@@ -290,9 +300,10 @@ bestPractice:
             summary: `Batch test memory ${batchCount}_${i}`,
             entities: ['batch-test'],
             decision: 'SUCCESS',
+            outcome: 'SUCCESS',
             taskType: 'CODE_EXPLAIN',
-            timestamp: Date.now(),
-            weight: 8
+            modelId: 'test-model',
+            durationMs: 100
           }));
         }
         await Promise.all(promises);

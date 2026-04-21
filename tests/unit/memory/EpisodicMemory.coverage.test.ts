@@ -47,8 +47,64 @@ describe('EpisodicMemory - High Coverage', () => {
     const projectFingerprint = new ProjectFingerprint();
     container.registerInstance(ProjectFingerprint, projectFingerprint);
     
-    episodicMemory = new EpisodicMemory(dbManager, auditLogger, projectFingerprint, configManager);
+    // ✅ L2: 提供完整的 Mock 组件
+    const mockVectorIndexManager = {
+      updateIndexAsync: jest.fn().mockResolvedValue(undefined),
+      getVector: jest.fn().mockResolvedValue([])
+    };
+    const mockSemanticRetriever = {
+      search: jest.fn().mockResolvedValue([])
+    };
+    
+    // ✅ L2.5: 提供完整的 Mock 组件
+    const mockQueryExecutor = {
+      searchByKeywords: jest.fn().mockResolvedValue([]),
+      getRecentMemories: jest.fn().mockResolvedValue([]),
+      searchByVector: jest.fn().mockResolvedValue([])
+    };
+    const mockWeightCalculator = {
+      calculateDynamicWeight: jest.fn().mockReturnValue(1.0),
+      calculateInitialWeight: jest.fn().mockReturnValue(8.0)
+    };
+    
+    const mockIndexSyncService = {
+      rebuildIndex: jest.fn().mockResolvedValue(undefined)
+    };
+    
+    // ✅ L2: Mock HybridRetriever
+    const mockHybridRetriever = {
+      search: jest.fn().mockResolvedValue([])
+    } as any;
+    
+    episodicMemory = new EpisodicMemory(
+      dbManager, 
+      auditLogger, 
+      projectFingerprint, 
+      configManager, 
+      mockVectorIndexManager as any, 
+      mockSemanticRetriever as any, 
+      mockQueryExecutor as any, 
+      mockWeightCalculator as any, 
+      mockIndexSyncService as any,
+      mockHybridRetriever as any
+    );
     await episodicMemory.initialize();
+  });
+
+  describe('retrieve - 检索功能', () => {
+    it('应该委托给 QueryExecutor 获取最近记忆', async () => {
+      const mockMemories = [{ id: 'test_1', summary: 'test' }];
+      (episodicMemory as any).queryExecutor.getRecentMemories.mockResolvedValue(mockMemories);
+      
+      const results = await episodicMemory.retrieve({ limit: 10 });
+      expect(results).toEqual(mockMemories);
+    });
+
+    it('应该处理空结果集', async () => {
+      (episodicMemory as any).queryExecutor.getRecentMemories.mockResolvedValue([]);
+      const results = await episodicMemory.retrieve();
+      expect(results).toEqual([]);
+    });
   });
 
   describe('record - 记录功能', () => {

@@ -11,6 +11,20 @@ export interface EpisodicMemoryItem {
   taskType: string;
   timestamp: number;
   entities: string[];  // 实体列表（文件名、关键词等）
+  projectFingerprint?: string; // ✅ 新增：项目指纹
+  outcome?: string; // ✅ 新增：执行结果
+  modelId?: string; // ✅ 新增：模型ID
+  durationMs?: number; // ✅ 新增：耗时
+  metadata?: Record<string, any>; // ✅ 新增：元数据
+}
+
+/**
+ * 关键决策项 (L2)
+ */
+export interface KeyDecision {
+  timestamp: number;
+  decision: string; // 用一句话描述，如"确定使用Redis作为缓存方案"
+  context?: string; // 做出该决策时的上下文摘要
 }
 
 /**
@@ -60,4 +74,8 @@ export interface MemoryContext {
   originalQuery?: string;
   /** 检索耗时（ms，可选） */
   retrievalDuration?: number;
+  /** ✅ 新增：L2 关键决策（本次会话累积） */
+  keyDecisions?: KeyDecision[];
+  /** ✅ 新增：L3 会话摘要（由 SessionCompressor 生成） */
+  sessionSummary?: string;
 }

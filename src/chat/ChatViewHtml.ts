@@ -27,76 +27,142 @@ export function generateChatViewHtml(webview: vscode.Webview): string {
       color: var(--vscode-foreground);
       background-color: var(--vscode-editor-background);
       height: 100vh;
-      display: flex;
-      flex-direction: column;
+      overflow: hidden;
     }
 
-    .header {
-      padding: 12px 16px;
+    /* ✅ DeepSeek 风格：左右分栏布局 */
+    .app-container {
+      display: flex;
+      height: 100vh;
+      width: 100vw;
+    }
+
+    /* 左侧边栏 - 会话列表 */
+    .sidebar {
+      width: 260px;
+      min-width: 260px;
+      background: var(--vscode-sideBar-background);
+      border-right: 1px solid var(--vscode-panel-border);
+      display: flex;
+      flex-direction: column;
+      transition: all 0.3s ease;
+      position: relative;
+    }
+
+    .sidebar.collapsed {
+      width: 0;
+      min-width: 0;
+      overflow: hidden;
+      border-right: none;
+    }
+
+    .sidebar-header {
+      padding: 16px;
       border-bottom: 1px solid var(--vscode-panel-border);
       display: flex;
       justify-content: space-between;
       align-items: center;
-      background: var(--vscode-sideBar-background);
-      backdrop-filter: blur(10px);
     }
 
-    .header h2 {
-      font-size: 15px;
+    .sidebar-header h3 {
+      font-size: 14px;
       font-weight: 600;
       margin: 0;
-      display: flex;
-      align-items: center;
-      gap: 8px;
     }
 
-    .session-selector {
-      display: flex;
-      gap: 5px;
-    }
-
-    .session-selector select {
-      flex: 1;
-      padding: 6px 10px;
-      border: 1px solid var(--vscode-input-border);
-      background: var(--vscode-input-background);
-      color: var(--vscode-input-foreground);
-      border-radius: 6px;
-      font-size: 13px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-
-    .session-selector select:hover {
-      border-color: var(--vscode-focusBorder);
-    }
-
-    .session-selector select:focus {
-      outline: none;
-      border-color: var(--vscode-focusBorder);
-      box-shadow: 0 0 0 2px rgba(var(--vscode-focusBorder), 0.2);
-    }
-
-    .session-selector button {
+    .new-session-btn {
       padding: 6px 12px;
-      border: 1px solid var(--vscode-button-border);
-      background: var(--vscode-button-secondaryBackground);
-      color: var(--vscode-button-secondaryForeground);
-      cursor: pointer;
+      background: var(--vscode-button-background);
+      color: var(--vscode-button-foreground);
+      border: none;
       border-radius: 6px;
+      cursor: pointer;
       font-size: 13px;
       font-weight: 500;
       transition: all 0.2s ease;
     }
 
-    .session-selector button:hover {
-      background: var(--vscode-button-secondaryHoverBackground);
+    .new-session-btn:hover {
+      background: var(--vscode-button-hoverBackground);
       transform: translateY(-1px);
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
 
-    .session-selector button:active {
-      transform: translateY(0);
+    .session-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+    }
+
+    .session-item {
+      padding: 10px 12px;
+      margin-bottom: 4px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-size: 13px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .session-item:hover {
+      background: var(--vscode-list-hoverBackground);
+    }
+
+    .session-item.active {
+      background: var(--vscode-list-activeSelectionBackground);
+      color: var(--vscode-list-activeSelectionForeground);
+    }
+
+    /* 主聊天区域 */
+    .chat-main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      position: relative;
+    }
+
+    /* 顶部工具栏 */
+    .chat-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--vscode-panel-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--vscode-editor-background);
+      backdrop-filter: blur(10px);
+    }
+
+    .chat-header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .toggle-sidebar-btn {
+      padding: 6px 10px;
+      background: transparent;
+      border: 1px solid var(--vscode-input-border);
+      color: var(--vscode-foreground);
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .toggle-sidebar-btn:hover {
+      background: var(--vscode-toolbar-hoverBackground);
+      border-color: var(--vscode-focusBorder);
+    }
+
+    .chat-title {
+      font-size: 15px;
+      font-weight: 600;
+      margin: 0;
     }
 
     .messages-container {
@@ -395,24 +461,43 @@ export function generateChatViewHtml(webview: vscode.Webview): string {
     }
   </style>
   
-  <div class="header">
-    <h2>🤖 小尾巴AI助手</h2>
-    <div class="session-selector">
-      <select id="sessionSelect"></select>
-      <button id="newSessionBtn">新会话</button>
-      <button id="deleteSessionBtn">删除</button>
-    </div>
-  </div>
+  <!-- ✅ DeepSeek 风格：左右分栏布局 -->
+  <div class="app-container">
+    <!-- 左侧边栏：会话列表 -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <h3>💬 会话</h3>
+        <button class="new-session-btn" id="newSessionBtn">+ 新建</button>
+      </div>
+      <div class="session-list" id="sessionList">
+        <!-- 会话列表项将动态插入这里 -->
+      </div>
+    </aside>
 
-  <div class="messages-container" id="messagesContainer"></div>
+    <!-- 主聊天区域 -->
+    <main class="chat-main">
+      <!-- 顶部工具栏 -->
+      <header class="chat-header">
+        <div class="chat-header-left">
+          <button class="toggle-sidebar-btn" id="toggleSidebarBtn" title="切换侧边栏">☰</button>
+          <h1 class="chat-title" id="chatTitle">小尾巴AI助手</h1>
+        </div>
+        <button id="deleteSessionBtn" style="padding: 6px 12px; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">🗑️ 删除</button>
+      </header>
 
-  <div class="input-container">
-    <div class="input-hints">
-      <span><kbd>Enter</kbd> 发送</span>
-      <span><kbd>Shift+Enter</kbd> 换行</span>
-    </div>
-    <textarea id="messageInput" placeholder="输入消息... (Enter发送, Shift+Enter换行)" rows="1"></textarea>
-    <button id="sendBtn">发送</button>
+      <!-- 消息容器 -->
+      <div class="messages-container" id="messagesContainer"></div>
+
+      <!-- 输入区域 -->
+      <div class="input-container">
+        <div class="input-hints">
+          <span><kbd>Enter</kbd> 发送</span>
+          <span><kbd>Shift+Enter</kbd> 换行</span>
+        </div>
+        <textarea id="messageInput" placeholder="输入消息... (Enter发送, Shift+Enter换行)" rows="1"></textarea>
+        <button id="sendBtn">发送</button>
+      </div>
+    </main>
   </div>
 
   <script>
@@ -622,20 +707,10 @@ export function generateChatViewHtml(webview: vscode.Webview): string {
     const deleteSessionBtn = document.getElementById('deleteSessionBtn');
     if (deleteSessionBtn) {
       deleteSessionBtn.addEventListener('click', () => {
-        const select = document.getElementById('sessionSelect');
-        if (select && select.value) {
-          vscode.postMessage({ type: 'deleteSession', sessionId: select.value });
-        }
-      });
-    }
-
-    // 切换会话
-    const sessionSelect = document.getElementById('sessionSelect');
-    if (sessionSelect) {
-      sessionSelect.addEventListener('change', (e) => {
-        const sessionId = e.target.value;
-        if (sessionId) {
-          vscode.postMessage({ type: 'switchSession', sessionId: sessionId });
+        // ✅ DeepSeek 风格：从侧边栏获取当前激活的会话
+        const activeItem = document.querySelector('.session-item.active');
+        if (activeItem && activeItem.dataset.sessionId) {
+          vscode.postMessage({ type: 'deleteSession', sessionId: activeItem.dataset.sessionId });
         }
       });
     }
@@ -739,17 +814,35 @@ export function generateChatViewHtml(webview: vscode.Webview): string {
     });
 
     function updateSessionList(sessions, currentSessionId) {
-      const select = document.getElementById('sessionSelect');
-      select.innerHTML = '';
+      // ✅ DeepSeek 风格：渲染到侧边栏列表
+      const sessionList = document.getElementById('sessionList');
+      if (!sessionList) return;
+      
+      sessionList.innerHTML = '';
       
       sessions.forEach(session => {
-        const option = document.createElement('option');
-        option.value = session.id;
-        option.textContent = session.title;
-        if (session.id === currentSessionId) {
-          option.selected = true;
+        const item = document.createElement('div');
+        item.className = 'session-item' + (session.id === currentSessionId ? ' active' : '');
+        item.textContent = session.title || '新会话';
+        item.dataset.sessionId = session.id;
+        
+        item.addEventListener('click', () => {
+          vscode.postMessage({ type: 'switchSession', sessionId: session.id });
+        });
+        
+        sessionList.appendChild(item);
+      });
+    }
+
+    // ✅ DeepSeek 风格：侧边栏切换
+    const toggleSidebarBtn = document.getElementById('toggleSidebarBtn');
+    if (toggleSidebarBtn) {
+      toggleSidebarBtn.addEventListener('click', () => {
+        const sidebar = document.getElementById('sidebar');
+        if (sidebar) {
+          sidebar.classList.toggle('collapsed');
+          toggleSidebarBtn.textContent = sidebar.classList.contains('collapsed') ? '☰' : '✕';
         }
-        select.appendChild(option);
       });
     }
   </script>

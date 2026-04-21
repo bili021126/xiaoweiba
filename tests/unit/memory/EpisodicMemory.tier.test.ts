@@ -66,7 +66,13 @@ describe.skip('EpisodicMemory - 短期/长期记忆分区', () => {
       mockDbManager,
       mockAuditLogger,
       mockProjectFingerprint,
-      mockConfigManager
+      mockConfigManager,
+      {} as any, // VectorIndexManager
+      {} as any, // SemanticRetriever
+      {} as any, // QueryExecutor
+      {} as any, // WeightCalculator
+      {} as any, // IndexSyncService
+      {} as any  // HybridRetriever ✅ L2: 新增
     );
   });
 

@@ -3,6 +3,9 @@
  */
 
 import { EpisodicMemory } from '../../../src/core/memory/EpisodicMemory';
+import { VectorIndexManager } from '../../../src/core/application/VectorIndexManager';
+import { SemanticRetriever } from '../../../src/core/application/SemanticRetriever';
+import { HybridRetriever } from '../../../src/core/application/HybridRetriever';
 import { DatabaseManager } from '../../../src/storage/DatabaseManager';
 import { ConfigManager } from '../../../src/storage/ConfigManager';
 import { AuditLogger } from '../../../src/core/security/AuditLogger';
@@ -46,7 +49,46 @@ describe('EpisodicMemory', () => {
     const projectFingerprint = new ProjectFingerprint();
     container.registerInstance(ProjectFingerprint, projectFingerprint);
     
-    episodicMemory = new EpisodicMemory(dbManager, auditLogger, projectFingerprint, configManager);
+    // ✅ L2: Mock 新组件
+    const mockVectorIndexManager = {
+      updateIndexAsync: jest.fn().mockResolvedValue(undefined),
+      getVector: jest.fn().mockResolvedValue([])
+    } as any;
+    const mockSemanticRetriever = {
+      search: jest.fn().mockResolvedValue([])
+    } as any;
+    
+    // ✅ L2.5: Mock 新增组件
+    const mockQueryExecutor = {
+      searchByKeywords: jest.fn().mockResolvedValue([]),
+      getRecentMemories: jest.fn().mockResolvedValue([])
+    };
+    const mockWeightCalculator = {
+      calculateDynamicWeight: jest.fn().mockReturnValue(1.0),
+      calculateInitialWeight: jest.fn().mockReturnValue(8.0)
+    };
+    
+    const mockIndexSyncService = {
+      rebuildIndex: jest.fn().mockResolvedValue(undefined)
+    };
+    
+    // ✅ L2: Mock HybridRetriever
+    const mockHybridRetriever = {
+      search: jest.fn().mockResolvedValue([])
+    } as any;
+    
+    episodicMemory = new EpisodicMemory(
+      dbManager, 
+      auditLogger, 
+      projectFingerprint, 
+      configManager, 
+      mockVectorIndexManager as any, 
+      mockSemanticRetriever as any, 
+      mockQueryExecutor as any, 
+      mockWeightCalculator as any, 
+      mockIndexSyncService as any,
+      mockHybridRetriever as any
+    );
     await episodicMemory.initialize();
   });
 

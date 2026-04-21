@@ -6,7 +6,7 @@
  */
 
 import { Intent } from '../domain/Intent';
-import { MemoryContext } from '../../core/domain/MemoryContext';
+import { MemoryContext, EpisodicMemoryItem } from '../../core/domain/MemoryContext'; // ✅ 新增导入
 import { TaskCompletedEvent, FeedbackGivenEvent } from '../events/DomainEvent';
 
 /**
@@ -102,4 +102,22 @@ export interface IMemoryPort {
    * @param content 内容
    */
   saveMessage(sessionId: string, role: string, content: string): Promise<void>;
+
+  /**
+   * ✅ 检索所有情景记忆（用于导出等全量操作）
+   */
+  retrieveAll(options?: { limit?: number }): Promise<EpisodicMemoryItem[]>;
+
+  /**
+   * ✅ 直接记录一条记忆（用于导入等操作）
+   */
+  recordMemory(record: {
+    taskType: string;
+    summary: string;
+    entities: string[];
+    outcome: string;
+    modelId?: string;
+    durationMs?: number;
+    metadata?: Record<string, any>;
+  }): Promise<string>;
 }

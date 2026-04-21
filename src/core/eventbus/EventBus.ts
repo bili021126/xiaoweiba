@@ -155,6 +155,12 @@ export class EventBus {
   private validatePluginEvent(event: BaseEvent<PluginEventType>): void {
     const pluginEventPrefix = /^plugin\.\w+\.\w+$/;
     if (!pluginEventPrefix.test(event.type)) {
+      // ✅ 提供更详细的调试信息
+      console.error(`[EventBus] Invalid plugin event type detected:`);
+      console.error(`  - Received: "${event.type}"`);
+      console.error(`  - Expected format: "plugin.<pluginId>.<event>"`);
+      console.error(`  - Event payload:`, event.payload);
+      console.error(`  - Stack trace:`, new Error().stack);
       throw new Error(`[EventBus] Plugin event type must match "plugin.<pluginId>.<event>", got ${event.type}`);
     }
   }

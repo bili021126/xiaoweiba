@@ -10,39 +10,33 @@
 
 import { injectable, inject } from 'tsyringe';
 import { IMemoryPort, Recommendation, AgentPerformance } from '../../core/ports/IMemoryPort';
-import { Intent, IntentName } from '../../core/domain/Intent';
+import { Intent } from '../../core/domain/Intent';
 import { MemoryContext } from '../../core/domain/MemoryContext';
 import { TaskCompletedEvent, FeedbackGivenEvent } from '../../core/events/DomainEvent';
-import { EpisodicMemory } from '../../core/memory/EpisodicMemory';
-import { PreferenceMemory } from '../../core/memory/PreferenceMemory';
-import { CommitStyleLearner } from '../../core/memory/CommitStyleLearner';
-import { IEventBus } from '../../core/ports/IEventBus';
-import { DatabaseManager } from '../../storage/DatabaseManager';
-import { IntentAnalyzer } from '../../core/memory/IntentAnalyzer';
-import { ExpertSelector } from '../../core/memory/ExpertSelector';
-import { ProjectFingerprint } from '../../utils/ProjectFingerprint';
+import { IMemoryStorage } from '../../core/ports/IMemoryStorage'; // ✅ 新增：只依赖存储端口
+import { SessionManager } from '../../core/application/SessionManager';
+import { SpecializedRetriever } from '../../core/application/SpecializedRetriever';
+import { SessionContextManager } from '../../core/application/SessionContextManager';
+import { MemorySummaryGenerator } from '../../core/application/MemorySummaryGenerator';
+import { IntentTypeMapper } from '../../core/application/IntentTypeMapper';
+import { MemoryEventSubscriber, TaskCompletionPayload } from '../../core/application/MemoryEventSubscriber';
+import { FeedbackRecorder } from '../../core/application/FeedbackRecorder';
+import { MemoryRecommender } from '../../core/application/MemoryRecommender';
+import { MemoryExporter } from '../../core/application/MemoryExporter';
 
 @injectable()
 export class MemoryAdapter implements IMemoryPort {
-  private unsubscribe?: () => void;
-  
-  // ✅ 会话历史存储（按sessionId分组）
-  private sessionHistories: Map<string, Array<{ role: string; content: string }>> = new Map();
-  
-  // ✅ Agent性能数据存储（用于Wilson评分）
-  private agentPerformances: Map<string, { totalAttempts: number; successCount: number; totalDurationMs: number }> = new Map();
-  
-  // ✅ P1-03: 反馈记录组件
-  private readonly intentAnalyzer = new IntentAnalyzer();
-  private readonly expertSelector = new ExpertSelector();
-
   constructor(
-    @inject(EpisodicMemory) private episodicMemory: EpisodicMemory,
-    @inject(PreferenceMemory) private preferenceMemory: PreferenceMemory,
-    @inject(CommitStyleLearner) private commitStyleLearner: CommitStyleLearner,
-    @inject('IEventBus') private eventBus: IEventBus,  // ✅ 注入EventBus以订阅事件
-    @inject(DatabaseManager) private dbManager: DatabaseManager,  // ✅ P1-02: 注入DatabaseManager
-    @inject(ProjectFingerprint) private projectFingerprint: ProjectFingerprint  // ✅ P1-03: 注入ProjectFingerprint
+    @inject('IMemoryStorage') private storage: IMemoryStorage, // ✅ 核心变化：只依赖存储端口
+    @inject(SessionManager) private sessionManager: SessionManager,
+    @inject(SpecializedRetriever) private specializedRetriever: SpecializedRetriever,
+    @inject(SessionContextManager) private sessionContextManager: SessionContextManager,
+    @inject(MemorySummaryGenerator) private summaryGenerator: MemorySummaryGenerator,
+    @inject(IntentTypeMapper) private typeMapper: IntentTypeMapper,
+    @inject(MemoryEventSubscriber) private eventSubscriber: MemoryEventSubscriber,
+    @inject(FeedbackRecorder) private feedbackRecorder: FeedbackRecorder,
+    @inject(MemoryRecommender) private memoryRecommender: MemoryRecommender,
+    @inject(MemoryExporter) private memoryExporter: MemoryExporter
   ) {
     this.subscribeToEvents();
   }
@@ -51,43 +45,23 @@ export class MemoryAdapter implements IMemoryPort {
    * 订阅领域事件（实现自动记忆记录）
    */
   private subscribeToEvents(): void {
-    // 订阅任务完成事件，自动记录到记忆系统
-    this.unsubscribe = this.eventBus.subscribe(
-      TaskCompletedEvent.type,
-      async (event: any) => {
-        // ✅ 修复：从payload中提取数据（DomainEvent结构）
-        const payload = event?.payload || event;
+    // ✅ 瘦身：委托给 MemoryEventSubscriber
+    this.eventSubscriber.subscribeToTaskCompletion(async (payload: TaskCompletionPayload) => {
+      const { intent, agentId, result, durationMs, modelId } = payload;
         
-        // ✅ 防御性检查：确保payload有必要的属性
-        if (!payload || !payload.intent || !payload.agentId) {
-          console.warn('[MemoryAdapter] Invalid TaskCompletedEvent payload, skipping');
-          return;
-        }
+      // 记录任务完成
+      await this.recordTaskCompletion(payload as any);
         
-        // ✅ 构造TaskCompletedEvent兼容对象
-        const taskEvent = {
-          intent: payload.intent,
-          agentId: payload.agentId,
-          result: payload.result,
-          durationMs: payload.durationMs,
-          modelId: payload.modelId, // ✅ 新增：提取模型ID
-          memoryMetadata: payload.memoryMetadata // ✅ P1-02: 提取记忆元数据
-        };
-        
-        await this.recordTaskCompletion(taskEvent as any);
-        
-        // 同时记录Agent执行性能数据
-        const { agentId, intent, result, durationMs } = taskEvent;
-        if (intent && intent.name) {
-          await this.recordAgentExecution(
-            agentId,
-            intent.name,
-            result?.success ?? false,
-            durationMs
-          );
-        }
+      // 记录 Agent 执行性能
+      if (intent && intent.name) {
+        await this.recordAgentExecution(
+          agentId,
+          intent.name,
+          result?.success ?? false,
+          durationMs
+        );
       }
-    );
+    });
   }
 
   /**
@@ -112,44 +86,49 @@ export class MemoryAdapter implements IMemoryPort {
           break;
         
         case 'explain_code':
-          context.episodicMemories = await this.retrieveForExplainCode(intent);
+          context.episodicMemories = await this.specializedRetriever.retrieveForExplainCode(intent); // ✅ 瘦身：委托
           break;
         
         case 'generate_commit':
-          context.episodicMemories = await this.retrieveForCommit(intent);
-          // 学习提交风格偏好
-          const commitPref = await this.commitStyleLearner.learnFromHistory(
-            intent.codeContext?.filePath
-          );
-          context.userPreferences = {
-            commitStylePreference: commitPref
-          };
+          context.episodicMemories = await this.specializedRetriever.retrieveForCommit(intent); // ✅ 瘦身：委托
           break;
         
         case 'chat':
-          context.episodicMemories = await this.retrieveForChat(intent);
-          // ✅ 填充会话历史
+          context.episodicMemories = await this.specializedRetriever.retrieveForChat(intent); // ✅ 瘦身：委托
+          // ✅ L1: 委托给 SessionContextManager 构建会话上下文
           const sessionId = (intent.metadata as any)?.sessionId;
+          const coreIntent = intent.metadata?.coreIntent;
+          const existingDecisions = context.keyDecisions;
+          
           if (sessionId) {
-            context.sessionHistory = this.sessionHistories.get(sessionId) || [];
+            const sessionContext = await this.sessionContextManager.buildChatContext(
+              sessionId,
+              coreIntent,
+              existingDecisions
+            );
+            
+            // 合并返回的上下文
+            if (sessionContext.sessionHistory) {
+              context.sessionHistory = sessionContext.sessionHistory;
+            }
+            if (sessionContext.keyDecisions) {
+              context.keyDecisions = sessionContext.keyDecisions;
+            }
+            if (sessionContext.sessionSummary) {
+              context.sessionSummary = sessionContext.sessionSummary;
+            }
           }
           break;
         
         default:
-          // 通用检索策略
+          // 通用检索策略 - 委托给存储端口
           const query = intent.userInput || intent.name;
-          const memories = await this.episodicMemory.search(query, { limit: 5 });
-          context.episodicMemories = memories.map((m: any) => this.toMemoryItem(m));
+          context.episodicMemories = await this.storage.searchEpisodic(query, { limit: 5 });
       }
 
-      // 2. ✅ 获取通用偏好推荐
-      const taskType = this.mapIntentToTaskType(intent.name);
-      const prefRecs = await this.preferenceMemory.getRecommendations(taskType as any);
-      context.preferenceRecommendations = prefRecs.map((r: any) => ({
-        domain: r.domain || taskType,
-        pattern: r.pattern || {},
-        confidence: r.confidence || 0.5
-      }));
+      // 2. ✅ 获取通用偏好推荐 - 委托给存储端口
+      const taskType = this.typeMapper.mapIntentToTaskType(intent.name);
+      context.preferenceRecommendations = await this.storage.getRecommendations(taskType);
 
       // 3. ✅ 推断用户偏好的Agent
       if (!context.userPreferences) {
@@ -188,9 +167,9 @@ export class MemoryAdapter implements IMemoryPort {
       if (memoryMetadata) {
         console.log('[MemoryAdapter] Recording with memoryMetadata:', memoryMetadata.taskType);
         
-        // 使用提供的元数据记录
-        await this.episodicMemory.record({
-          taskType: memoryMetadata.taskType as any,
+        // 使用提供的元数据记录 - 委托给存储端口
+        await this.storage.recordEpisodic({
+          taskType: memoryMetadata.taskType,
           summary: memoryMetadata.summary,
           entities: memoryMetadata.entities || [],
           outcome: memoryMetadata.outcome || (result.success ? 'SUCCESS' : 'FAILED'),
@@ -212,45 +191,20 @@ export class MemoryAdapter implements IMemoryPort {
         console.log('[MemoryAdapter] Skipping record for intent:', intent.name, '(no memoryMetadata and not auto-recordable)');
         return;
       }
-
-      // ✅ 如果是chat意图，保存对话历史到sessionHistories
-      if (intent.name === 'chat' && result.success) {
-        const sessionId = (intent.metadata as any)?.sessionId;
-        if (sessionId) {
-          const history = this.sessionHistories.get(sessionId) || [];
-          
-          // 添加用户消息
-          if (intent.userInput) {
-            history.push({ role: 'user', content: intent.userInput });
-          }
-          
-          // 添加助手回复（从result中提取）
-          if (result.data?.content) {
-            history.push({ role: 'assistant', content: result.data.content });
-          }
-          
-          // 限制历史记录长度（最多20条）
-          if (history.length > 20) {
-            history.splice(0, history.length - 20);
-          }
-          
-          this.sessionHistories.set(sessionId, history);
-        }
-      }
-
+      
       // 生成摘要
-      const summary = this.generateSummary(intent, result);
+      const summary = this.summaryGenerator.generateSummary(intent, result); // ✅ 瘦身：委托
 
       // 提取实体
-      const entities = this.extractEntities(intent);
+      const entities = this.summaryGenerator.extractEntities(intent); // ✅ 瘦身：委托
 
-      // 记录到情景记忆
-      await this.episodicMemory.record({
-        taskType: this.mapIntentToTaskType(intent.name) as any,
+      // 记录到情景记忆 - 委托给存储端口
+      await this.storage.recordEpisodic({
+        taskType: this.typeMapper.mapIntentToTaskType(intent.name),
         summary,
         entities,
         outcome: result.success ? 'SUCCESS' : 'FAILED',
-        modelId: modelId || result.modelId || 'unknown', // ✅ 优先级：event.modelId > result.modelId > 'unknown'
+        modelId: modelId || result.modelId || 'unknown',
         durationMs: durationMs || 0,
         metadata: {
           agentId,
@@ -288,27 +242,9 @@ export class MemoryAdapter implements IMemoryPort {
    */
   async recordFeedback(event: FeedbackGivenEvent): Promise<void> {
     try {
-      // ✅ P1-03: 完整实现反馈记录机制
+      // ✅ 瘦身：委托给 FeedbackRecorder
       const { query, clickedMemoryId, dwellTimeMs } = event;
-      
-      // 1. 从query提取意图向量
-      const intentVector = this.intentAnalyzer.analyze(query);
-      
-      // 2. 获取基础权重配置（ExpertSelector会基于多次反馈自动调整）
-      //    注意：不使用clickedMemoryId对应的历史权重，避免冷启动问题
-      const clickedWeights = this.expertSelector.getBaseWeights();
-      
-      // 3. 记录到ExpertSelector（用于动态调整检索权重）
-      this.expertSelector.recordFeedback(intentVector, clickedWeights, query, dwellTimeMs);
-      
-      // 4. 持久化到数据库（用于后续分析和回溯）
-      const projectFingerprint = await this.projectFingerprint.getCurrentProjectFingerprint();
-      const feedbackId = `feedback_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      
-      await this.dbManager.run(
-        'INSERT INTO feedback_records (id, query, clicked_memory_id, dwell_time_ms, timestamp, project_fingerprint) VALUES (?, ?, ?, ?, ?, ?)',
-        [feedbackId, query, clickedMemoryId, dwellTimeMs, Date.now(), projectFingerprint || null]
-      );
+      await this.feedbackRecorder.recordClickFeedback(query, clickedMemoryId, dwellTimeMs);
     } catch (error) {
       console.error('[MemoryAdapter] recordFeedback failed:', error);
       throw error;
@@ -327,257 +263,35 @@ export class MemoryAdapter implements IMemoryPort {
     success: boolean,
     durationMs: number
   ): Promise<void> {
-    try {
-      // ✅ 构建性能数据key（agentId + intentName）
-      const key = `${agentId}::${intentName}`;
-      
-      // 获取或初始化性能数据
-      let perf = this.agentPerformances.get(key);
-      if (!perf) {
-        perf = { totalAttempts: 0, successCount: 0, totalDurationMs: 0 };
-      }
-      
-      // 更新统计数据
-      perf.totalAttempts += 1;
-      if (success) {
-        perf.successCount += 1;
-      }
-      perf.totalDurationMs += durationMs;
-      
-      this.agentPerformances.set(key, perf);
-    } catch (error) {
-      console.error('[MemoryAdapter] recordAgentExecution failed:', error);
-      // 静默失败，不影响主流程
-    }
+    // ✅ 核心变化：委托给存储端口
+    await this.storage.recordAgentExecution(agentId, intentName, success, durationMs);
   }
 
   /**
    * 主动推荐：根据当前文件推荐相关历史记忆
    */
   async recommendForFile(filePath: string): Promise<Recommendation[]> {
-    try {
-      const fileName = filePath.split('/').pop() || filePath.split('\\').pop() || '';
-      
-      if (!fileName) {
-        return [];
-      }
-
-      const memories = await this.episodicMemory.search(fileName, { limit: 5 });
-
-      return memories.map((m: any) => ({
-        title: m.summary,
-        timestamp: m.timestamp,
-        memoryId: m.id
-      }));
-    } catch (error) {
-      console.error('[MemoryAdapter] recommendForFile failed:', error);
-      return [];
-    }
+    // ✅ 瘦身：委托给 MemoryRecommender
+    return await this.memoryRecommender.recommendForFile(filePath);
   }
 
   /**
    * 获取 Agent 性能历史（用于调度决策）
    */
   async getAgentPerformance(agentId: string, intentName: string): Promise<AgentPerformance> {
-    try {
-      // ✅ 优先使用内存中的性能数据（由recordAgentExecution更新）
-      const key = `${agentId}::${intentName}`;
-      const perf = this.agentPerformances.get(key);
-      
-      if (perf && perf.totalAttempts > 0) {
-        return {
-          totalAttempts: perf.totalAttempts,
-          successCount: perf.successCount,
-          avgDurationMs: perf.totalDurationMs / perf.totalAttempts
-        };
-      }
-      
-      // 降级：从情景记忆中查询（兼容旧数据）
-      const taskType = this.mapIntentToTaskType(intentName as IntentName);
-      const memories = await this.episodicMemory.retrieve({
-        taskType: taskType as any,
-        limit: 50
-      });
-
-      // 过滤出该 Agent 的记录
-      const relevant = memories.filter((m: any) => m.metadata?.agentId === agentId);
-      
-      const successCount = relevant.filter((m: any) => m.outcome === 'SUCCESS').length;
-      const totalDuration = relevant.reduce((sum, m) => sum + (m.durationMs || 0), 0);
-
-      return {
-        totalAttempts: relevant.length,
-        successCount,
-        avgDurationMs: relevant.length > 0 ? totalDuration / relevant.length : 0
-      };
-    } catch (error) {
-      console.error('[MemoryAdapter] getAgentPerformance failed:', error);
-      return {
-        totalAttempts: 0,
-        successCount: 0,
-        avgDurationMs: 0
-      };
-    }
+    // ✅ 核心变化：委托给存储端口
+    return await this.storage.getAgentPerformance(agentId, intentName);
   }
 
   /**
    * 将意图名称映射为任务类型
    */
-  private mapIntentToTaskType(intentName: IntentName): string {
-    const map: Record<IntentName, string> = {
-      explain_code: 'CODE_EXPLAIN',
-      generate_code: 'CODE_GENERATE',
-      generate_commit: 'COMMIT_GENERATE',
-      check_naming: 'NAMING_CHECK',
-      optimize_sql: 'SQL_OPTIMIZE',
-      chat: 'CHAT_COMMAND',
-      configure_api_key: 'CONFIGURATION',
-      export_memory: 'EXPORT_MEMORY',
-      import_memory: 'IMPORT_MEMORY',
-      inline_completion: 'INLINE_COMPLETION', // ✅ 新增
-      new_session: 'SESSION_MANAGEMENT', // ✅ 新增
-      switch_session: 'SESSION_MANAGEMENT', // ✅ 新增
-      delete_session: 'SESSION_MANAGEMENT' // ✅ 新增
-    };
-    return map[intentName];
-  }
-
-  /**
-   * 根据意图生成有意义的摘要
-   */
-  private generateSummary(intent: Intent, result: any): string {
-    // 根据意图生成有意义的摘要
-    if (intent.name === 'explain_code' && intent.codeContext) {
-      return `解释了 ${intent.codeContext.filePath} 中的代码`;
-    }
-    
-    if (intent.name === 'generate_commit') {
-      const commitMsg = result.data?.commitMessage || result.commitMessage;
-      return `生成了提交信息: ${commitMsg?.substring(0, 50) || ''}`;
-    }
-    
-    if (intent.name === 'generate_code' && intent.codeContext) {
-      return `在 ${intent.codeContext.filePath} 中生成代码`;
-    }
-    
-    if (intent.name === 'check_naming' && intent.codeContext) {
-      return `检查了 ${intent.codeContext.filePath} 的命名规范`;
-    }
-    
-    if (intent.name === 'optimize_sql') {
-      return '优化了SQL查询';
-    }
-
-    return `执行了 ${intent.name}`;
-  }
-
-  /**
-   * 从意图中提取实体
-   */
-  private extractEntities(intent: Intent): string[] {
-    const entities: string[] = [];
-
-    // 提取文件路径
-    if (intent.codeContext?.filePath) {
-      entities.push(intent.codeContext.filePath);
-    }
-
-    // 提取语言
-    if (intent.codeContext?.language) {
-      entities.push(intent.codeContext.language);
-    }
-
-    // 提取用户输入中的关键词（简单实现）
-    if (intent.userInput) {
-      const keywords = intent.userInput
-        .split(/\s+/)
-        .filter(word => word.length > 3)
-        .slice(0, 5);
-      entities.push(...keywords);
-    }
-
-    return entities;
-  }
-
   /**
    * 清理资源
    */
   dispose(): void {
-    if (this.unsubscribe) {
-      this.unsubscribe();
-      console.log('[MemoryAdapter] Unsubscribed from events');
-    }
-  }
-
-  // ========== 私有方法：深化检索策略 ==========
-
-  /**
-   * 代码解释场景检索
-   */
-  private async retrieveForExplainCode(intent: Intent): Promise<any[]> {
-    if (!intent.codeContext) return [];
-
-    const filePath = intent.codeContext.filePath;
-    const fileName = filePath.split(/[/\\]/).pop() || '';
-    
-    try {
-      // 1. 检索该文件的历史解释
-      const fileMemories = await this.episodicMemory.search(fileName, {
-        taskType: 'CODE_EXPLAIN',
-        limit: 3
-      });
-
-      // 2. 检索相似代码的解释（基于选中的代码片段）
-      let similarMemories: any[] = [];
-      if (intent.codeContext.selectedCode) {
-        // ✅ 实现语义搜索：使用EpisodicMemory.search()自动调用searchSemantic
-        similarMemories = await this.episodicMemory.search(
-          intent.codeContext.selectedCode.substring(0, 200),
-          { limit: 2 }
-        );
-      }
-
-      // 3. 合并去重
-      const allMemories = [...fileMemories, ...similarMemories];
-      const unique = this.deduplicateById(allMemories);
-      
-      return unique.slice(0, 5).map((m: any) => this.toMemoryItem(m));
-    } catch (error) {
-      console.error('[MemoryAdapter] retrieveForExplainCode failed:', error);
-      return [];
-    }
-  }
-
-  /**
-   * 生成提交信息场景检索
-   */
-  private async retrieveForCommit(intent: Intent): Promise<any[]> {
-    try {
-      // 检索历史提交记忆
-      const memories = await this.episodicMemory.retrieve({
-        taskType: 'COMMIT_GENERATE',
-        limit: 5
-      });
-
-      return memories.map((m: any) => this.toMemoryItem(m));
-    } catch (error) {
-      console.error('[MemoryAdapter] retrieveForCommit failed:', error);
-      return [];
-    }
-  }
-
-  /**
-   * 聊天场景检索
-   */
-  private async retrieveForChat(intent: Intent): Promise<any[]> {
-    try {
-      // 检索最近的对话和操作
-      const recent = await this.episodicMemory.retrieve({ limit: 5 });
-      return recent.map((m: any) => this.toMemoryItem(m));
-    } catch (error) {
-      console.error('[MemoryAdapter] retrieveForChat failed:', error);
-      return [];
-    }
+    // ✅ 瘦身：委托给 MemoryEventSubscriber
+    this.eventSubscriber.unsubscribeFromEvents();
   }
 
   /**
@@ -585,10 +299,10 @@ export class MemoryAdapter implements IMemoryPort {
    */
   private async inferPreferredAgent(intentName: string): Promise<string | undefined> {
     try {
-      // 从情景记忆中查询该意图类型的历史记录
-      const taskType = this.mapIntentToTaskType(intentName as any);
-      const memories = await this.episodicMemory.retrieve({
-        taskType: taskType as any,
+      // 从情景记忆中查询该意图类型的历史记录 - 委托给存储端口
+      const taskType = this.typeMapper.mapIntentToTaskType(intentName as any);
+      const memories = await this.storage.retrieveEpisodic({
+        taskType,
         limit: 20
       });
 
@@ -646,105 +360,55 @@ export class MemoryAdapter implements IMemoryPort {
    * 创建新会话
    */
   async createSession(sessionId: string, metadata?: Record<string, any>): Promise<void> {
-    try {
-      const db = this.dbManager.getDatabase();
-      const now = Date.now();
-      
-      db.run(
-        `INSERT INTO chat_sessions (session_id, created_at, last_active_at, message_count, metadata)
-         VALUES (?, ?, ?, 0, ?)`,
-        [sessionId, now, now, metadata ? JSON.stringify(metadata) : null]
-      );
-    } catch (error) {
-      console.error('[MemoryAdapter] createSession failed:', error);
-      throw error;
-    }
+    // ✅ 瘦身：委托给 SessionManager
+    await this.sessionManager.createSession(sessionId, metadata);
   }
 
   /**
    * 加载会话历史
    */
   async loadSessionHistory(sessionId: string): Promise<Array<{ role: string; content: string; timestamp: number }>> {
-    try {
-      const db = this.dbManager.getDatabase();
-      
-      const stmt = db.prepare(
-        `SELECT role, content, timestamp FROM chat_messages
-         WHERE session_id = ?
-         ORDER BY timestamp ASC`
-      );
-      stmt.bind([sessionId]);
-      
-      const messages: Array<{ role: string; content: string; timestamp: number }> = [];
-      while (stmt.step()) {
-        const row = stmt.getAsObject();
-        messages.push({
-          role: row.role as string,
-          content: row.content as string,
-          timestamp: row.timestamp as number
-        });
-      }
-      stmt.free();
-      
-      return messages;
-    } catch (error) {
-      console.error('[MemoryAdapter] loadSessionHistory failed:', error);
-      return [];
-    }
+    // ✅ 瘦身：委托给 SessionManager
+    return await this.sessionManager.loadSessionHistory(sessionId);
   }
 
   /**
    * 删除会话
    */
   async deleteSession(sessionId: string): Promise<void> {
-    try {
-      const db = this.dbManager.getDatabase();
-      
-      // 外键级联删除会自动删除关联的消息
-      db.run(`DELETE FROM chat_sessions WHERE session_id = ?`, [sessionId]);
-      
-      // 清理内存中的会话历史
-      this.sessionHistories.delete(sessionId);
-    } catch (error) {
-      console.error('[MemoryAdapter] deleteSession failed:', error);
-      throw error;
-    }
+    // ✅ 瘦身：委托给 SessionManager
+    await this.sessionManager.deleteSession(sessionId);
   }
 
   /**
    * 保存消息到会话
    */
   async saveMessage(sessionId: string, role: string, content: string): Promise<void> {
-    try {
-      const db = this.dbManager.getDatabase();
-      const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      const timestamp = Date.now();
-      
-      // 插入消息
-      db.run(
-        `INSERT INTO chat_messages (id, session_id, role, content, timestamp)
-         VALUES (?, ?, ?, ?, ?)`,
-        [messageId, sessionId, role, content, timestamp]
-      );
-      
-      // 更新会话的最后活跃时间和消息计数
-      db.run(
-        `UPDATE chat_sessions 
-         SET last_active_at = ?, message_count = message_count + 1
-         WHERE session_id = ?`,
-        [timestamp, sessionId]
-      );
-      
-      // 同时更新内存中的会话历史
-      const history = this.sessionHistories.get(sessionId) || [];
-      history.push({ role, content });
-      if (history.length > 20) {
-        history.splice(0, history.length - 20);
-      }
-      this.sessionHistories.set(sessionId, history);
-    } catch (error) {
-      console.error('[MemoryAdapter] saveMessage failed:', error);
-      throw error;
-    }
+    // ✅ 瘦身：委托给 SessionManager
+    await this.sessionManager.saveMessage(sessionId, role, content);
+  }
+
+  /**
+   * ✅ 新增：检索所有情景记忆
+   */
+  async retrieveAll(options?: { limit?: number }): Promise<any[]> {
+    // ✅ 瘦身：委托给 MemoryExporter
+    return await this.memoryExporter.retrieveAll(options);
+  }
+
+  /**
+   * ✅ 新增：直接记录一条记忆
+   */
+  async recordMemory(record: {
+    taskType: string;
+    summary: string;
+    entities: string[];
+    outcome: string;
+    modelId?: string;
+    durationMs?: number;
+    metadata?: Record<string, any>;
+  }): Promise<string> {
+    // ✅ 瘦身：委托给 MemoryExporter
+    return await this.memoryExporter.recordMemory(record);
   }
 }

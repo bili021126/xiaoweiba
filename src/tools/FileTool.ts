@@ -6,17 +6,18 @@
  */
 
 import * as vscode from 'vscode';
+import { injectable, inject } from 'tsyringe';
 import { DiffService } from './DiffService';
 import { AuditLogger } from '../core/security/AuditLogger';
-import { container } from 'tsyringe';
 
+@injectable()
 export class FileTool {
   private diffService: DiffService;
   private auditLogger: AuditLogger;
 
-  constructor() {
+  constructor(@inject(AuditLogger) auditLogger: AuditLogger) {
     this.diffService = new DiffService();
-    this.auditLogger = container.resolve(AuditLogger);
+    this.auditLogger = auditLogger;
   }
 
   /**

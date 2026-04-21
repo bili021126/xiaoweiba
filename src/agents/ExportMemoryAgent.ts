@@ -13,7 +13,7 @@ import * as path from 'path';
 import { IAgent, AgentResult } from '../core/agent/IAgent';
 import { Intent } from '../core/domain/Intent';
 import { MemoryContext } from '../core/domain/MemoryContext';
-import { EpisodicMemory } from '../core/memory/EpisodicMemory';
+import { IMemoryPort } from '../core/ports/IMemoryPort';
 
 @injectable()
 export class ExportMemoryAgent implements IAgent {
@@ -22,7 +22,7 @@ export class ExportMemoryAgent implements IAgent {
   readonly supportedIntents = ['export_memory'];
 
   constructor(
-    @inject(EpisodicMemory) private episodicMemory: EpisodicMemory
+    @inject('IMemoryPort') private memoryPort: IMemoryPort
   ) {}
 
   /**
@@ -49,8 +49,8 @@ export class ExportMemoryAgent implements IAgent {
         return { success: false, error: 'User cancelled', durationMs: Date.now() - startTime };
       }
 
-      // 2. ✅ 获取所有情景记忆（直接访问EpisodicMemory）
-      const allMemories = await this.episodicMemory.retrieve({ limit: 1000 });
+      // 2. ✅ 通过IMemoryPort端口获取所有情景记忆
+      const allMemories = await this.memoryPort.retrieveAll({ limit: 1000 });
       
       // 3. 转换为可导出的格式
       const exportData = {

@@ -46,5 +46,35 @@ export interface Intent {
     timestamp: number;
     source: 'command' | 'chat' | 'auto' | 'inline_completion'; // ✅ 新增inline_completion
     sessionId?: string;
+    
+    // ✅ L1: 意图向量 (Intent Vector)
+    intentVector?: {
+      temporal: number;          // 时间敏感度 (0-1)
+      entity: number;            // 实体敏感度 (0-1)
+      semantic: number;          // 语义复杂度 (0-1)
+      distantTemporal: number;   // 远期时间依赖 (0-1)
+    };
+    
+    // ✅ L1: 查询特征
+    complexity?: 'simple' | 'moderate' | 'complex';  // 查询复杂度
+    requiresCodeContext?: boolean;  // 是否需要代码上下文
+    
+    coreIntent?: string; // ✅ L1: 核心意图（北极星）
+    enrichedContext?: {
+      activeFilePath?: string;
+      activeFileLanguage?: string;
+      cursorLine?: number;
+      selectedCode?: {
+        content: string;
+        startLine: number;
+        endLine: number;
+      };
+      visibleCode?: {
+        content: string;
+        startLine: number;
+        endLine: number;
+      };
+      timestamp: number;
+    };
   };
 }

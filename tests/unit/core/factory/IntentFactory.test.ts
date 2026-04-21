@@ -91,21 +91,21 @@ describe('IntentFactory', () => {
   });
 
   describe('buildChatIntent', () => {
-    it('应成功构建聊天意图', () => {
-      const intent = IntentFactory.buildChatIntent('你好');
+    it('应成功构建聊天意图', async () => {
+      const intent = await IntentFactory.buildChatIntent('你好');
 
       expect(intent.name).toBe('chat');
       expect(intent.userInput).toBe('你好');
       expect(intent.metadata.source).toBe('chat');
     });
 
-    it('应支持自定义sessionId', () => {
-      const intent = IntentFactory.buildChatIntent('你好', { sessionId: 'custom_session' });
+    it('应支持自定义sessionId', async () => {
+      const intent = await IntentFactory.buildChatIntent('你好', { sessionId: 'custom_session' });
 
       expect(intent.metadata.sessionId).toBe('custom_session');
     });
 
-    it('有编辑器时应包含codeContext', () => {
+    it('有编辑器时应包含codeContext', async () => {
       const mockEditor = {
         document: {
           getText: jest.fn().mockReturnValue('content'),
@@ -116,7 +116,7 @@ describe('IntentFactory', () => {
       };
       (vscode.window.activeTextEditor as any) = mockEditor;
 
-      const intent = IntentFactory.buildChatIntent('解释代码');
+      const intent = await IntentFactory.buildChatIntent('解释代码');
 
       expect(intent.codeContext).toBeDefined();
       expect(intent.codeContext?.language).toBe('javascript');

@@ -34,7 +34,10 @@ const mockMemoryPort: jest.Mocked<IMemoryPort> = {
   createSession: jest.fn(),
   loadSessionHistory: jest.fn(),
   deleteSession: jest.fn(),
-  saveMessage: jest.fn()
+  saveMessage: jest.fn(),
+  // ✅ 新增：全量检索和记录记忆
+  retrieveAll: jest.fn(),
+  recordMemory: jest.fn()
 };
 
 const mockAgentRegistry: jest.Mocked<IAgentRegistry> = {

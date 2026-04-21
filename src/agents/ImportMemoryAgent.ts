@@ -12,7 +12,7 @@ import * as fs from 'fs';
 import { IAgent, AgentResult } from '../core/agent/IAgent';
 import { Intent } from '../core/domain/Intent';
 import { MemoryContext } from '../core/domain/MemoryContext';
-import { EpisodicMemory } from '../core/memory/EpisodicMemory';
+import { IMemoryPort } from '../core/ports/IMemoryPort';
 
 @injectable()
 export class ImportMemoryAgent implements IAgent {
@@ -21,7 +21,7 @@ export class ImportMemoryAgent implements IAgent {
   readonly supportedIntents = ['import_memory'];
 
   constructor(
-    @inject(EpisodicMemory) private episodicMemory: EpisodicMemory
+    @inject('IMemoryPort') private memoryPort: IMemoryPort
   ) {}
 
   /**
@@ -59,13 +59,13 @@ export class ImportMemoryAgent implements IAgent {
 
       const memories = importData.memories;
 
-      // 3. ✅ 导入记忆（直接调用EpisodicMemory.record）
+      // 3. ✅ 通过IMemoryPort端口导入记忆
       let importedCount = 0;
       let skippedCount = 0;
 
       for (const mem of memories) {
         try {
-          await this.episodicMemory.record({
+          await this.memoryPort.recordMemory({
             taskType: mem.taskType,
             summary: mem.summary,
             entities: mem.entities || [],

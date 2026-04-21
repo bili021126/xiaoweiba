@@ -19,8 +19,8 @@ export class DiffService {
     modified: string,
     filePath: string
   ): Promise<boolean> {
-    // 生成简化的diff文本
-    const diffText = this.generateSimpleDiff(original, modified);
+    // ✅ 生成简化的diff文本（用于日志或未来扩展）
+    this.generateSimpleDiff(original, modified);
     
     // 使用QuickPick展示差异并让用户确认
     const choice = await vscode.window.showQuickPick(

@@ -51,6 +51,18 @@ import { LENGTH_LIMITS } from './constants';
 
 // Phase 2: 导入新架构组件
 import { IntentDispatcher } from './core/application/IntentDispatcher';
+import { ContextEnricher } from './core/application/ContextEnricher';
+import { SessionCompressor } from './core/application/SessionCompressor';
+import { SessionContextManager } from './core/application/SessionContextManager'; // ✅ L1: 新增
+import { MemorySummaryGenerator } from './core/application/MemorySummaryGenerator'; // ✅ 瘦身：抽离摘要生成
+import { IntentTypeMapper } from './core/application/IntentTypeMapper'; // ✅ 瘦身：抽离类型映射
+import { SpecializedRetriever } from './core/application/SpecializedRetriever'; // ✅ 瘦身：抽离专门检索
+import { MemoryEventSubscriber } from './core/application/MemoryEventSubscriber'; // ✅ 瘦身：抽离事件订阅
+import { FeedbackRecorder } from './core/application/FeedbackRecorder'; // ✅ 瘦身：抽离反馈记录
+import { LocalMemoryStorage } from './infrastructure/adapters/LocalMemoryStorage'; // ✅ 新增：存储适配器
+import { SessionManager } from './core/application/SessionManager'; // ✅ 瘦身：抽离会话管理
+import { MemoryRecommender } from './core/application/MemoryRecommender'; // ✅ 瘦身：抽离推荐逻辑
+import { MemoryExporter } from './core/application/MemoryExporter'; // ✅ 瘦身：抽离导出/导入
 import { MessageFlowManager } from './core/application/MessageFlowManager';  // ✅ 新增
 import { AgentRunner } from './infrastructure/agent/AgentRunner';
 import { AgentRegistryImpl } from './infrastructure/agent/AgentRegistryImpl';  // ✅ 更新路径
@@ -71,6 +83,15 @@ import { ExportMemoryAgent } from './agents/ExportMemoryAgent';
 import { ImportMemoryAgent } from './agents/ImportMemoryAgent';
 import { ChatAgent } from './agents/ChatAgent';  // ✅ 新增
 import { InlineCompletionAgent } from './agents/InlineCompletionAgent';  // ✅ 新增：行内补全Agent
+import { PromptComposer } from './core/application/PromptComposer'; // ✅ L1: 提示词编排器
+import { EmbeddingService } from './core/application/EmbeddingService'; // ✅ L2: 嵌入服务
+import { VectorEngine } from './core/application/VectorEngine'; // ✅ L2: 向量引擎
+import { VectorIndexManager } from './core/application/VectorIndexManager'; // ✅ L2: 向量索引管理器
+import { SemanticRetriever } from './core/application/SemanticRetriever'; // ✅ L2: 语义检索器
+import { QueryExecutor } from './core/application/QueryExecutor'; // ✅ L2.5: 查询执行器
+import { WeightCalculator } from './core/application/WeightCalculator'; // ✅ L2.5: 权重计算器
+import { IndexSyncService } from './core/application/IndexSyncService'; // ✅ L2.5: 索引同步服务
+import { HybridRetriever } from './core/application/HybridRetriever'; // ✅ L2: 混合检索器
 import { SessionManagementAgent } from './agents/SessionManagementAgent';  // ✅ 新增：会话管理Agent
 import { CommitStyleLearner } from './core/memory/CommitStyleLearner';  // ✅ 保留：MemoryAdapter需要
 import { EpisodicMemory } from './core/memory/EpisodicMemory';
@@ -137,12 +158,48 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     memorySystem = container.resolve(MemorySystem);
     llmTool = container.resolve(LLMTool);
     
+    // ✅ L2: 注册 L2 核心组件
+    const embeddingService = container.resolve(EmbeddingService);
+    const vectorIndexManager = container.resolve(VectorIndexManager);
+    const semanticRetriever = container.resolve(SemanticRetriever);
+    
+    // ✅ L2.5: 注册深度拆分组件
+    const queryExecutor = container.resolve(QueryExecutor);
+    const weightCalculator = container.resolve(WeightCalculator);
+    
     // ✅ P1-03: 创建ProjectFingerprint实例
     const projectFingerprint = new ProjectFingerprint();
     
     // ✅ 创建MemoryAdapter并注册为IMemoryPort
     const eventBusAdapter = new EventBusAdapter(legacyEventBus);
-    memoryAdapter = new MemoryAdapter(episodicMemory, preferenceMemory, commitStyleLearner, eventBusAdapter, databaseManager, projectFingerprint);
+    const sessionCompressor = container.resolve(SessionCompressor);
+    const sessionContextManager = container.resolve(SessionContextManager); // ✅ L1: 新增
+    // ✅ 核心架构升级：注册 IMemoryStorage 端口
+    const localStorage = new LocalMemoryStorage(episodicMemory, preferenceMemory);
+    container.register('IMemoryStorage', { useValue: localStorage });
+
+    // 实例化记忆适配器（现在只依赖 IMemoryStorage 端口）
+    const sessionManager = container.resolve(SessionManager); // ✅ 瘦身：新增
+    const specializedRetriever = container.resolve(SpecializedRetriever); // ✅ 瘦身：新增
+    const summaryGenerator = container.resolve(MemorySummaryGenerator); // ✅ 瘦身：新增
+    const typeMapper = container.resolve(IntentTypeMapper); // ✅ 瘦身：新增
+    const eventSubscriber = container.resolve(MemoryEventSubscriber); // ✅ 瘦身：新增
+    const feedbackRecorder = container.resolve(FeedbackRecorder); // ✅ 瘦身：新增
+    const memoryRecommender = container.resolve(MemoryRecommender); // ✅ 瘦身：新增
+    const memoryExporter = container.resolve(MemoryExporter); // ✅ 瘦身：新增
+    
+    memoryAdapter = new MemoryAdapter(
+      localStorage, // ✅ 核心变化：注入存储端口
+      sessionManager,
+      specializedRetriever,
+      sessionContextManager,
+      summaryGenerator,
+      typeMapper,
+      eventSubscriber,
+      feedbackRecorder,
+      memoryRecommender,
+      memoryExporter
+    );
     container.register('IMemoryPort', { useValue: memoryAdapter });
     
     // 初始化记忆系统
@@ -172,8 +229,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       agentRegistry.register(agent);
     });
     
+    // ✅ L1: 注册 PromptComposer
+    const promptComposer = container.resolve(PromptComposer);
+    
     // ✅ 额外注册ChatAgent和InlineCompletionAgent
-    const chatAgent = new ChatAgent(llmAdapter, memoryAdapter, eventBusAdapter);
+    const chatAgent = new ChatAgent(llmAdapter, memoryAdapter, eventBusAdapter, promptComposer); // ✅ L1: 注入 PromptComposer
     await chatAgent.initialize();
     agentRegistry.register(chatAgent);
     
@@ -332,6 +392,17 @@ async function initializeContainer(context: vscode.ExtensionContext): Promise<vo
   container.register('IAgentRegistry', { useValue: agentRegistry });
   
   // ⚠️ Agent注册、IntentDispatcher、MessageFlowManager已移至activate()函数的Step 5之后
+
+  // ✅ L1: 注册ContextEnricher和SessionCompressor
+  container.registerSingleton(ContextEnricher);
+  container.registerSingleton(SessionCompressor);
+  container.registerSingleton(VectorEngine); // ✅ L2: 注册向量引擎
+  container.registerSingleton(EmbeddingService); // ✅ L2: 注册嵌入服务
+  container.registerSingleton(QueryExecutor); // ✅ L2.5: 注册查询执行器
+  container.registerSingleton(WeightCalculator); // ✅ L2.5: 注册权重计算器
+  container.registerSingleton(IndexSyncService); // ✅ L2.5: 注册索引同步服务
+  container.registerSingleton(HybridRetriever); // ✅ L2: 注册混合检索器
+  console.log('[Extension] L2 Semantic Retrieval components registered');
 
   // 5. ✅ 初始化 AgentRunner（自动订阅事件）
   const agentRunner = new AgentRunner(eventBusAdapter, agentRegistry, auditLogger);
