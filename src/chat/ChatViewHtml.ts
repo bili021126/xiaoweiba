@@ -122,6 +122,11 @@ export function generateChatViewHtml(webview: vscode.Webview): string {
       opacity: 0;
       transform: translateX(-10px);
       transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      position: relative;
     }
 
     .sidebar:hover .session-item {
@@ -143,7 +148,6 @@ export function generateChatViewHtml(webview: vscode.Webview): string {
     .session-item.active {
       background: var(--vscode-list-activeSelectionBackground);
       color: var(--vscode-list-activeSelectionForeground);
-      position: relative;
     }
 
     .session-item.active::before {
@@ -156,6 +160,40 @@ export function generateChatViewHtml(webview: vscode.Webview): string {
       height: 70%;
       background: var(--vscode-list-activeSelectionForeground);
       border-radius: 0 2px 2px 0;
+    }
+
+    /* ✅ 会话标题文本 */
+    .session-title {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* ✅ 删除按钮（默认隐藏，悬停显示） */
+    .session-delete-btn {
+      opacity: 0;
+      visibility: hidden;
+      padding: 2px 6px;
+      background: transparent;
+      border: none;
+      color: var(--vscode-descriptionForeground);
+      cursor: pointer;
+      font-size: 14px;
+      border-radius: 4px;
+      transition: all 0.15s ease;
+      flex-shrink: 0;
+      line-height: 1;
+    }
+
+    .session-item:hover .session-delete-btn {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .session-delete-btn:hover {
+      background: var(--vscode-inputValidation-errorBackground);
+      color: var(--vscode-inputValidation-errorForeground);
     }
 
     /* ✅ 侧边栏图标（默认显示） */
@@ -901,10 +939,30 @@ export function generateChatViewHtml(webview: vscode.Webview): string {
       sessions.forEach(session => {
         const item = document.createElement('div');
         item.className = 'session-item' + (session.id === currentSessionId ? ' active' : '');
-        item.textContent = session.title || '新会话';
         item.dataset.sessionId = session.id;
-        item.title = session.title || '新会话'; // 添加 tooltip
         
+        // ✅ 创建标题文本
+        const titleSpan = document.createElement('span');
+        titleSpan.className = 'session-title';
+        titleSpan.textContent = session.title || '新会话';
+        titleSpan.title = session.title || '新会话'; // 添加 tooltip
+        
+        // ✅ 创建删除按钮
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'session-delete-btn';
+        deleteBtn.innerHTML = '×';
+        deleteBtn.title = '删除会话';
+        
+        // 阻止删除按钮点击事件冒泡
+        deleteBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          vscode.postMessage({ type: 'deleteSession', sessionId: session.id });
+        });
+        
+        item.appendChild(titleSpan);
+        item.appendChild(deleteBtn);
+        
+        // 点击会话项切换会话
         item.addEventListener('click', () => {
           vscode.postMessage({ type: 'switchSession', sessionId: session.id });
         });
