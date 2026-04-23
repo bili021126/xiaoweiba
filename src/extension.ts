@@ -172,6 +172,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     
     // ✅ 创建MemoryAdapter并注册为IMemoryPort
     const eventBusAdapter = new EventBusAdapter(legacyEventBus);
+    
+    // ✅ 修复：提前初始化 auditLogger，供 MemoryAdapter 使用
+    auditLogger = container.resolve(AuditLogger);
+    
     const sessionCompressor = container.resolve(SessionCompressor);
     const sessionContextManager = container.resolve(SessionContextManager); // ✅ L1: 新增
     // ✅ 核心架构升级：注册 IMemoryStorage 端口
@@ -198,7 +202,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       eventSubscriber,
       feedbackRecorder,
       memoryRecommender,
-      memoryExporter
+      memoryExporter,
+      eventBusAdapter, // ✅ 修复：添加 EventBus
+      auditLogger // ✅ 修复：添加 AuditLogger
     );
     container.register('IMemoryPort', { useValue: memoryAdapter });
     
@@ -243,9 +249,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const sessionAgent = container.resolve(SessionManagementAgent);
     await sessionAgent.initialize();
     agentRegistry.register(sessionAgent);
-
-    // 初始化审计日志
-    auditLogger = container.resolve(AuditLogger);
 
     // ✅ 重构后：ChatViewProvider通过依赖注入创建
     chatViewProvider = container.resolve(ChatViewProvider);

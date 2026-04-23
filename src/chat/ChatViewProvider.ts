@@ -208,10 +208,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       // 5. 调度意图
       await this.intentDispatcher.dispatch(intent);
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('[ChatViewProvider] handleUserInput failed:', errorMessage);
+      
+      // ✅ 修复：发送错误消息并恢复输入框状态
       this.view?.webview.postMessage({
         type: 'showError',
-        error: error instanceof Error ? error.message : String(error)
+        error: errorMessage
       });
+      
+      // ✅ 修复：显式发送 enableInput 消息，防止输入框死锁
+      this.view?.webview.postMessage({ type: 'enableInput' });
     } finally {
       this.view?.webview.postMessage({ type: 'setLoading', loading: false });
     }

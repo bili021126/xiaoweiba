@@ -12,8 +12,10 @@ import { injectable, inject } from 'tsyringe';
 import { IMemoryPort, Recommendation, AgentPerformance } from '../../core/ports/IMemoryPort';
 import { Intent } from '../../core/domain/Intent';
 import { MemoryContext } from '../../core/domain/MemoryContext';
-import { TaskCompletedEvent, FeedbackGivenEvent } from '../../core/events/DomainEvent';
+import { TaskCompletedEvent, FeedbackGivenEvent, SystemErrorEvent } from '../../core/events/DomainEvent'; // ✅ 修复：导入 SystemErrorEvent
+import { IEventBus } from '../../core/ports/IEventBus'; // ✅ 修复：导入 IEventBus
 import { IMemoryStorage } from '../../core/ports/IMemoryStorage'; // ✅ 新增：只依赖存储端口
+import { AuditLogger } from '../../core/security/AuditLogger'; // ✅ 修复：导入 AuditLogger
 import { SessionManager } from '../../core/application/SessionManager';
 import { SpecializedRetriever } from '../../core/application/SpecializedRetriever';
 import { SessionContextManager } from '../../core/application/SessionContextManager';
@@ -36,7 +38,9 @@ export class MemoryAdapter implements IMemoryPort {
     @inject(MemoryEventSubscriber) private eventSubscriber: MemoryEventSubscriber,
     @inject(FeedbackRecorder) private feedbackRecorder: FeedbackRecorder,
     @inject(MemoryRecommender) private memoryRecommender: MemoryRecommender,
-    @inject(MemoryExporter) private memoryExporter: MemoryExporter
+    @inject(MemoryExporter) private memoryExporter: MemoryExporter,
+    @inject('IEventBus') private eventBus: IEventBus, // ✅ 修复：注入 EventBus
+    @inject(AuditLogger) private auditLogger: AuditLogger // ✅ 修复：注入 AuditLogger
   ) {
     this.subscribeToEvents();
   }
@@ -213,8 +217,27 @@ export class MemoryAdapter implements IMemoryPort {
         }
       });
     } catch (error) {
-      console.error('[MemoryAdapter] recordTaskCompletion failed:', error);
-      throw error;
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('[MemoryAdapter] recordTaskCompletion failed:', errorMessage);
+      
+      // ✅ 修复：发布 SystemErrorEvent，通知用户记忆记录失败
+      this.eventBus.publish(new SystemErrorEvent(
+        'MemoryAdapter',
+        'recordTaskCompletion',
+        errorMessage
+      ));
+      
+      // ✅ 修复：记录审计日志（用于调试和监控）
+      await this.auditLogger.log('memory_record', 'failure', 0, {
+        parameters: {
+          error: errorMessage,
+          agentId: event.agentId,
+          intentName: event.intent.name
+        }
+      });
+      
+      // 不再重新抛出异常，避免影响主流程
+      // throw error;
     }
   }
 
