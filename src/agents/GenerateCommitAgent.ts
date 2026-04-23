@@ -58,6 +58,7 @@ export class GenerateCommitAgent implements IAgent {
 
       // 2. 获取 Git diff
       let commitMessage = ''; // ✅ P1-04: 提升作用域
+      let diff = ''; // ✅ 修复 #P3: 提升作用域
       
       await vscode.window.withProgress({
         location: vscode.ProgressLocation.Notification,
@@ -66,7 +67,7 @@ export class GenerateCommitAgent implements IAgent {
       }, async (progress) => {
         progress.report({ message: '📊 分析代码变更...', increment: 10 });
 
-        const diff = await this.getGitDiff(workspacePath);
+        diff = await this.getGitDiff(workspacePath);
         
         if (!diff || diff.trim().length === 0) {
           vscode.window.showInformationMessage('✅ 没有检测到代码变更');
@@ -97,6 +98,9 @@ export class GenerateCommitAgent implements IAgent {
 
       const durationMs = Date.now() - startTime;
 
+      // ✅ 修复 #P3: 从 diff 中解析实际的文件名
+      const changedFiles = diff.match(/diff --git a\/(.+?) b\//g)?.map(s => s.split('a/')[1]?.split(' b/')[0]) || [];
+
       return { 
         success: true, 
         durationMs,
@@ -109,7 +113,7 @@ export class GenerateCommitAgent implements IAgent {
         memoryMetadata: {
           taskType: 'COMMIT_GENERATE',
           summary: `生成并应用了Git提交信息：${commitMessage.substring(0, 50)}`,
-          entities: ['Git', 'Commit'],
+          entities: changedFiles.length > 0 ? changedFiles : ['Git', 'Commit'], // ✅ 使用实际变更文件
           outcome: 'SUCCESS'
         }
       };

@@ -14,6 +14,7 @@ import { Intent } from '../core/domain/Intent';
 import { MemoryContext } from '../core/domain/MemoryContext';
 import { ILLMPort } from '../core/ports/ILLMPort';
 import { IMemoryPort } from '../core/ports/IMemoryPort';
+import { DiffService } from '../tools/DiffService'; // ✅ 引入 DiffService
 
 @injectable()
 export class CodeGenerationAgent implements IAgent {
@@ -35,6 +36,7 @@ export class CodeGenerationAgent implements IAgent {
   }): Promise<AgentResult> {
     const startTime = Date.now();
     const { intent, memoryContext } = params;
+    const editor = vscode.window.activeTextEditor;
 
     try {
       // 1. 获取用户输入（从intent或弹出输入框）
@@ -52,6 +54,7 @@ export class CodeGenerationAgent implements IAgent {
       }
 
       // 2. 显示进度提示
+      let generatedCode = '';
       await vscode.window.withProgress({
         location: vscode.ProgressLocation.Notification,
         title: '正在生成代码...',
@@ -60,13 +63,27 @@ export class CodeGenerationAgent implements IAgent {
         progress.report({ message: '分析需求...' });
 
         // 3. 调用 LLM 生成代码（注入记忆上下文）
-        const generatedCode = await this.generateCode(userInput, memoryContext);
+        generatedCode = await this.generateCode(userInput, memoryContext);
         
         progress.report({ message: '生成完成' });
-
-        // 4. 在编辑器中插入或展示代码
-        await this.insertOrShowCode(generatedCode);
       });
+
+      // 4. ✅ 修复 #P2: 插入代码前调用 DiffService 确认
+      if (editor && generatedCode) {
+        const originalContent = editor.document.getText(editor.selection);
+        const diffService = new DiffService();
+        const confirmed = await diffService.confirmChangeWithWebview(
+          originalContent || '// 新代码',
+          generatedCode,
+          editor.document.uri.fsPath
+        );
+
+        if (confirmed) {
+          await editor.edit(editBuilder => {
+            editBuilder.replace(editor.selection, generatedCode);
+          });
+        }
+      }
 
       const durationMs = Date.now() - startTime;
 
@@ -77,7 +94,13 @@ export class CodeGenerationAgent implements IAgent {
           userInput,
           generatedCode: 'Generated'
         },
-        modelId: this.llmPort.getModelId()
+        modelId: this.llmPort.getModelId(),
+        memoryMetadata: { // ✅ 修复 #P2: 顶层元数据
+          taskType: 'CODE_GENERATION',
+          summary: `生成了代码：${userInput.substring(0, 50)}`,
+          entities: [userInput],
+          outcome: 'SUCCESS'
+        }
       };
 
     } catch (error) {

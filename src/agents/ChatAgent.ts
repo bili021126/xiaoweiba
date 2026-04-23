@@ -7,6 +7,7 @@ import { Intent } from '../core/domain/Intent';
 import { AssistantResponseEvent, StreamChunkEvent } from '../core/events/DomainEvent';
 import { injectable, inject } from 'tsyringe';
 import { PromptComposer } from '../core/application/PromptComposer'; // ✅ L1: 引入提示词编排器
+import { DialogManager } from '../chat/DialogManager'; // ✅ P2: 引入对话管理器
 
 /**
  * 聊天Agent实现
@@ -32,7 +33,8 @@ export class ChatAgent implements IAgent {
     @inject('ILLMPort') private llmPort: ILLMPort,  // ✅ 使用端口接口
     @inject('IMemoryPort') private memoryPort: IMemoryPort,  // ✅ 使用端口接口
     @inject('IEventBus') private eventBus: IEventBus,  // ✅ 注入全局单例
-    @inject(PromptComposer) private promptComposer: PromptComposer // ✅ L1: 注入提示词编排器
+    @inject(PromptComposer) private promptComposer: PromptComposer, // ✅ L1: 注入提示词编排器
+    private dialogManager: DialogManager = new DialogManager() // ✅ P2: 初始化对话管理器
   ) {}
 
   async initialize(): Promise<void> {
@@ -192,33 +194,16 @@ export class ChatAgent implements IAgent {
   }
 
   /**
-   * ✅ P1-02: 判断是否应该记录记忆
+   * ✅ P1-02: 判断是否应该记录记忆（✅ 修复 #P2：引入复杂度评估）
    */
   private shouldRecordMemory(intent: Intent, userMessage: string, assistantResponse: string): boolean {
-    // 非chat意图（如explain_code）总是记录
-    if (intent.name !== 'chat') {
-      return true;
-    }
-
-    // chat意图：检查是否有意义
-    // 1. 消息长度足够（至少10个字符）
-    if (userMessage.length < 10) {
-      return false;
-    }
-
-    // 2. 不是简单的问候语
-    const greetings = ['你好', 'hello', 'hi', 'hey', '早上好', '晚上好', '再见', 'bye'];
-    const isGreeting = greetings.some(g => userMessage.toLowerCase().includes(g));
-    if (isGreeting && userMessage.length < 20) {
-      return false;
-    }
-
-    // 3. 助手回复有实质内容（至少50个字符）
-    if (assistantResponse.length < 50) {
-      return false;
-    }
-
-    return true;
+    if (intent.name !== 'chat') return true;
+    
+    // 使用 DialogManager 的复杂度评估替代简单规则
+    const { complexity } = this.dialogManager.assessComplexity(userMessage);
+    
+    // 复杂度 > 0.3 或回复长度 > 80 时记录
+    return complexity > 0.3 || assistantResponse.length > 80;
   }
 
   /**

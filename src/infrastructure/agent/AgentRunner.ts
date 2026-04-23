@@ -11,6 +11,7 @@
 import { injectable, inject } from 'tsyringe';
 import { IEventBus } from '../../core/ports/IEventBus';
 import { IAgentRegistry } from '../../core/ports/IAgentRegistry';
+import { IMemoryPort } from '../../core/ports/IMemoryPort'; // ✅ 修复 #P3: 引入内存端口
 import { 
   AgentSelectedEvent, 
   TaskCompletedEvent, 
@@ -28,8 +29,8 @@ export class AgentRunner {
   constructor(
     @inject('IEventBus') private eventBus: IEventBus,
     @inject('IAgentRegistry') private agentRegistry: IAgentRegistry,
-    @inject(AuditLogger) private auditLogger: AuditLogger
-    // ✅ 移除IMemoryPort依赖，让MemoryAdapter通过订阅事件来处理
+    @inject(AuditLogger) private auditLogger: AuditLogger,
+    @inject('IMemoryPort') private memoryPort: IMemoryPort // ✅ 修复 #P3: 注入内存端口
   ) {
     this.subscribeToEvents();
   }
@@ -110,6 +111,9 @@ export class AgentRunner {
 
       // ✅ P1-04: 生成 actionId（用于记忆追踪）
       const actionId = `action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      // ✅ 修复 #P3: 记录 Agent 执行性能
+      await this.memoryPort.recordAgentExecution(agent.id, intent.name, true, durationMs);
 
       // 4. ✅ 只发布事件，让 MemoryAdapter 订阅处理（解耦）
       this.eventBus.publish(new TaskCompletedEvent(

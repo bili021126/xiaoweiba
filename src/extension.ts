@@ -394,7 +394,7 @@ async function initializeContainer(context: vscode.ExtensionContext): Promise<vo
   console.log('[Extension] L2 Semantic Retrieval components registered');
 
   // 5. ✅ 初始化 AgentRunner（自动订阅事件）
-  const agentRunner = new AgentRunner(eventBusAdapter, agentRegistry, auditLogger);
+  const agentRunner = new AgentRunner(eventBusAdapter, agentRegistry, auditLogger, memoryAdapter!);
   container.registerInstance(AgentRunner, agentRunner);
   console.log('[Extension] AgentRunner initialized (auto-subscribed to events)');
   
