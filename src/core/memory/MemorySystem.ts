@@ -517,6 +517,13 @@ export class MemorySystem {
    * 清理资源
    */
   async dispose(): Promise<void> {
+    // ✅ 修复 #41：清理定时器，防止内存泄漏
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = null;
+      console.log('[MemorySystem] Cleanup timer stopped');
+    }
+    
     await this.episodicMemory.dispose();
     console.log('[MemorySystem] Disposed');
   }
