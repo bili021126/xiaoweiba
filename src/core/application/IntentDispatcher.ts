@@ -29,11 +29,10 @@ import { TaskTokenManager } from '../security/TaskTokenManager'; // ✅ 修复 #
 export class IntentDispatcher {
   // ✅ 修复 #28：定义需要写权限的意图列表
   private readonly WRITE_INTENTS = new Set([
-    'generate_commit',     // Git 提交
-    'generate_code',       // 代码生成（可能写入文件）
-    'check_naming',        // 命名检查（可能重命名）
+    'generate_commit',     // Git 提交（执行 git commit）
     'export_memory',       // 导出记忆（写文件）
     'import_memory'        // 导入记忆（写数据库）
+    // 注意：generate_code 和 check_naming 仅提供建议，不直接执行写操作
   ]);
 
   constructor(
