@@ -88,6 +88,7 @@ import { IndexSyncService } from './core/application/IndexSyncService'; // ✅ L
 import { HybridRetriever } from './core/application/HybridRetriever'; // ✅ L2: 混合检索器
 import { SessionManagementAgent } from './agents/SessionManagementAgent';  // ✅ 新增：会话管理Agent
 import { CommitStyleLearner } from './core/memory/CommitStyleLearner';  // ✅ 保留：MemoryAdapter需要
+import { TaskTokenManager } from './core/security/TaskTokenManager'; // ✅ 修复 #28：引入 TaskTokenManager
 import { EpisodicMemory } from './core/memory/EpisodicMemory';
 import { PreferenceMemory } from './core/memory/PreferenceMemory';
 import { MemorySystem } from './core/memory/MemorySystem';
@@ -147,7 +148,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // Step 4: 初始化核心服务
     episodicMemory = container.resolve(EpisodicMemory);
     preferenceMemory = container.resolve(PreferenceMemory);
-    const commitStyleLearner = container.resolve(CommitStyleLearner);
     legacyEventBus = container.resolve(EventBus);  // ✅ 使用legacyEventBus
     memorySystem = container.resolve(MemorySystem);
     llmTool = container.resolve(LLMTool);
@@ -202,6 +202,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     );
     container.register('IMemoryPort', { useValue: memoryAdapter });
     
+    // ✅ 注册 CommitStyleLearner
+    const commitStyleLearner = container.resolve(CommitStyleLearner);
+    container.registerInstance(CommitStyleLearner, commitStyleLearner);
+    console.log('[Extension] CommitStyleLearner registered');
+
+    // ✅ 注册 TaskTokenManager
+    const taskTokenManager = new TaskTokenManager();
+    container.registerInstance(TaskTokenManager, taskTokenManager);
+    console.log('[Extension] TaskTokenManager registered');
+
     // 初始化记忆系统
     await memorySystem.initialize();
 

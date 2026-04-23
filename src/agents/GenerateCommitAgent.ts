@@ -20,6 +20,8 @@ import { IMemoryPort } from '../core/ports/IMemoryPort';
 import { IEventBus } from '../core/ports/IEventBus'; // ✅ P1-04: 引入事件总线
 import { AssistantResponseEvent } from '../core/events/DomainEvent'; // ✅ P1-04: 引入响应事件
 import { TaskTokenManager } from '../core/security/TaskTokenManager'; // ✅ 修复 #28：引入 TaskTokenManager
+import { CommitStyleLearner } from '../core/memory/CommitStyleLearner'; // ✅ 增强 #1：引入风格学习器
+import { DiffService } from '../tools/DiffService'; // ✅ 增强 #3：引入 DiffService
 
 const execAsync = promisify(exec);
 
@@ -33,7 +35,8 @@ export class GenerateCommitAgent implements IAgent {
     @inject('ILLMPort') private llmPort: ILLMPort,
     @inject('IMemoryPort') private memoryPort: IMemoryPort,
     @inject('IEventBus') private eventBus: IEventBus, // ✅ P1-04: 注入事件总线
-    @inject(TaskTokenManager) private taskTokenManager: TaskTokenManager // ✅ 修复 #28：注入 TaskTokenManager
+    @inject(TaskTokenManager) private taskTokenManager: TaskTokenManager, // ✅ 修复 #28：注入 TaskTokenManager
+    @inject(CommitStyleLearner) private styleLearner: CommitStyleLearner // ✅ 增强 #1：注入风格学习器
   ) {}
 
   /**
@@ -74,10 +77,30 @@ export class GenerateCommitAgent implements IAgent {
           return;
         }
 
-        progress.report({ message: '🧠 检索历史记忆...', increment: 20 });
+        progress.report({ message: '🧠 学习提交风格...', increment: 20 });
 
-        // 3. 调用 LLM 生成提交信息（注入记忆上下文）
-        commitMessage = await this.generateCommitMessage(diff, memoryContext);
+        // ✅ 增强 #1: 学习用户历史提交风格
+        const stylePreferences = await this.styleLearner.learnFromHistory();
+        
+        progress.report({ message: '✨ 生成提交信息...', increment: 40 });
+
+        // 3. 调用 LLM 生成提交信息（注入记忆上下文 + 风格偏好）
+        commitMessage = await this.generateCommitMessage(diff, memoryContext, stylePreferences);
+        
+        progress.report({ message: '⏳ 等待确认...', increment: 60 });
+
+        // ✅ 增强 #3: 交互式确认与编辑
+        const diffService = new DiffService();
+        const confirmed = await diffService.confirmChangeWithWebview(
+          '当前生成的提交信息：',
+          commitMessage,
+          workspacePath
+        );
+
+        if (!confirmed) {
+          vscode.window.showInformationMessage('❌ 已取消提交');
+          return;
+        }
         
         progress.report({ message: '✨ 应用提交信息...', increment: 80 });
 
@@ -166,7 +189,13 @@ export class GenerateCommitAgent implements IAgent {
   /**
    * 生成提交信息
    */
-  private async generateCommitMessage(diff: string, context: MemoryContext): Promise<string> {
+  private async generateCommitMessage(diff: string, context: MemoryContext, stylePreferences?: any): Promise<string> {
+    // ✅ 增强 #1: 注入风格偏好
+    let styleHint = '';
+    if (stylePreferences) {
+      styleHint = `\n\n用户提交风格偏好：\n- 常用类型: ${stylePreferences.commonTypes?.join(', ') || 'feat, fix'}\n- 描述长度: ${stylePreferences.descriptionLength || '简短'}`;
+    }
+
     // 添加相关记忆到Prompt
     let memoryHint = '';
     if (context.episodicMemories && context.episodicMemories.length > 0) {
