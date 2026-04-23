@@ -9,7 +9,7 @@ import { container } from 'tsyringe';
 import 'reflect-metadata';
 
 // 动态导入编译后的模块
-let GenerateCommitCommand: any;
+let GenerateCommitAgent: any;
 let LLMTool: any;
 let EpisodicMemory: any;
 let PreferenceMemory: any;
@@ -17,9 +17,10 @@ let AuditLogger: any;
 let ConfigManager: any;
 let DatabaseManager: any;
 let TaskToken: any;
+let CommitStyleLearner: any;
 
 suite('提交生成全链路集成测试', () => {
-  let generateCommitCommand: any;
+  let generateCommitAgent: any;
   let llmTool: any;
   let episodicMemory: any;
   let preferenceMemory: any;
@@ -41,7 +42,8 @@ suite('提交生成全链路集成测试', () => {
     const PreferenceMemoryModule = require(path.join(outPath, 'core/memory/PreferenceMemory'));
     const LLMToolModule = require(path.join(outPath, 'tools/LLMTool'));
     const TaskTokenModule = require(path.join(outPath, 'core/security/TaskToken'));
-    const GenerateCommitCommandModule = require(path.join(outPath, 'commands/GenerateCommitCommand'));
+    const GenerateCommitAgentModule = require(path.join(outPath, 'agents/GenerateCommitAgent'));
+    const CommitStyleLearnerModule = require(path.join(outPath, 'core/memory/CommitStyleLearner'));
     
     ConfigManager = ConfigManagerModule.ConfigManager;
     DatabaseManager = DatabaseManagerModule.DatabaseManager;
@@ -50,7 +52,8 @@ suite('提交生成全链路集成测试', () => {
     PreferenceMemory = PreferenceMemoryModule.PreferenceMemory;
     LLMTool = LLMToolModule.LLMTool;
     TaskToken = TaskTokenModule.TaskTokenManager;
-    GenerateCommitCommand = GenerateCommitCommandModule.GenerateCommitCommand;
+    GenerateCommitAgent = GenerateCommitAgentModule.GenerateCommitAgent;
+    CommitStyleLearner = CommitStyleLearnerModule.CommitStyleLearner;
 
     // 清除容器中的旧实例
     container.clearInstances();
@@ -149,17 +152,32 @@ suite('提交生成全链路集成测试', () => {
     taskTokenManager = new TaskToken(auditLogger);
     container.registerInstance('TaskTokenManager', taskTokenManager);
     
-    // 初始化提交生成命令
-    generateCommitCommand = new GenerateCommitCommand(
+    // ✅ 初始化 CommitStyleLearner
+    const styleLearner = new CommitStyleLearner(episodicMemory);
+    container.registerInstance('CommitStyleLearner', styleLearner);
+    
+    // ✅ 初始化 Mock EventBus
+    const mockEventBus = {
+      publish: () => {},
+      subscribe: () => () => {},
+      unsubscribe: () => {}
+    };
+    container.registerInstance('IEventBus', mockEventBus);
+    
+    // ✅ 初始化 GenerateCommitAgent
+    generateCommitAgent = new GenerateCommitAgent(
       llmTool,
       episodicMemory,
-      auditLogger
+      mockEventBus,
+      taskTokenManager,
+      styleLearner
     );
   });
 
   test('应该完成提交生成的完整流程初始化', async () => {
     // 验证所有依赖已正确注入
-    assert.ok(generateCommitCommand, 'GenerateCommitCommand应成功初始化');
+    assert.ok(generateCommitAgent, 'GenerateCommitAgent应成功初始化');
+    assert.strictEqual(generateCommitAgent.id, 'generate-commit-agent', 'Agent ID应匹配');
     assert.ok(llmTool, 'LLMTool应成功初始化');
     assert.ok(episodicMemory, 'EpisodicMemory应成功初始化');
     assert.ok(preferenceMemory, 'PreferenceMemory应成功初始化');
