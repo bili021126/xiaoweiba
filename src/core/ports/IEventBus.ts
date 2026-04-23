@@ -4,7 +4,7 @@
  * 设计原则：
  * 1. 应用层只依赖此接口，不依赖具体实现
  * 2. 基础设施层提供EventBus实现
- * 3. 支持发布/订阅模式和请求/响应模式
+ * 3. 仅支持发布/订阅模式（请求-响应模式应通过专用服务实现）
  */
 
 import { DomainEvent } from '../events/DomainEvent';
@@ -15,17 +15,11 @@ import { DomainEvent } from '../events/DomainEvent';
 export type EventHandler<T extends DomainEvent = DomainEvent> = (event: T) => void | Promise<void>;
 
 /**
- * 请求处理器类型（用于请求-响应模式）
- */
-export type RequestHandler<TPayload, TResult> = (payload: TPayload) => TResult | Promise<TResult>;
-
-/**
  * 事件总线端口接口
  * 
  * 职责：
  * 1. 发布领域事件
  * 2. 订阅领域事件
- * 3. 请求-响应模式（可选）
  */
 export interface IEventBus {
   /**
@@ -41,24 +35,6 @@ export interface IEventBus {
    * @returns 取消订阅函数
    */
   subscribe<T extends DomainEvent>(eventType: string, handler: EventHandler<T>): () => void;
-
-  /**
-   * 注册请求处理器（用于请求-响应模式）
-   * @param requestType 请求类型
-   * @param handler 请求处理器
-   */
-  registerRequestHandler<TPayload, TResult>(
-    requestType: string,
-    handler: RequestHandler<TPayload, TResult>
-  ): void;
-
-  /**
-   * 发送请求并等待响应
-   * @param requestType 请求类型
-   * @param payload 请求载荷
-   * @returns 响应结果
-   */
-  request<TPayload, TResult>(requestType: string, payload: TPayload): Promise<TResult>;
 
   /**
    * 清理所有订阅和处理器

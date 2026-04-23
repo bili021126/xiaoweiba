@@ -52,8 +52,6 @@ const mockAgentRegistry: jest.Mocked<IAgentRegistry> = {
 const mockEventBus: jest.Mocked<IEventBus> = {
   publish: jest.fn(),
   subscribe: jest.fn(),
-  registerRequestHandler: jest.fn(),
-  request: jest.fn(),
   dispose: jest.fn()
 };
 

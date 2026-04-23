@@ -121,20 +121,15 @@ export class LLMAdapter implements ILLMPort {
       let modelId = options.modelId;
 
       // 调用 LLMTool 的流式方法
-      await this.llmTool.callStream(
+      const result = await this.llmTool.callStream(
         {
           messages,
           model: options.modelId,
           temperature: options.temperature,
           maxTokens: options.maxTokens
         },
-        async (chunk: string, info?: any) => {
+        async (chunk: string) => {
           fullText += chunk;
-          
-          if (info?.model) {
-            modelId = info.model;
-          }
-
           // 转发chunk到回调
           await onChunk(chunk);
         }
@@ -142,10 +137,21 @@ export class LLMAdapter implements ILLMPort {
 
       const durationMs = Date.now() - startTime;
 
+      // ✅ 修复：检查底层调用是否成功
+      if (!result.success) {
+        console.error('[LLMAdapter] callStream underlying call failed:', result.error);
+        return {
+          success: false,
+          error: result.error,
+          durationMs,
+          modelId: options.modelId
+        };
+      }
+
       return {
         success: true,
         durationMs,
-        modelId
+        modelId: (result as any).model || options.modelId
       };
     } catch (error) {
       const durationMs = Date.now() - startTime;
