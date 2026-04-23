@@ -41,11 +41,12 @@ describe('SessionCompressor E2E测试', () => {
       initialize: jest.fn().mockResolvedValue(undefined)
     } as any;
 
-    // 注入依赖
+    // ✅ 统一使用容器解析：先注册依赖，再从容器解析
     container.registerInstance('ILLMPort', mockLLMPort);
     container.registerInstance(ConfigManager, mockConfigManager);
+    container.registerSingleton(SessionCompressor); // 注册SessionCompressor为单例
 
-    sessionCompressor = new SessionCompressor(mockLLMPort, mockConfigManager);
+    sessionCompressor = container.resolve(SessionCompressor); // 从容器解析
   });
 
   afterEach(() => {
@@ -141,10 +142,13 @@ describe('SessionCompressor E2E测试', () => {
           : `助手回答 ${Math.floor(i / 2) + 1}: 可以通过方法Y实现`
       }));
 
-      // Mock LLM成功返回
+      // Mock LLM成功返回（✅ 修复：返回JSON格式）
       mockLLMPort.call.mockResolvedValueOnce({
         success: true,
-        text: '用户询问了多个功能实现问题，助手提供了技术方案建议。',
+        text: JSON.stringify({
+          summary: '用户询问了多个功能实现问题，助手提供了技术方案建议。',
+          newKeyDecisions: ['选择方案A']
+        }),
         usage: { promptTokens: 100, completionTokens: 50, totalTokens: 100+50 }
       });
 
@@ -282,10 +286,13 @@ describe('SessionCompressor E2E测试', () => {
         { role: 'assistant', content: '很高兴能帮助到你！' }
       ];
 
-      // Mock LLM返回
+      // Mock LLM返回（✅ 修复：返回JSON格式）
       mockLLMPort.call.mockResolvedValueOnce({
         success: true,
-        text: '用户请求解释和优化Python代码，助手提供了详细的解释和改进建议，包括类型注解和文档字符串。',
+        text: JSON.stringify({
+          summary: '用户请求解释和优化Python代码，助手提供了详细的解释和改进建议，包括类型注解和文档字符串。',
+          newKeyDecisions: []
+        }),
         usage: { promptTokens: 150, completionTokens: 80, totalTokens: 150+80 }
       });
 
@@ -311,7 +318,7 @@ describe('SessionCompressor E2E测试', () => {
 
       mockLLMPort.call.mockResolvedValue({
         success: true,
-        text: '历史对话摘要',
+        text: JSON.stringify({ summary: '历史对话摘要', newKeyDecisions: [] }), // ✅ 修复：JSON格式
         usage: { promptTokens: 100, completionTokens: 50, totalTokens: 100+50 }
       });
 
@@ -332,7 +339,7 @@ describe('SessionCompressor E2E测试', () => {
 
       mockLLMPort.call.mockResolvedValue({
         success: true,
-        text: '摘要',
+        text: JSON.stringify({ summary: '摘要', newKeyDecisions: [] }), // ✅ 修复：JSON格式
         usage: { promptTokens: 100, completionTokens: 50, totalTokens: 100+50 }
       });
 

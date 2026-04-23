@@ -62,7 +62,7 @@ describe('L1集成E2E测试', () => {
   describe('场景1: Intent完整流转 - 从创建到上下文注入', () => {
     it('应该完成完整的Intent生命周期', async () => {
       // 1. 创建Intent
-      const intent = IntentFactory.buildChatIntent('解释这段代码');
+      const intent = await IntentFactory.buildChatIntent('解释这段代码'); // ✅ 修复：添加await
       
       expect(intent.name).toBe('chat');
       expect(intent.userInput).toBe('解释这段代码');
@@ -113,7 +113,7 @@ describe('L1集成E2E测试', () => {
       // Mock LLM返回摘要
       mockLLMPort.call.mockResolvedValueOnce({
         success: true,
-        text: '用户和助手进行了多轮代码相关讨论',
+        text: JSON.stringify({ summary: '用户和助手进行了多轮代码相关讨论', newKeyDecisions: [] }), // ✅ 修复
         usage: { promptTokens: 200, completionTokens: 100, totalTokens: 200+100 }
       });
 
@@ -147,7 +147,7 @@ describe('L1集成E2E测试', () => {
 
       mockLLMPort.call.mockResolvedValueOnce({
         success: true,
-        text: '用户询问数组排序方法、时间复杂度和优化建议，助手提供了详细解答和代码示例。',
+        text: JSON.stringify({ summary: '用户询问数组排序方法、时间复杂度和优化建议，助手提供了详细解答和代码示例。', newKeyDecisions: [] }), // ✅ 修复
         usage: { promptTokens: 180, completionTokens: 90, totalTokens: 180+90 }
       });
 
@@ -180,7 +180,7 @@ describe('L1集成E2E测试', () => {
       };
 
       // 步骤2: 用户发起询问
-      const intent = IntentFactory.buildChatIntent('解释这段代码的作用');
+      const intent = await IntentFactory.buildChatIntent('解释这段代码的作用'); // ✅ 修复：添加await
       
       // 步骤3: 手动注入模拟的上下文（因为测试环境没有激活编辑器）
       (intent.metadata as any).enrichedContext = mockContext;
@@ -220,7 +220,7 @@ describe('L1集成E2E测试', () => {
 
       mockLLMPort.call.mockResolvedValueOnce({
         success: true,
-        text: '用户咨询函数内存泄漏问题并获得修复方案，随后讨论了性能优化和线程安全性改造方案。',
+        text: JSON.stringify({ summary: '用户咨询函数内存泄漏问题并获得修复方案，随后讨论了性能优化和线程安全性改造方案。', newKeyDecisions: [] }), // ✅ 修复
         usage: { promptTokens: 250, completionTokens: 120, totalTokens: 250+120 }
       });
 
@@ -239,7 +239,7 @@ describe('L1集成E2E测试', () => {
 
   describe('场景4: 错误处理与降级', () => {
     it('应该在ContextEnricher失败时不影响Intent流转', async () => {
-      const intent = IntentFactory.buildChatIntent('你好');
+      const intent = await IntentFactory.buildChatIntent('你好'); // ✅ 修复：添加await
       
       // 即使没有激活编辑器（capture返回undefined），Intent也应该正常
       const enrichedIntent = await contextEnricher.enrichIntent(intent);
@@ -290,8 +290,8 @@ describe('L1集成E2E测试', () => {
 
   describe('场景5: 数据一致性验证', () => {
     it('应该在多次操作中保持数据一致性', async () => {
-      const intent1 = IntentFactory.buildChatIntent('第一个问题');
-      const intent2 = IntentFactory.buildChatIntent('第二个问题');
+      const intent1 = await IntentFactory.buildChatIntent('第一个问题'); // ✅ 修复：添加await
+      const intent2 = await IntentFactory.buildChatIntent('第二个问题'); // ✅ 修复：添加await
 
       const enriched1 = await contextEnricher.enrichIntent(intent1);
       const enriched2 = await contextEnricher.enrichIntent(intent2);
@@ -322,7 +322,7 @@ describe('L1集成E2E测试', () => {
 
       mockLLMPort.call.mockResolvedValueOnce({
         success: true,
-        text: '历史摘要',
+        text: JSON.stringify({ summary: '历史摘要', newKeyDecisions: [] }), // ✅ 修复
         usage: { promptTokens: 100, completionTokens: 50, totalTokens: 100+50 }
       });
 
@@ -384,7 +384,7 @@ describe('L1集成E2E测试', () => {
 
       mockLLMPort.call.mockResolvedValueOnce({
         success: true,
-        text: '混合对话摘要',
+        text: JSON.stringify({ summary: '混合对话摘要', newKeyDecisions: [] }), // ✅ 修复
         usage: { promptTokens: 100, completionTokens: 50, totalTokens: 100+50 }
       });
 
@@ -401,7 +401,7 @@ describe('L1集成E2E测试', () => {
       const startTime = Date.now();
 
       // 1. 创建Intent
-      const intent = IntentFactory.buildChatIntent('测试性能');
+      const intent = await IntentFactory.buildChatIntent('测试性能'); // ✅ 修复：添加await
       
       // 2. 注入上下文
       await contextEnricher.enrichIntent(intent);
@@ -414,7 +414,7 @@ describe('L1集成E2E测试', () => {
 
       mockLLMPort.call.mockResolvedValueOnce({
         success: true,
-        text: '摘要',
+        text: JSON.stringify({ summary: '摘要', newKeyDecisions: [] }), // ✅ 修复
         usage: { promptTokens: 100, completionTokens: 50, totalTokens: 100+50 }
       });
 

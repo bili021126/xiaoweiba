@@ -207,7 +207,7 @@ describe('ContextEnricher E2E测试', () => {
       // 模拟通过IntentFactory创建Intent
       // 注意：在实际E2E环境中,需要VS Code API支持
       
-      const intent = IntentFactory.buildChatIntent('解释这段代码');
+      const intent = await IntentFactory.buildChatIntent('解释这段代码'); // ✅ 修复：添加await
       
       // 验证Intent结构
       expect(intent.name).toBe('chat');

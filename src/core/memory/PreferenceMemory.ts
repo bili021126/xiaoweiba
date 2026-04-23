@@ -360,10 +360,13 @@ export class PreferenceMemory {
     const initialConfidence = isPositive ? 0.8 : 0.3;
     const initialSampleCount = isPositive ? 1 : 0;
 
+    // ✅ 修复：计算 pattern_hash
+    const patternHash = this.hashPattern(pattern);
+
     const sql = `
       INSERT INTO preference_memory 
-      (id, domain, pattern, confidence, sample_count, last_updated, model_id, project_fingerprint)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      (id, domain, pattern, confidence, sample_count, last_updated, model_id, project_fingerprint, pattern_hash)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     this.dbManager.runMutation(sql, [
@@ -374,7 +377,8 @@ export class PreferenceMemory {
       initialSampleCount,
       timestamp,
       modelId || null,
-      projectFingerprint || null
+      projectFingerprint || null,
+      patternHash // ✅ 添加 pattern_hash
     ]);
 
     await this.auditLogger.log('preference_create', 'success', 0);

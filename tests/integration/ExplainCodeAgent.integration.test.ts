@@ -90,10 +90,23 @@ describe('代码解释功能集成测试 (简化版)', () => {
       auditLogger,
       mockFingerprint,
       configManager,
-      {} as any, // VectorIndexManager
+      { updateIndexAsync: jest.fn().mockResolvedValue(undefined) } as any, // ✅ 修复：VectorIndexManager Mock
       {} as any, // SemanticRetriever
-      {} as any, // QueryExecutor
-      {} as any, // WeightCalculator
+      { 
+        // ✅ 修复：QueryExecutor Mock - 从数据库查询真实数据
+        getRecentMemories: jest.fn().mockImplementation(async (limit: number) => {
+          const result = databaseManager.runQuery(
+            'SELECT * FROM episodic_memory ORDER BY timestamp DESC LIMIT ?',
+            [limit]
+          );
+          return result.map((row: any) => ({
+            ...row,
+            entities: JSON.parse(row.entities || '[]'),
+            metadata: JSON.parse(row.metadata || '{}')
+          }));
+        })
+      } as any,
+      { calculateInitialWeight: jest.fn().mockReturnValue(5) } as any, // ✅ 修复：WeightCalculator Mock
       {} as any, // IndexSyncService
       {} as any  // HybridRetriever ✅ L2: 新增
     );
