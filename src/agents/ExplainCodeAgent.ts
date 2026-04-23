@@ -20,9 +20,11 @@ import { Intent } from '../core/domain/Intent';
 import { MemoryContext } from '../core/domain/MemoryContext';
 import { ILLMPort } from '../core/ports/ILLMPort';
 import { IMemoryPort } from '../core/ports/IMemoryPort';
+import { IEventBus } from '../core/ports/IEventBus'; // ✅ 修复 #7：引入事件总线
 import { LLMResponseCache } from '../core/cache/LLMResponseCache';
 import { generateCompleteStyles } from '../ui/styles';
 import { generateCard, generateCodeBlock, generateBadge, generateWebviewTemplate } from '../ui/components';
+import { AssistantResponseEvent } from '../core/events/DomainEvent';
 
 @injectable()
 export class ExplainCodeAgent implements IAgent {
@@ -34,7 +36,8 @@ export class ExplainCodeAgent implements IAgent {
 
   constructor(
     @inject('ILLMPort') private llmPort: ILLMPort,
-    @inject('IMemoryPort') private memoryPort: IMemoryPort
+    @inject('IMemoryPort') private memoryPort: IMemoryPort,
+    @inject('IEventBus') private eventBus: IEventBus // ✅ 修复 #7：注入事件总线
   ) {
     this.cache = new LLMResponseCache();
   }
@@ -98,7 +101,7 @@ export class ExplainCodeAgent implements IAgent {
 
       const durationMs = Date.now() - startTime;
 
-      // 5. 返回结果（包含元数据供记忆系统使用）
+      // 5. 返回结果（✅ 修复 #8：将 metadata 提升到顶层 memoryMetadata）
       const relativePath = vscode.workspace.asRelativePath(editor.document.uri.fsPath);
       
       return { 
@@ -109,12 +112,12 @@ export class ExplainCodeAgent implements IAgent {
           fileName: editor.document.fileName.split('/').pop()?.split('\\').pop(),
           language: editor.document.languageId,
           code: selectedCode,
-          explanation,
-          metadata: {
-            taskType: 'CODE_EXPLAIN',
-            summary: `解释了 ${relativePath} 中的代码`,
-            entities: [relativePath]
-          }
+          explanation
+        },
+        memoryMetadata: { // ✅ 修复 #8：顶层元数据
+          taskType: 'CODE_EXPLAIN',
+          summary: `解释了 ${relativePath} 中的代码`,
+          entities: [relativePath]
         },
         modelId: this.llmPort.getModelId()
       };
@@ -123,6 +126,13 @@ export class ExplainCodeAgent implements IAgent {
       const durationMs = Date.now() - startTime;
       const errorMessage = error instanceof Error ? error.message : String(error);
       vscode.window.showErrorMessage(`代码解释失败: ${errorMessage}`);
+      
+      // ✅ 修复 #7：发布错误事件
+      this.eventBus.publish(new AssistantResponseEvent({ 
+        messageId: `error_${Date.now()}`,
+        content: errorMessage,
+        timestamp: Date.now()
+      }));
       
       return { 
         success: false, 
