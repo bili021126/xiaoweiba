@@ -1,4 +1,5 @@
 import { injectable } from 'tsyringe';
+import * as crypto from 'crypto'; // ✅ 修复 #40：使用加密安全的随机数
 
 /**
  * 任务权限级别
@@ -32,8 +33,10 @@ export class TaskTokenManager {
    * 生成新的授权令牌
    */
   generateToken(actionId: string, permission: TaskPermissionLevel): TaskToken {
+    // ✅ 修复 #40：使用 crypto.randomBytes 替代 Math.random()
+    const randomPart = crypto.randomBytes(8).toString('hex');
     const token: TaskToken = {
-      tokenId: `tt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      tokenId: `tt_${Date.now()}_${randomPart}`,
       actionId,
       permission,
       expiresAt: Date.now() + this.TOKEN_EXPIRY_MS

@@ -260,7 +260,9 @@ export class AuditLogger {
    * 生成会话 ID
    */
   private generateSessionId(): string {
-    return `sess_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    // ✅ 修复 #40：使用 crypto.randomBytes 替代 Math.random()
+    const randomPart = crypto.randomBytes(8).toString('hex');
+    return `sess_${Date.now()}_${randomPart}`;
   }
 
   /**
