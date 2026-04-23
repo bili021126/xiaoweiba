@@ -8,6 +8,7 @@
 import { injectable, inject } from 'tsyringe';
 import { ConfigManager } from '../../storage/ConfigManager';
 import { pipeline, env } from '@xenova/transformers';
+import * as vscode from 'vscode'; // ✅ 修复：导入 vscode 用于用户通知
 
 // 配置 Transformers.js 不使用本地缓存路径，避免权限问题
 env.allowLocalModels = false;
@@ -18,6 +19,7 @@ export class EmbeddingService {
   private enabled = false;
   private extractor: any = null; // 模型提取器
   private isModelLoading = false;
+  private hasNotifiedFailure = false; // ✅ 修复：防止重复通知
 
   constructor(@inject(ConfigManager) private configManager: ConfigManager) {
     this.initialize();
@@ -44,9 +46,23 @@ export class EmbeddingService {
       console.log('[EmbeddingService] Loading local model: Xenova/all-MiniLM-L6-v2...');
       this.extractor = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
       console.log('[EmbeddingService] Local model loaded successfully.');
+      this.hasNotifiedFailure = false; // ✅ 修复：加载成功后重置标志
     } catch (error) {
       console.error('[EmbeddingService] Failed to load local model:', error);
       this.enabled = false; // 加载失败则禁用功能
+      
+      // ✅ 修复：首次失败时通知用户
+      if (!this.hasNotifiedFailure) {
+        this.hasNotifiedFailure = true;
+        vscode.window.showWarningMessage(
+          '向量模型加载失败，语义检索暂不可用，将使用关键词匹配。',
+          '重试' // ✅ 提供重试按钮
+        ).then(selection => {
+          if (selection === '重试') {
+            this.retryLoadModel();
+          }
+        });
+      }
     } finally {
       this.isModelLoading = false;
     }
@@ -92,5 +108,15 @@ export class EmbeddingService {
 
   isEnabled(): boolean {
     return this.enabled;
+  }
+
+  /**
+   * ✅ 修复：重试加载模型
+   */
+  async retryLoadModel(): Promise<void> {
+    console.log('[EmbeddingService] Retrying model load...');
+    this.hasNotifiedFailure = false; // 重置通知标志
+    this.extractor = null; // 清除旧的提取器
+    await this.getModel(); // 重新加载
   }
 }

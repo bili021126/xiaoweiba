@@ -30,6 +30,19 @@ export class IntentFactory {
       throw new Error('请先选中要解释的代码');
     }
 
+    // ✅ 修复：构建 enrichedContext，将代码片段注入其中
+    const enrichedContext = {
+      activeFilePath: editor.document.uri.fsPath,
+      activeFileLanguage: editor.document.languageId,
+      cursorLine: editor.selection.active.line + 1, // VS Code 行号从 0 开始
+      selectedCode: {
+        content: selectedCode,
+        startLine: selection.start.line + 1,
+        endLine: selection.end.line + 1
+      },
+      timestamp: Date.now()
+    };
+
     return {
       name: 'explain_code',
       userInput: undefined,
@@ -37,7 +50,9 @@ export class IntentFactory {
       metadata: {
         timestamp: Date.now(),
         source: 'command',
-        sessionId: this.generateSessionId()
+        sessionId: this.generateSessionId(),
+        // ✅ 修复：将选中的代码传递到 enrichedContext，供 PromptComposer 使用
+        enrichedContext
       }
     };
   }
