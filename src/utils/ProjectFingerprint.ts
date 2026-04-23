@@ -3,8 +3,39 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as vscode from 'vscode';
 import { injectable } from 'tsyringe';
+import * as path from 'path'; // ✅ 修复 #39：引入 path 模块
 
 const execAsync = promisify(exec);
+
+// ✅ 修复 #39：统一路径处理工具函数
+export class PathUtils {
+  /**
+   * 从完整路径中提取文件名（跨平台兼容）
+   * @param filePath 文件完整路径
+   * @returns 文件名
+   */
+  static getFileName(filePath: string): string {
+    return path.basename(filePath);
+  }
+
+  /**
+   * 安全地拼接路径（防止路径遍历攻击）
+   * @param baseDir 基础目录
+   * @param relativePath 相对路径
+   * @returns 安全的全路径
+   */
+  static safeJoin(baseDir: string, relativePath: string): string {
+    const joined = path.join(baseDir, relativePath);
+    const resolved = path.resolve(joined);
+    
+    // 确保结果在 baseDir 内
+    if (!resolved.startsWith(path.resolve(baseDir))) {
+      throw new Error(`Path traversal detected: ${relativePath}`);
+    }
+    
+    return resolved;
+  }
+}
 
 @injectable()
 export class ProjectFingerprint {

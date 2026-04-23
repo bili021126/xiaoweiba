@@ -9,6 +9,7 @@
 import { injectable, inject } from 'tsyringe';
 import { EpisodicMemory } from '../memory/EpisodicMemory';
 import { Recommendation } from '../ports/IMemoryPort';
+import { PathUtils } from '../../utils/ProjectFingerprint'; // ✅ 修复 #39：使用统一路径工具
 
 @injectable()
 export class MemoryRecommender {
@@ -21,7 +22,8 @@ export class MemoryRecommender {
    */
   async recommendForFile(filePath: string): Promise<Recommendation[]> {
     try {
-      const fileName = filePath.split('/').pop() || filePath.split('\\').pop() || '';
+      // ✅ 修复 #39：使用统一的路径工具函数
+      const fileName = PathUtils.getFileName(filePath);
       
       // 搜索与该文件相关的记忆
       const memories = await this.episodicMemory.search(fileName, {
