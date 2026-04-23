@@ -19,6 +19,7 @@ import { ILLMPort } from '../core/ports/ILLMPort';
 import { IMemoryPort } from '../core/ports/IMemoryPort';
 import { IEventBus } from '../core/ports/IEventBus'; // ✅ P1-04: 引入事件总线
 import { AssistantResponseEvent } from '../core/events/DomainEvent'; // ✅ P1-04: 引入响应事件
+import { TaskTokenManager } from '../core/security/TaskTokenManager'; // ✅ 修复 #28：引入 TaskTokenManager
 
 const execAsync = promisify(exec);
 
@@ -31,7 +32,8 @@ export class GenerateCommitAgent implements IAgent {
   constructor(
     @inject('ILLMPort') private llmPort: ILLMPort,
     @inject('IMemoryPort') private memoryPort: IMemoryPort,
-    @inject('IEventBus') private eventBus: IEventBus // ✅ P1-04: 注入事件总线
+    @inject('IEventBus') private eventBus: IEventBus, // ✅ P1-04: 注入事件总线
+    @inject(TaskTokenManager) private taskTokenManager: TaskTokenManager // ✅ 修复 #28：注入 TaskTokenManager
   ) {}
 
   /**
@@ -79,7 +81,7 @@ export class GenerateCommitAgent implements IAgent {
         progress.report({ message: '✨ 应用提交信息...', increment: 80 });
 
         // 4. 应用提交信息
-        await this.applyCommitMessage(workspacePath, commitMessage);
+        await this.applyCommitMessage(workspacePath, commitMessage, intent);
 
         progress.report({ message: '✅ 完成', increment: 100 });
 
@@ -203,11 +205,28 @@ ${diff.substring(0, 8000)}
   /**
    * 应用提交信息
    */
-  private async applyCommitMessage(workspacePath: string, message: string): Promise<void> {
+  private async applyCommitMessage(workspacePath: string, message: string, intent: Intent): Promise<void> {
+    // ✅ 修复 #28：校验 TaskToken
+    const taskToken = intent.metadata.taskToken;
+    if (!taskToken) {
+      throw new Error('缺少写操作授权令牌（TaskToken），无法执行 Git 提交');
+    }
+    
+    const isValid = this.taskTokenManager.validateToken(taskToken, 'write');
+    if (!isValid) {
+      throw new Error('写操作授权令牌无效或已过期，请重新尝试');
+    }
+    
+    console.log(`[GenerateCommitAgent] TaskToken validated: ${taskToken}`);
+    
     try {
       await execAsync(`git commit -m "${message.replace(/"/g, '\\"')}"`, { 
         cwd: workspacePath 
       });
+      
+      // ✅ 修复 #28：提交成功后撤销 Token（一次性使用）
+      this.taskTokenManager.revokeToken(taskToken);
+      console.log(`[GenerateCommitAgent] TaskToken revoked after successful commit`);
     } catch (error) {
       // 提交应用失败，重新抛出由调用方处理
       throw error;

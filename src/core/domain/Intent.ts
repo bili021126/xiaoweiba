@@ -76,5 +76,8 @@ export interface Intent {
       };
       timestamp: number;
     };
+    
+    // ✅ 修复 #28：TaskToken（用于写操作授权）
+    taskToken?: string;
   };
 }

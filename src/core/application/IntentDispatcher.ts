@@ -23,13 +23,24 @@ import {
 import { Intent } from '../domain/Intent';
 import { MemoryContext } from '../domain/MemoryContext';
 import { IAgent } from '../agent/IAgent';
+import { TaskTokenManager } from '../security/TaskTokenManager'; // ✅ 修复 #28：引入 TaskTokenManager
 
 @injectable()
 export class IntentDispatcher {
+  // ✅ 修复 #28：定义需要写权限的意图列表
+  private readonly WRITE_INTENTS = new Set([
+    'generate_commit',     // Git 提交
+    'generate_code',       // 代码生成（可能写入文件）
+    'check_naming',        // 命名检查（可能重命名）
+    'export_memory',       // 导出记忆（写文件）
+    'import_memory'        // 导入记忆（写数据库）
+  ]);
+
   constructor(
     @inject('IMemoryPort') private memoryPort: IMemoryPort,
     @inject('IAgentRegistry') private agentRegistry: IAgentRegistry,
-    @inject('IEventBus') private eventBus: IEventBus  // ✅ 统一使用字符串token
+    @inject('IEventBus') private eventBus: IEventBus,  // ✅ 统一使用字符串token
+    @inject(TaskTokenManager) private taskTokenManager: TaskTokenManager // ✅ 修复 #28：注入 TaskTokenManager
   ) {}
 
   /**
@@ -41,6 +52,17 @@ export class IntentDispatcher {
     try {
       // 1. 发布意图接收事件
       this.eventBus.publish(new IntentReceivedEvent(intent));
+
+      // ✅ 修复 #28：为写操作意图生成 TaskToken
+      if (this.WRITE_INTENTS.has(intent.name)) {
+        const actionId = `action_${intent.name}_${Date.now()}`;
+        const token = this.taskTokenManager.generateToken(actionId, 'write');
+        
+        // 将 Token 注入到 intent.metadata
+        intent.metadata.taskToken = token.tokenId;
+        
+        console.log(`[IntentDispatcher] Generated write token for ${intent.name}: ${token.tokenId}`);
+      }
 
       // 2. 通过端口检索记忆上下文（绝不直接调用EpisodicMemory）
       const memoryContext = await this.memoryPort.retrieveContext(intent);
