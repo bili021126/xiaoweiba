@@ -150,7 +150,7 @@ export class DatabaseManager {
    * - 优先使用原子重命名（安全）
    * - 失败后降级为直接覆盖写入（兼容性更好）
    */
-  private saveDatabase(): void {
+  private async saveDatabase(): Promise<void> {
     if (!this.db) return;
 
     const data = this.db.export();
@@ -176,9 +176,8 @@ export class DatabaseManager {
       } catch (error) {
         console.warn(`[DatabaseManager] Rename attempt ${i + 1} failed:`, error instanceof Error ? error.message : String(error));
         if (i < maxRetries - 1) {
-          // 等待100ms后重试（忙等待，避免Atomics兼容性问题）
-          const end = Date.now() + 100;
-          while (Date.now() < end) { /* 忙等待 */ }
+          // ✅ 修复 #2：使用异步延迟替代忙等待
+          await new Promise(resolve => setTimeout(resolve, 100));
         }
       }
     }
