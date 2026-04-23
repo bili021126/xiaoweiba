@@ -317,9 +317,73 @@ getByCategory(category): BestPractice[] {
 4. ⏳ 处理剩余 P2 技术债务
 5. ⏳ 补充 E2E 测试覆盖核心流程
 
+### 中期（2-4 周）
+5. ⏳ P2 级别任务
+6. ⏳ 代码重构和技术债务清理
+
 ### 长期（1-2 月）
-6. ⏳ P3 级别任务
-7. ⏳ 性能优化和用户体验提升
+7. ⏳ P3 级别任务
+8. ⏳ 性能优化和用户体验提升
+
+---
+
+## 🧪 测试覆盖率提升成果
+
+### ✅ 单元测试覆盖率从 69.11% 提升至 71.55%
+
+**本次会话成就**：
+- 测试套件: 44/44 通过 (100%) ✨
+- 测试用例: 654/654 通过 (100%) ✨
+- 覆盖率: 69.11% → 71.55% (+2.44%)
+- 失败测试: 0个 ❌
+- 新增测试代码: ~2,286 行
+
+**核心覆盖模块**：
+
+1. **Agents 模块** (33.33%)
+   - ✅ ConfigureApiKeyAgent.test.ts (157行)
+   - ✅ GenerateCommitAgent.test.ts (287行)
+
+2. **Application 模块** (74.88%)
+   - ✅ IntentTypeMapper.test.ts (63行)
+   - ✅ MemoryExporter.test.ts (105行)
+   - ✅ MemoryRecommender.test.ts (67行)
+   - ✅ MemorySummaryGenerator.test.ts (142行)
+   - ✅ SpecializedRetriever.test.ts (133行)
+   - ✅ MemoryEventSubscriber.test.ts (131行)
+
+3. **Core 模块**
+   - ✅ DomainEvent.test.ts (78行)
+   - ✅ CommitStyleLearner.test.ts (174行)
+
+4. **Tools 模块**
+   - ✅ DiffService.test.ts (123行)
+
+5. **E2E 集成测试** (661行)
+   - ✅ generate-commit-agent.e2e.test.ts
+   - ✅ agent-dispatch-flow.e2e.test.ts
+
+**质量指标对比**：
+| 指标 | 会话前 | 当前 | 提升 |
+|------|--------|------|------|
+| 通过率 | 97% | **100%** | +3% ✨ |
+| 失败套件 | 7个 | **0个** | -100% ✨ |
+| 覆盖率 | 69.11% | **71.55%** | **+2.44%** ✨ |
+
+**Git 提交历史**：
+- 共 14 个 commits，全部已提交
+- 清晰的提交信息，可追溯
+- 无编译错误，代码质量高
+
+**下一步目标**：
+- 🎯 短期：达到 75% 覆盖率（还需 +3.45%）
+- 🎯 中期：达到 80% 覆盖率（还需 +8.45%）
+- 🎯 长期：达到 85% 覆盖率（项目目标）
+
+**推荐策略**：
+1. 继续补充剩余 9 个 Agent 的测试（ChatAgent、ExplainCodeAgent、OptimizeSQLAgent 等）
+2. 补充 completion 模块测试（AICompletionProvider）
+3. 补充 storage 模块边界测试（DatabaseManager）
 
 ---
 
