@@ -13,7 +13,9 @@ import { IAgent, AgentResult } from '../core/agent/IAgent';
 import { Intent } from '../core/domain/Intent';
 import { MemoryContext } from '../core/domain/MemoryContext';
 import { ILLMPort } from '../core/ports/ILLMPort';
+import { IEventBus } from '../core/ports/IEventBus'; // ✅ 修复 #7：引入事件总线
 import { LLMResponseCache } from '../core/cache/LLMResponseCache';
+import { AssistantResponseEvent } from '../core/events/DomainEvent';
 
 @injectable()
 export class OptimizeSQLAgent implements IAgent {
@@ -24,7 +26,8 @@ export class OptimizeSQLAgent implements IAgent {
   private cache: LLMResponseCache;
 
   constructor(
-    @inject('ILLMPort') private llmPort: ILLMPort
+    @inject('ILLMPort') private llmPort: ILLMPort,
+    @inject('IEventBus') private eventBus: IEventBus // ✅ 修复 #7：注入事件总线
   ) {
     this.cache = new LLMResponseCache();
   }
@@ -88,6 +91,11 @@ export class OptimizeSQLAgent implements IAgent {
           originalSQL: selectedSQL,
           optimized: true
         },
+        memoryMetadata: { // ✅ 修复 #6：顶层元数据
+          taskType: 'SQL_OPTIMIZATION',
+          summary: `优化了 SQL 语句`,
+          entities: []
+        },
         modelId: this.llmPort.getModelId()
       };
 
@@ -95,6 +103,13 @@ export class OptimizeSQLAgent implements IAgent {
       const durationMs = Date.now() - startTime;
       const errorMessage = error instanceof Error ? error.message : String(error);
       vscode.window.showErrorMessage(`SQL优化失败: ${errorMessage}`);
+      
+      // ✅ 修复 #7：发布错误事件
+      this.eventBus.publish(new AssistantResponseEvent({ 
+        messageId: `error_${Date.now()}`,
+        content: errorMessage,
+        timestamp: Date.now()
+      }));
       
       return { success: false, error: errorMessage, durationMs };
     }
