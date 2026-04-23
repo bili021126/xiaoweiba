@@ -238,12 +238,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // ✅ L1: 注册 PromptComposer
     const promptComposer = container.resolve(PromptComposer);
     
-    // ✅ 额外注册ChatAgent和InlineCompletionAgent
-    const chatAgent = new ChatAgent(llmAdapter, memoryAdapter, eventBusAdapter, promptComposer); // ✅ L1: 注入 PromptComposer
+    // ✅ 修复 #34：统一使用 container.resolve，消除手动 new
+    const chatAgent = container.resolve(ChatAgent); // ✅ 通过容器解析，依赖自动注入
     await chatAgent.initialize();
     agentRegistry.register(chatAgent);
     
-    agentRegistry.register(new InlineCompletionAgent(llmAdapter));
+    const inlineAgent = container.resolve(InlineCompletionAgent);
+    agentRegistry.register(inlineAgent);
     
     // ✅ 注册SessionManagementAgent
     const sessionAgent = container.resolve(SessionManagementAgent);

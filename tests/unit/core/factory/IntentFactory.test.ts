@@ -43,7 +43,11 @@ describe('IntentFactory', () => {
 
     it('应成功构建解释代码意图', () => {
       const mockEditor = {
-        selection: { active: { line: 10 } },
+        selection: { 
+          active: { line: 10 },
+          start: { line: 9 },
+          end: { line: 11 }
+        },
         document: {
           getText: jest.fn().mockReturnValue('const x = 1;'),
           uri: { fsPath: '/test/file.ts' },
@@ -59,6 +63,10 @@ describe('IntentFactory', () => {
       expect(intent.codeContext?.selectedCode).toBe('const x = 1;');
       expect(intent.metadata.source).toBe('command');
       expect(intent.metadata.sessionId).toMatch(/^session_\d+_[a-z0-9]{9}$/);
+      // ✅ 修复：验证 enrichedContext 是否正确注入
+      expect(intent.metadata.enrichedContext).toBeDefined();
+      expect(intent.metadata.enrichedContext?.selectedCode).toBeDefined();
+      expect(intent.metadata.enrichedContext?.selectedCode?.content).toBe('const x = 1;');
     });
   });
 
@@ -78,7 +86,11 @@ describe('IntentFactory', () => {
           uri: { fsPath: '/test/file.ts' },
           languageId: 'typescript'
         },
-        selection: { active: { line: 10 } }
+        selection: { 
+          active: { line: 10 },
+          start: { line: 10 },
+          end: { line: 10 }
+        }
       };
       (vscode.window.activeTextEditor as any) = mockEditor;
 
@@ -112,7 +124,11 @@ describe('IntentFactory', () => {
           uri: { fsPath: '/test/file.ts' },
           languageId: 'javascript'
         },
-        selection: { active: { line: 5 } }
+        selection: { 
+          active: { line: 5 },
+          start: { line: 5 },
+          end: { line: 5 }
+        }
       };
       (vscode.window.activeTextEditor as any) = mockEditor;
 
