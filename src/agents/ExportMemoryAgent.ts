@@ -14,6 +14,7 @@ import { IAgent, AgentResult } from '../core/agent/IAgent';
 import { Intent } from '../core/domain/Intent';
 import { MemoryContext } from '../core/domain/MemoryContext';
 import { IMemoryPort } from '../core/ports/IMemoryPort';
+import { TaskTokenManager } from '../core/security/TaskTokenManager'; // ✅ 修复 #28：引入 TaskTokenManager
 
 @injectable()
 export class ExportMemoryAgent implements IAgent {
@@ -22,7 +23,8 @@ export class ExportMemoryAgent implements IAgent {
   readonly supportedIntents = ['export_memory'];
 
   constructor(
-    @inject('IMemoryPort') private memoryPort: IMemoryPort
+    @inject('IMemoryPort') private memoryPort: IMemoryPort,
+    @inject(TaskTokenManager) private taskTokenManager: TaskTokenManager // ✅ 修复 #28：注入 TaskTokenManager
   ) {}
 
   /**
@@ -33,6 +35,7 @@ export class ExportMemoryAgent implements IAgent {
     memoryContext: MemoryContext;
   }): Promise<AgentResult> {
     const startTime = Date.now();
+    const { intent, memoryContext } = params; // ✅ 修复：解构 intent
 
     try {
       // 1. 选择导出路径
@@ -71,9 +74,26 @@ export class ExportMemoryAgent implements IAgent {
         }))
       };
 
-      // 4. 写入文件
+      // 4. ✅ 修复 #28：校验 TaskToken（写文件操作）
+      const taskToken = intent.metadata.taskToken;
+      if (!taskToken) {
+        throw new Error('缺少写操作授权令牌（TaskToken），无法导出记忆');
+      }
+      
+      const isValid = this.taskTokenManager.validateToken(taskToken, 'write');
+      if (!isValid) {
+        throw new Error('写操作授权令牌无效或已过期，请重新尝试');
+      }
+      
+      console.log(`[ExportMemoryAgent] TaskToken validated: ${taskToken}`);
+
+      // 5. 写入文件
       const jsonContent = JSON.stringify(exportData, null, 2);
       fs.writeFileSync(saveUri.fsPath, jsonContent, 'utf-8');
+      
+      // ✅ 修复 #28：导出成功后撤销 Token（一次性使用）
+      this.taskTokenManager.revokeToken(taskToken);
+      console.log(`[ExportMemoryAgent] TaskToken revoked after successful export`);
 
       vscode.window.showInformationMessage(
         `✅ 成功导出 ${allMemories.length} 条记忆到 ${saveUri.fsPath}`
