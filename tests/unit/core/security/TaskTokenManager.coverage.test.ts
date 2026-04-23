@@ -1,11 +1,11 @@
 /**
- * TaskTokenManager 单元测试 - 覆盖率提升
+ * TaskTokenManager 单元测试 - 覆盖率提�?
  */
 
 import 'reflect-metadata';
 import { TaskTokenManager } from '../../../../src/core/security/TaskTokenManager';
 
-describe('TaskTokenManager - 覆盖率提升', () => {
+describe('TaskTokenManager - 覆盖率提�?, () => {
   let tokenManager: TaskTokenManager;
 
   beforeEach(() => {
@@ -14,15 +14,15 @@ describe('TaskTokenManager - 覆盖率提升', () => {
   });
 
   describe('generateToken', () => {
-    it('应生成具有唯一ID的令牌', () => {
+    it('应生成具有唯一ID的令�?, () => {
       const token1 = tokenManager.generateToken('action1', 'read');
       const token2 = tokenManager.generateToken('action1', 'read');
 
       expect(token1.tokenId).not.toBe(token2.tokenId);
-      expect(token1.tokenId).toMatch(/^tt_\d+_[a-z0-9]{9}$/);
+      expect(token1.tokenId).toMatch(/^tt_\d+_[a-z0-9]{16}$/);
     });
 
-    it('应设置正确的过期时间（5分钟后）', () => {
+    it('应设置正确的过期时间�?分钟后）', () => {
       const now = Date.now();
       jest.spyOn(Date, 'now').mockReturnValue(now);
 
@@ -39,7 +39,7 @@ describe('TaskTokenManager - 覆盖率提升', () => {
       expect(writeToken.permission).toBe('write');
     });
 
-    it('应增加活跃令牌数量', () => {
+    it('应增加活跃令牌数�?, () => {
       const initialCount = tokenManager.getActiveTokenCount();
       
       tokenManager.generateToken('action1', 'read');
@@ -50,7 +50,7 @@ describe('TaskTokenManager - 覆盖率提升', () => {
   });
 
   describe('validateToken', () => {
-    it('应验证有效的未过期令牌', () => {
+    it('应验证有效的未过期令�?, () => {
       const token = tokenManager.generateToken('test_action', 'read');
       
       const isValid = tokenManager.validateToken(token.tokenId, 'read');
@@ -58,13 +58,13 @@ describe('TaskTokenManager - 覆盖率提升', () => {
       expect(isValid).toBe(true);
     });
 
-    it('应拒绝不存在的令牌', () => {
+    it('应拒绝不存在的令�?, () => {
       const isValid = tokenManager.validateToken('non_existent_token', 'read');
       
       expect(isValid).toBe(false);
     });
 
-    it('应拒绝已过期的令牌', () => {
+    it('应拒绝已过期的令�?, () => {
       const now = Date.now();
       jest.spyOn(Date, 'now').mockReturnValue(now);
       
@@ -78,7 +78,7 @@ describe('TaskTokenManager - 覆盖率提升', () => {
       expect(isValid).toBe(false);
     });
 
-    it('应拒绝权限不匹配的令牌', () => {
+    it('应拒绝权限不匹配的令�?, () => {
       const token = tokenManager.generateToken('test_action', 'read');
       
       const isValid = tokenManager.validateToken(token.tokenId, 'write');
@@ -86,7 +86,7 @@ describe('TaskTokenManager - 覆盖率提升', () => {
       expect(isValid).toBe(false);
     });
 
-    it('过期令牌应从activeTokens中删除', () => {
+    it('过期令牌应从activeTokens中删�?, () => {
       const now = Date.now();
       jest.spyOn(Date, 'now').mockReturnValue(now);
       
@@ -127,7 +127,7 @@ describe('TaskTokenManager - 覆盖率提升', () => {
   });
 
   describe('cleanupExpired', () => {
-    it('应清理所有过期令牌', () => {
+    it('应清理所有过期令�?, () => {
       const now = Date.now();
       jest.spyOn(Date, 'now').mockReturnValue(now);
       
@@ -144,13 +144,13 @@ describe('TaskTokenManager - 覆盖率提升', () => {
       expect(tokenManager.getActiveTokenCount()).toBe(0);
     });
 
-    it('应保留未过期的令牌', () => {
+    it('应保留未过期的令�?, () => {
       const now = Date.now();
       jest.spyOn(Date, 'now').mockReturnValue(now);
       
       const validToken = tokenManager.generateToken('action1', 'read');
       
-      // 只过去2分钟（未过期）
+      // 只过�?分钟（未过期�?
       jest.spyOn(Date, 'now').mockReturnValue(now + 2 * 60 * 1000);
       
       tokenManager.cleanupExpired();
@@ -167,10 +167,10 @@ describe('TaskTokenManager - 覆盖率提升', () => {
       const validToken = tokenManager.generateToken('action2', 'write');
       const expiredToken2 = tokenManager.generateToken('action3', 'read');
       
-      // 模拟时间：expiredToken1和expiredToken2已过期，validToken仍有效
+      // 模拟时间：expiredToken1和expiredToken2已过期，validToken仍有�?
       jest.spyOn(Date, 'now').mockReturnValue(now + 6 * 60 * 1000);
       
-      // 重新生成validToken使其不过期
+      // 重新生成validToken使其不过�?
       jest.spyOn(Date, 'now').mockReturnValue(now + 6 * 60 * 1000);
       const newValidToken = tokenManager.generateToken('action4', 'write');
       
@@ -186,7 +186,7 @@ describe('TaskTokenManager - 覆盖率提升', () => {
       tokenManager.generateToken('action1', 'read');
       tokenManager.generateToken('action2', 'write');
       
-      // 只过去1分钟
+      // 只过�?分钟
       jest.spyOn(Date, 'now').mockReturnValue(now + 1 * 60 * 1000);
       
       tokenManager.cleanupExpired();
@@ -223,10 +223,10 @@ describe('TaskTokenManager - 覆盖率提升', () => {
   });
 
   describe('边界条件', () => {
-    it('应处理大量令牌的生成和清理', () => {
+    it('应处理大量令牌的生成和清�?, () => {
       const tokens: string[] = [];
       
-      // 生成100个令牌
+      // 生成100个令�?
       for (let i = 0; i < 100; i++) {
         const token = tokenManager.generateToken(`action_${i}`, i % 2 === 0 ? 'read' : 'write');
         tokens.push(token.tokenId);
@@ -234,7 +234,7 @@ describe('TaskTokenManager - 覆盖率提升', () => {
       
       expect(tokenManager.getActiveTokenCount()).toBe(100);
       
-      // 撤销一半
+      // 撤销一�?
       for (let i = 0; i < 50; i++) {
         tokenManager.revokeToken(tokens[i]);
       }
@@ -249,7 +249,7 @@ describe('TaskTokenManager - 覆盖率提升', () => {
       expect(tokenManager.validateToken(token.tokenId, 'read')).toBe(true);
     });
 
-    it('多次撤销同一令牌应安全', () => {
+    it('多次撤销同一令牌应安�?, () => {
       const token = tokenManager.generateToken('action1', 'read');
       
       tokenManager.revokeToken(token.tokenId);
