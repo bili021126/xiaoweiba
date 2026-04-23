@@ -7,7 +7,7 @@
  * 3. 禁止直接依赖 MemoryService，确保“记忆为核、先记忆后行动”
  */
 
-import { EventBus } from '../eventbus/EventBus';
+import { IEventBus } from '../ports/IEventBus'; // ✅ 修复 #33：使用新的事件总线
 import { MemorySystem, MemoryContext } from '../memory/MemorySystem';
 // ✅ 新增：引入重构后的模块
 import { CommandExecutor, CommandInput, CommandResult } from './CommandExecutor';
@@ -20,7 +20,7 @@ export abstract class BaseCommand extends CommandExecutor {
 
   constructor(
     memorySystem: MemorySystem,
-    eventBus: EventBus,
+    eventBus: IEventBus, // ✅ 修复 #33：使用新的事件总线
     commandId: string
   ) {
     super(memorySystem, commandId);

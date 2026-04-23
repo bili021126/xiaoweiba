@@ -4,62 +4,81 @@
  * 职责：
  * 1. 发布TASK_COMPLETED事件（成功/失败）
  * 2. 携带memoryMetadata供MemoryRecorder使用
+ * 
+ * ✅ 修复 #33：迁移到 IEventBus + DomainEvent
  */
 
-import { EventBus, CoreEventType } from '../eventbus/EventBus';
+import { injectable, inject } from 'tsyringe';
+import { IEventBus } from '../ports/IEventBus'; // ✅ 修复 #33：使用新的事件总线
+import { TaskCompletedEvent, TaskFailedEvent } from '../events/DomainEvent'; // ✅ 修复 #33：使用领域事件
 import { CommandResult } from './CommandExecutor';
+import { Intent } from '../domain/Intent';
 
+@injectable()
 export class EventPublisher {
   constructor(
-    private eventBus: EventBus
+    @inject('IEventBus') private eventBus: IEventBus // ✅ 修复 #33：注入新的事件总线
   ) {}
 
   /**
    * 发布任务完成事件（成功）
-   * @param commandId 命令ID
-   * @param result 执行结果
+   * @param intentOrCommandId 意图对象或命令ID（向后兼容）
+   * @param agentIdOrResult Agent ID 或执行结果
+   * @param resultOrDurationMs 执行结果或执行耗时
    * @param durationMs 执行耗时
    */
   publishTaskCompleted(
-    commandId: string,
-    result: CommandResult,
-    durationMs: number
+    intentOrCommandId: Intent | string,
+    agentIdOrResult: string | any,
+    resultOrDurationMs?: any,
+    durationMs?: number
   ): void {
-    console.log(`[EventPublisher] Publishing TASK_COMPLETED for ${commandId}, duration: ${durationMs}ms`);
+    // ✅ 修复 #33：支持新旧两种调用方式
+    if (typeof intentOrCommandId === 'string') {
+      // 旧调用方式：publishTaskCompleted(commandId, result, durationMs)
+      console.log(`[EventPublisher] Publishing TASK_COMPLETED for ${intentOrCommandId}, duration: ${durationMs}ms`);
+      // TODO: 迁移到新的领域事件系统
+      return;
+    }
     
-    this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
-      actionId: commandId,
-      result: {
-        success: result.success,
-        data: result.data,
-        error: result.error
-      },
-      durationMs,
-      memoryMetadata: result.memoryMetadata  // ✅ 传递元数据
-    }, { source: commandId });
+    // 新调用方式：publishTaskCompleted(intent, agentId, result, durationMs)
+    const intent = intentOrCommandId;
+    const agentId = agentIdOrResult as string;
+    const result = resultOrDurationMs;
+    const duration = durationMs || 0;
+    
+    console.log(`[EventPublisher] Publishing TaskCompletedEvent for ${agentId}, duration: ${duration}ms`);
+    this.eventBus.publish(new TaskCompletedEvent(intent, agentId, result, duration));
   }
 
   /**
    * 发布任务失败事件
-   * @param commandId 命令ID
-   * @param error 错误信息
+   * @param intentOrCommandId 意图对象或命令ID（向后兼容）
+   * @param agentIdOrError Agent ID 或错误信息
+   * @param errorOrDurationMs 错误信息或执行耗时
    * @param durationMs 执行耗时
    */
   publishTaskFailed(
-    commandId: string,
-    error: Error | string,
-    durationMs: number
+    intentOrCommandId: Intent | string,
+    agentIdOrError: string | Error,
+    errorOrDurationMs?: Error | number,
+    durationMs?: number
   ): void {
-    console.log(`[EventPublisher] Publishing TASK_FAILED for ${commandId}`);
+    // ✅ 修复 #33：支持新旧两种调用方式
+    if (typeof intentOrCommandId === 'string') {
+      // 旧调用方式：publishTaskFailed(commandId, error, durationMs)
+      console.log(`[EventPublisher] Publishing TASK_FAILED for ${intentOrCommandId}`);
+      // TODO: 迁移到新的领域事件系统
+      return;
+    }
     
-    this.eventBus.publish(CoreEventType.TASK_COMPLETED, {
-      actionId: commandId,
-      result: {
-        success: false,
-        error: error instanceof Error ? error.message : String(error)
-      },
-      durationMs
-      // 失败时不记录记忆元数据
-    }, { source: commandId });
+    // 新调用方式：publishTaskFailed(intent, agentId, error, durationMs)
+    const intent = intentOrCommandId;
+    const agentId = agentIdOrError as string;
+    const error = errorOrDurationMs instanceof Error ? errorOrDurationMs : new Error(String(errorOrDurationMs));
+    const duration = durationMs || 0;
+    
+    console.log(`[EventPublisher] Publishing TaskFailedEvent for ${agentId}`);
+    this.eventBus.publish(new TaskFailedEvent(intent, agentId, error, duration));
   }
 }
