@@ -13,6 +13,7 @@ import { IntentDispatcher } from '../../../../src/core/application/IntentDispatc
 import { IMemoryPort } from '../../../../src/core/ports/IMemoryPort';
 import { IAgentRegistry } from '../../../../src/core/ports/IAgentRegistry';
 import { IEventBus } from '../../../../src/core/ports/IEventBus';
+import { TaskTokenManager } from '../../../../src/core/security/TaskTokenManager'; // ✅ 修复：引入 TaskTokenManager
 import { Intent, MemoryContext } from '../../../../src/core/domain';
 import { IAgent } from '../../../../src/core/agent/IAgent';
 import {
@@ -55,12 +56,21 @@ const mockEventBus: jest.Mocked<IEventBus> = {
   dispose: jest.fn()
 };
 
+// ✅ Mock TaskTokenManager
+const mockTaskTokenManager: jest.Mocked<TaskTokenManager> = {
+  generate: jest.fn(),
+  validate: jest.fn(),
+  revokeToken: jest.fn(),
+  consume: jest.fn(),
+  cleanupExpiredTokens: jest.fn()
+} as any;
+
 describe('IntentDispatcher - 三层降级策略', () => {
   let dispatcher: IntentDispatcher;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    dispatcher = new IntentDispatcher(mockMemoryPort, mockAgentRegistry, mockEventBus);
+    dispatcher = new IntentDispatcher(mockMemoryPort, mockAgentRegistry, mockEventBus, mockTaskTokenManager);
   });
 
   // ==================== 测试用例1: 正常路径 ====================
