@@ -1,7 +1,6 @@
 // 确保reflect-metadata在最前面加载
 try {
   require("reflect-metadata");
-  console.log('[Extension] reflect-metadata loaded successfully');
 } catch (err) {
   console.error('[Extension] Failed to load reflect-metadata:', err);
   // 尝试从扩展目录加载
@@ -10,7 +9,6 @@ try {
   const reflectPath = path.join(extensionPath, '..', 'node_modules', 'reflect-metadata');
   try {
     require(reflectPath);
-    console.log('[Extension] reflect-metadata loaded from:', reflectPath);
   } catch (err2) {
     console.error('[Extension] Also failed to load from:', reflectPath, err2);
   }
@@ -27,13 +25,9 @@ try {
   
   if (fs.existsSync(envPath)) {
     require('dotenv').config({ path: envPath });
-    console.log('[Extension] .env file loaded successfully');
   } else if (fs.existsSync(envExamplePath)) {
     // 如果 .env 不存在，尝试加载 .env.example 作为默认值
     require('dotenv').config({ path: envExamplePath });
-    console.log('[Extension] .env file not found, using .env.example as default');
-  } else {
-    console.log('[Extension] No .env or .env.example file found, using environment variables');
   }
 } catch (err) {
   console.warn('[Extension] Failed to load .env file:', err);
@@ -360,15 +354,11 @@ export function getLLMTool(): LLMTool {
  * 初始化依赖注入容器（组合根）
  */
 async function initializeContainer(context: vscode.ExtensionContext): Promise<void> {
-  console.log('[Extension] Step 1: Initializing infrastructure...');
-  
   // ✅ 注册SecretStorage（ConfigManager依赖）
   container.registerInstance('SecretStorage', context.secrets);
-  console.log('[Extension] SecretStorage registered');
   
   // ✅ 注册ExtensionContext（DatabaseManager等模块依赖）
   container.registerInstance('extensionContext', context);
-  console.log('[Extension] ExtensionContext registered');
   
   // 1. ✅ 初始化基础设施
   const legacyEventBus = new EventBus();
@@ -377,7 +367,6 @@ async function initializeContainer(context: vscode.ExtensionContext): Promise<vo
   // 创建适配器并注册为IEventBus
   const eventBusAdapter = new EventBusAdapter(legacyEventBus);
   container.register('IEventBus', { useValue: eventBusAdapter });
-  console.log('[Extension] IEventBus registered (EventBusAdapter)');
 
   // ⚠️ 注意：不在这里解析EpisodicMemory等依赖DatabaseManager的服务
   // 它们将在Step 4中DatabaseManager注册之后再解析
@@ -386,11 +375,7 @@ async function initializeContainer(context: vscode.ExtensionContext): Promise<vo
   const llmTool = container.resolve(LLMTool);
   const llmAdapter = new LLMAdapter(llmTool);
   container.register('ILLMPort', { useValue: llmAdapter });
-  console.log('[Extension] ILLMPort registered (LLMAdapter)');
   
-  console.log('[Extension] Step 1 complete');
-  console.log('[Extension] Step 2: Creating adapters and registry...');
-
   // 2. ✅ 创建 Agent 注册表
   const agentRegistry = new AgentRegistryImpl();
   container.register('IAgentRegistry', { useValue: agentRegistry });
