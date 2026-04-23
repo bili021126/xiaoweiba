@@ -6,6 +6,23 @@
 
 import * as vscode from 'vscode';
 
+// ✅ 修复 #35：将中文硬编码提取为常量
+const DIFF_SERVICE_TEXT = {
+  APPLY_CHANGE: '$(check) 应用更改',
+  CANCEL: '$(close) 取消',
+  APPLY_CHANGE_DESC: '将新代码插入到当前位置',
+  CANCEL_DESC: '不执行任何操作',
+  CONFIRM_PLACEHOLDER: (fileName: string) => `确认修改 ${fileName}`,
+  WEBVIEW_TITLE: '代码差异预览',
+  ORIGINAL_HEADER: (length: number) => `原始内容 (${length} 字符)`,
+  MODIFIED_HEADER: (length: number) => `新内容 (${length} 字符)`,
+  EMPTY_CONTENT: '(空)',
+  TIP_TEXT: '💡 提示：仔细检查差异后，点击“应用更改”将新代码插入到编辑器中。',
+  BTN_CANCEL: '❌ 取消',
+  BTN_CONFIRM: '✅ 应用更改',
+  FILE_LABEL: '文件:',
+} as const;
+
 export class DiffService {
   /**
    * 显示差异确认对话框
@@ -25,12 +42,12 @@ export class DiffService {
     // 使用QuickPick展示差异并让用户确认
     const choice = await vscode.window.showQuickPick(
       [
-        { label: '$(check) 应用更改', description: '将新代码插入到当前位置' },
-        { label: '$(close) 取消', description: '不执行任何操作' }
+        { label: DIFF_SERVICE_TEXT.APPLY_CHANGE, description: DIFF_SERVICE_TEXT.APPLY_CHANGE_DESC },
+        { label: DIFF_SERVICE_TEXT.CANCEL, description: DIFF_SERVICE_TEXT.CANCEL_DESC }
       ],
       {
-        placeHolder: `确认修改 ${this.getFileName(filePath)}`,
-        title: '📝 代码差异预览',
+        placeHolder: DIFF_SERVICE_TEXT.CONFIRM_PLACEHOLDER(this.getFileName(filePath)),
+        title: DIFF_SERVICE_TEXT.WEBVIEW_TITLE,
         ignoreFocusOut: true
       }
     );
@@ -63,7 +80,7 @@ export class DiffService {
       
       const panel = vscode.window.createWebviewPanel(
         'diffPreview',
-        '代码差异预览',
+        DIFF_SERVICE_TEXT.WEBVIEW_TITLE,
         vscode.ViewColumn.Beside,
         {
           enableScripts: true,
@@ -224,19 +241,19 @@ export class DiffService {
         </style>
       </head>
       <body>
-        <h2>📝 代码差异预览</h2>
-        <div class="file-name">文件: ${fileName}</div>
+        <h2>${DIFF_SERVICE_TEXT.WEBVIEW_TITLE}</h2>
+        <div class="file-name">${DIFF_SERVICE_TEXT.FILE_LABEL} ${fileName}</div>
         
         <div class="diff-container">
           <div class="diff-panel">
-            <div class="diff-header original">原始内容 (${original.length} 字符)</div>
+            <div class="diff-header original">${DIFF_SERVICE_TEXT.ORIGINAL_HEADER(original.length)}</div>
             <div class="diff-content">
-              <pre>${this.escapeHtml(original || '(空)')}</pre>
+              <pre>${this.escapeHtml(original || DIFF_SERVICE_TEXT.EMPTY_CONTENT)}</pre>
             </div>
           </div>
           
           <div class="diff-panel">
-            <div class="diff-header modified">新内容 (${modified.length} 字符)</div>
+            <div class="diff-header modified">${DIFF_SERVICE_TEXT.MODIFIED_HEADER(modified.length)}</div>
             <div class="diff-content">
               <pre>${this.escapeHtml(modified)}</pre>
             </div>
@@ -244,15 +261,15 @@ export class DiffService {
         </div>
 
         <div class="stats">
-          💡 提示：仔细检查差异后，点击“应用更改”将新代码插入到编辑器中。
+          ${DIFF_SERVICE_TEXT.TIP_TEXT}
         </div>
 
         <div class="button-group">
           <button class="btn-cancel" onclick="vscode.postMessage({ action: 'cancel' })">
-            ❌ 取消
+            ${DIFF_SERVICE_TEXT.BTN_CANCEL}
           </button>
           <button class="btn-confirm" onclick="vscode.postMessage({ action: 'confirm' })">
-            ✅ 应用更改
+            ${DIFF_SERVICE_TEXT.BTN_CONFIRM}
           </button>
         </div>
 
