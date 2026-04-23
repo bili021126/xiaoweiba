@@ -59,7 +59,7 @@ export class GenerateCommitAgent implements IAgent {
 
       const workspacePath = workspaceFolders[0].uri.fsPath;
 
-      // 2. 获取 Git diff
+      // 2. ✅ 增强 #4: 多状态场景支持 - 检测 Git 状态
       let commitMessage = ''; // ✅ P1-04: 提升作用域
       let diff = ''; // ✅ 修复 #P3: 提升作用域
       
@@ -70,14 +70,60 @@ export class GenerateCommitAgent implements IAgent {
       }, async (progress) => {
         progress.report({ message: '📊 分析代码变更...', increment: 10 });
 
+        // 先检查是否有 staged 变更
         diff = await this.getGitDiff(workspacePath);
         
+        // ✅ 如果没有 staged 变更，检查是否有未暂存变更
         if (!diff || diff.trim().length === 0) {
-          vscode.window.showInformationMessage('✅ 没有检测到代码变更');
-          return;
+          const unstagedDiff = await this.getUnstagedDiff(workspacePath);
+          if (unstagedDiff && unstagedDiff.trim().length > 0) {
+            const choice = await vscode.window.showWarningMessage(
+              '⚠️ 检测到未暂存的变更，是否一键暂存所有变更？',
+              { modal: true },
+              '✅ 是，暂存所有变更',
+              '❌ 否，取消操作'
+            );
+            
+            if (choice === '✅ 是，暂存所有变更') {
+              await this.stageAllChanges(workspacePath);
+              diff = await this.getGitDiff(workspacePath);
+            } else {
+              vscode.window.showInformationMessage('❌ 已取消操作');
+              return;
+            }
+          }
+          
+          if (!diff || diff.trim().length === 0) {
+            vscode.window.showInformationMessage('✅ 没有检测到代码变更');
+            return;
+          }
         }
 
         progress.report({ message: '🧠 学习提交风格...', increment: 20 });
+
+        // ✅ 增强 #5: 变更规模分析
+        const changedFilesCount = (diff.match(/diff --git/g) || []).length;
+        if (changedFilesCount > 5) {
+          console.log(`[GenerateCommitAgent] Large change detected: ${changedFilesCount} files`);
+          // 可以在这里添加逻辑：建议用户拆分提交
+        }
+
+        // ✅ 增强 #6: 预提交安全检查 - 检测敏感文件
+        const sensitiveFiles = ['.env', 'secrets', 'credentials', 'private_key', '.pem'];
+        const hasSensitiveFile = sensitiveFiles.some(file => diff.includes(file));
+        if (hasSensitiveFile) {
+          const warning = await vscode.window.showWarningMessage(
+            '⚠️ 检测到可能包含敏感信息的文件被修改，是否继续提交？',
+            { modal: true },
+            '✅ 是，继续提交',
+            '❌ 否，取消操作'
+          );
+          
+          if (warning !== '✅ 是，继续提交') {
+            vscode.window.showInformationMessage('❌ 已取消提交');
+            return;
+          }
+        }
 
         // ✅ 增强 #1: 学习用户历史提交风格
         const stylePreferences = await this.styleLearner.learnFromHistory();
@@ -263,6 +309,31 @@ ${diff.substring(0, 8000)}
     } catch (error) {
       // 提交应用失败，重新抛出由调用方处理
       throw error;
+    }
+  }
+
+  /**
+   * ✅ 增强 #4: 获取未暂存变更的 diff
+   */
+  private async getUnstagedDiff(workspacePath: string): Promise<string> {
+    try {
+      const { stdout } = await execAsync('git diff', { cwd: workspacePath });
+      return stdout;
+    } catch (error) {
+      console.warn('[GenerateCommitAgent] Failed to get unstaged diff:', error);
+      return '';
+    }
+  }
+
+  /**
+   * ✅ 增强 #4: 一键暂存所有变更
+   */
+  private async stageAllChanges(workspacePath: string): Promise<void> {
+    try {
+      await execAsync('git add .', { cwd: workspacePath });
+      console.log('[GenerateCommitAgent] All changes staged');
+    } catch (error) {
+      throw new Error(`暂存变更失败: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
