@@ -25,7 +25,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private view?: vscode.WebviewView;
   private currentSessionId: string | undefined;
   private unsubscribers: Array<() => void> = []; // ✅ 保存取消订阅函数
-  private isRestoringOnStartup = true; // ✅ 标记是否为插件启动后的首次恢复
 
   constructor(
     @inject('IEventBus') private eventBus: IEventBus,
@@ -153,33 +152,23 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
       webviewView.webview.html = this.getHtmlForWebview(webviewView.webview);
 
-      // ✅ 会话恢复：仅在插件启动后的首次 Webview 创建时执行
-      if (this.isRestoringOnStartup) {
-        this.isRestoringOnStartup = false; // 标记为已恢复，后续不再自动恢复
-        
-        const savedSessionId = this.context.workspaceState.get<string>('currentSessionId');
-        if (savedSessionId) {
-          console.log('[ChatViewProvider] Restoring session on startup:', savedSessionId);
-          this.currentSessionId = savedSessionId;
-          // 注意：此时 Webview 可能还未完全就绪，延迟执行以确保前端能接收消息
-          setTimeout(() => {
-            this.handleSwitchSession(savedSessionId).catch(err => {
-              console.error('[ChatViewProvider] Failed to restore session:', err);
-            });
-          }, 100);
-        } else {
-          console.log('[ChatViewProvider] No saved session, starting fresh');
-        }
-      } else {
-        console.log('[ChatViewProvider] Webview recreated, keeping current session:', this.currentSessionId);
-      }
+      // ✅ 会话恢复逻辑已移至 'ready' 消息处理中，由前端主导会话状态切换
 
       // 处理来自Webview的消息
       webviewView.webview.onDidReceiveMessage(async (message) => {
         switch (message.type) {
           case 'webviewReady':
-            // ✅ Webview 就绪信号（前端通知后端，可用于其他初始化逻辑）
-            console.log('[ChatViewProvider] Webview ready signal received');
+            // ✅ 会话恢复：通知前端恢复上次的会话（由前端主导切换）
+            const savedSessionId = this.context.workspaceState.get<string>('currentSessionId');
+            if (savedSessionId) {
+              console.log('[ChatViewProvider] Sending restoreSession to frontend:', savedSessionId);
+              this.view?.webview.postMessage({
+                type: 'restoreSession',
+                sessionId: savedSessionId
+              });
+            } else {
+              console.log('[ChatViewProvider] No saved session, frontend will start fresh');
+            }
             break;
             
           case 'sendMessage':

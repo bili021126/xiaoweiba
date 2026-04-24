@@ -355,6 +355,16 @@ export const CHAT_SCRIPTS = `
         }
         break;
 
+      case 'restoreSession':
+        // ✅ 会话恢复：前端收到后端的恢复指令，主动请求加载历史
+        if (message.sessionId && message.sessionId !== currentSessionId) {
+          console.log('[Frontend] Restoring session:', message.sessionId);
+          currentSessionId = message.sessionId;
+          // 通知后端加载该会话的历史
+          vscode.postMessage({ type: 'switchSession', sessionId: message.sessionId });
+        }
+        break;
+
       case 'clearMessages':
         // ✅ 清空消息列表（删除当前会话时触发）
         const msgContainer = document.getElementById('messagesContainer');
