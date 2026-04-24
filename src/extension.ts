@@ -202,9 +202,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     container.registerInstance(CommitStyleLearner, commitStyleLearner);
 
 
-    // ✅ 注册 TaskTokenManager
-    const taskTokenManager = new TaskTokenManager();
-    container.registerInstance(TaskTokenManager, taskTokenManager);
+    // ✅ 注册 TaskTokenManager（单例）
+    container.registerSingleton(TaskTokenManager);
 
 
     // 初始化记忆系统

@@ -35,7 +35,7 @@ export class ChatAgent implements IAgent {
     @inject('IMemoryPort') private memoryPort: IMemoryPort,  // ✅ 使用端口接口
     @inject('IEventBus') private eventBus: IEventBus,  // ✅ 注入全局单例
     @inject(PromptComposer) private promptComposer: PromptComposer, // ✅ L1: 注入提示词编排器
-    private dialogManager: DialogManager = new DialogManager() // ✅ P2: 初始化对话管理器
+    @inject(DialogManager) private dialogManager: DialogManager // ✅ P2: 依赖注入对话管理器
   ) {}
 
   async initialize(): Promise<void> {

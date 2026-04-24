@@ -15,7 +15,10 @@ module.exports = {
     '@typescript-eslint/no-explicit-any': 'warn',
     '@typescript-eslint/explicit-module-boundary-types': 'off',
     '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
-    'no-console': 'warn',
+    
+    // ✅ 规范化 console 使用：禁止 console.log/warn，仅允许 console.error
+    'no-console': ['error', { allow: ['error'] }],
+    
     '@typescript-eslint/no-unsafe-assignment': 'warn',
     '@typescript-eslint/no-unsafe-argument': 'warn',
     '@typescript-eslint/restrict-template-expressions': 'warn',

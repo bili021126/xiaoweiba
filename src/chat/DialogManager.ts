@@ -1,5 +1,6 @@
 import { ChatMessage } from './types';
 import { CONFIDENCE_THRESHOLDS } from '../constants';
+import { injectable } from 'tsyringe';
 
 /**
  * 对话状态枚举
@@ -48,6 +49,7 @@ export interface DialogContext {
  * 
  * 负责管理多轮对话的状态、澄清流程和交互模式切换
  */
+@injectable()
 export class DialogManager {
   private context: DialogContext;
   private readonly MAX_HISTORY = 20;
