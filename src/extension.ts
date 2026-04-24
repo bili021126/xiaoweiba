@@ -385,7 +385,8 @@ async function initializeContainer(context: vscode.ExtensionContext): Promise<vo
   // 它们将在Step 4中DatabaseManager注册之后再解析
 
   // ✅ 成本优化：基于最新定价的分层模型策略（Flash作为默认，Pro用于复杂推理）
-  const llmTool = container.resolve(LLMTool);
+  // ⚠️ 注意：LLMTool 必须在 loadConfig() 之后才能 resolve，否则会获取到旧配置
+  // const llmTool = container.resolve(LLMTool);  // ← 已移至 activate() 函数的 Step 4
   
   // 1️⃣ Flash Adapter（默认，覆盖95%的高频任务）
   // 用于：OptimizeSQLAgent, CheckNamingAgent, InlineCompletionAgent 等
