@@ -126,8 +126,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     await initializeContainer(context);
 
     // Step 2: 加载配置
+    console.log('[Extension] Step 2: Loading configuration...');
     configManager = container.resolve(ConfigManager);
+    console.log('[Extension] ConfigManager resolved, calling loadConfig()...');
     await configManager.loadConfig();
+    console.log('[Extension] ✅ Configuration loaded successfully');
 
     // Step 3: 初始化数据库
     databaseManager = container.resolve(DatabaseManager);
