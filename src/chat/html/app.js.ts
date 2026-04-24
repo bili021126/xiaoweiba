@@ -354,6 +354,11 @@ export const CHAT_SCRIPTS = `
         }
         break;
 
+      case 'updateSuggestions':
+        // ✅ 550B: 更新推荐操作卡片
+        updateSuggestionCards(message.suggestions);
+        break;
+
       case 'restoreSession':
         // ✅ 会话恢复：前端收到后端的恢复指令，主动请求加载历史
         if (message.sessionId && message.sessionId !== currentSessionId) {
@@ -432,5 +437,34 @@ export const CHAT_SCRIPTS = `
       
       sessionList.appendChild(item);
     });
+  }
+
+  /**
+   * ✅ 550B: 更新推荐操作卡片
+   */
+  function updateSuggestionCards(suggestions) {
+    const container = document.getElementById('suggestionCards');
+    if (!container) return;
+
+    if (!suggestions || suggestions.length === 0) {
+      container.style.display = 'none';
+      return;
+    }
+
+    container.innerHTML = '';
+    suggestions.forEach(sugg => {
+      const btn = document.createElement('button');
+      btn.className = 'suggestion-card';
+      btn.textContent = sugg.label;
+      btn.onclick = () => {
+        // 点击后发送对应的意图消息
+        vscode.postMessage({ type: 'sendMessage', text: sugg.label, intent: sugg.intent });
+        // 隐藏卡片
+        container.style.display = 'none';
+      };
+      container.appendChild(btn);
+    });
+
+    container.style.display = 'flex';
   }
 `;

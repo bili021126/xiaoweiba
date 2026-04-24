@@ -55,6 +55,11 @@ export const CHAT_TEMPLATE = `
 
       <!-- 输入区域 -->
       <div class="input-container">
+        <!-- ✅ 550B: 推荐操作卡片 -->
+        <div id="suggestionCards" class="suggestion-cards" style="display: none; padding: 8px 16px; gap: 8px; flex-wrap: wrap;">
+          <!-- 建议卡片将动态插入这里 -->
+        </div>
+        
         <div class="input-hints">
           <span><kbd>Enter</kbd> 发送</span>
           <span><kbd>Shift+Enter</kbd> 换行</span>

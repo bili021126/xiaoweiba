@@ -181,6 +181,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       setTimeout(() => {
         if (this.view) {
           this.view.webview.postMessage({ type: 'hideLoading' });
+          // ✅ 550B: 初始化推荐操作卡片
+          this.updateSuggestionCards();
         }
       }, 1000);
     } catch (error) {
@@ -351,6 +353,35 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     } catch (error) {
       vscode.window.showWarningMessage('删除会话失败，请重试');
       throw error;
+    }
+  }
+
+  /**
+   * ✅ 550B: 根据当前文件上下文更新推荐操作卡片
+   */
+  private async updateSuggestionCards(): Promise<void> {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || !this.view) return;
+
+    const fileName = editor.document.fileName.split(/[/\\]/).pop() || '';
+    const language = editor.document.languageId;
+    const suggestions: Array<{ label: string; intent: string }> = [];
+
+    // 根据语言类型生成建议
+    if (language === 'sql') {
+      suggestions.push({ label: '优化这段 SQL', intent: 'optimize_sql' });
+      suggestions.push({ label: '解释查询逻辑', intent: 'explain_code' });
+    } else if (['javascript', 'typescript', 'python', 'java'].includes(language)) {
+      suggestions.push({ label: '生成单元测试', intent: 'generate_test' });
+      suggestions.push({ label: '检查命名规范', intent: 'check_naming' });
+      suggestions.push({ label: '解释这段代码', intent: 'explain_code' });
+    }
+
+    if (suggestions.length > 0) {
+      this.view.webview.postMessage({
+        type: 'updateSuggestions',
+        suggestions
+      });
     }
   }
 
