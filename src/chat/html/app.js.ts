@@ -351,14 +351,12 @@ export const CHAT_SCRIPTS = `
         if (container && message.session && message.session.messages) {
           container.innerHTML = '';
           message.session.messages.forEach(msg => appendMessage(msg));
-          console.log('[Frontend] Session loaded:', message.session.id, 'messages:', message.session.messages.length);
         }
         break;
 
       case 'restoreSession':
         // ✅ 会话恢复：前端收到后端的恢复指令，主动请求加载历史
         if (message.sessionId && message.sessionId !== currentSessionId) {
-          console.log('[Frontend] Restoring session:', message.sessionId);
           currentSessionId = message.sessionId;
           // 通知后端加载该会话的历史
           vscode.postMessage({ type: 'switchSession', sessionId: message.sessionId });
@@ -370,7 +368,6 @@ export const CHAT_SCRIPTS = `
         const msgContainer = document.getElementById('messagesContainer');
         if (msgContainer) {
           msgContainer.innerHTML = '';
-          console.log('[Frontend] Messages cleared');
         }
         break;
 
@@ -380,7 +377,6 @@ export const CHAT_SCRIPTS = `
 
       // ✅ DeepSeek 风格：会话列表变化，请求后端发送完整列表
       case 'sessionListChanged':
-        console.log('[Frontend] Session list changed, requesting full list...');
         // TODO: 通过 postMessage 请求后端发送完整列表
         // vscode.postMessage({ type: 'requestSessionList' });
         break;

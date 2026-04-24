@@ -100,7 +100,7 @@ export class SessionManagementAgent implements IAgent {
       createdAt: Date.now()
     });
 
-    console.log('[SessionManagementAgent] Created session:', sessionId, 'with title:', friendlyTitle);
+    console.log('[SessionManagementAgent] Created session:', sessionId);
 
     // ✅ 发布会话列表更新事件（通知前端刷新列表）
     this.eventBus.publish(new SessionListUpdatedEvent('created', sessionId));
@@ -132,17 +132,13 @@ export class SessionManagementAgent implements IAgent {
   private async handleSwitchSession(intent: Intent, startTime: number): Promise<AgentResult> {
     const sessionId = intent.userInput;
     
-    console.log('[SessionManagementAgent] Handling switch session:', sessionId);
-    
     if (!sessionId) {
       throw new Error('缺少会话ID');
     }
 
     // ✅ P1-02: 从数据库加载会话历史
-    console.log('[SessionManagementAgent] Loading session history from database...');
     const history = await this.memoryPort.loadSessionHistory(sessionId);
-    console.log('[SessionManagementAgent] Loaded', history.length, 'messages');
-
+    
     // ✅ P1-04: 发布会话历史加载事件（携带完整历史供前端渲染）
     const messages = history.map((msg, index) => ({
       id: `msg_${msg.timestamp}_${index}`,
@@ -151,20 +147,10 @@ export class SessionManagementAgent implements IAgent {
       timestamp: msg.timestamp
     }));
     
-    console.log('[SessionManagementAgent] Publishing SessionHistoryLoadedEvent with', messages.length, 'messages');
     this.eventBus.publish(new SessionHistoryLoadedEvent(sessionId, messages));
 
     // ✅ 发布会话列表更新事件（通知前端当前会话已切换）
     this.eventBus.publish(new SessionListUpdatedEvent('switched', sessionId));
-
-    // ✅ DeepSeek 风格：简洁提示，显示消息数量
-    this.eventBus.publish(new AssistantResponseEvent({
-      messageId: `msg_${Date.now()}_system`,
-      content: history.length > 0 
-        ? `🔄 已切换会话（${history.length} 条消息）`
-        : `🔄 已切换到新会话`,
-      timestamp: Date.now()
-    }));
 
     return {
       success: true,

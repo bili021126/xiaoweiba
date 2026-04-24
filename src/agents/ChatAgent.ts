@@ -54,9 +54,6 @@ export class ChatAgent implements IAgent {
     const { intent, memoryContext } = params;
 
     try {
-      // ✅ 添加调试日志
-      console.log('[ChatAgent] Intent:', intent.name, 'UserInput:', intent.userInput, 'CodeContext:', intent.codeContext);
-
       // ✅ 处理无用户输入的情况
       let userMessage = intent.userInput;
       
@@ -93,9 +90,6 @@ export class ChatAgent implements IAgent {
 
       // 2. 构建系统提示
       const systemPrompt = this.buildSystemPrompt(intent, memoryContext);
-      
-      // ✅ 调试日志：打印系统提示词
-      console.log('[ChatAgent] System prompt:', systemPrompt);
 
       // 3. 调用LLM（流式）
       const messageId = `msg_${Date.now()}_assistant`;
@@ -112,7 +106,6 @@ export class ChatAgent implements IAgent {
         },
         (chunk: string) => {
           fullContent += chunk;
-          console.log('[ChatAgent] onChunk called, chunk length:', chunk.length, 'total:', fullContent.length);  // 临时加这行
           // ✅ 发布流式块事件
           this.eventBus.publish(new StreamChunkEvent(messageId, chunk));
         }

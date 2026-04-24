@@ -46,9 +46,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         const streamEvent = event as any;
         const payload = streamEvent.payload || streamEvent;
         
-        // ✅ 调试日志
-        console.log('[ChatViewProvider] received streamChunk:', payload.chunk);
-        
         this.view?.webview.postMessage({
           type: 'streamChunk',
           messageId: payload.messageId,
@@ -82,14 +79,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         const sessionEvent = event as any;
         const payload = sessionEvent.payload || sessionEvent;
         
-        console.log('[ChatViewProvider] Session list updated:', payload.action, payload.sessionId);
-        
         try {
           // ✅ 修复：如果是新建会话，保存当前会话 ID
           if (payload.action === 'created' && payload.sessionId) {
             this.currentSessionId = payload.sessionId;
             await this.context.workspaceState.update('currentSessionId', payload.sessionId);
-            console.log('[ChatViewProvider] Saved new session to workspaceState:', payload.sessionId);
           }
           
           // ✅ 通过 IMemoryPort 获取完整的会话列表
@@ -100,8 +94,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             sessions,
             currentSessionId: this.currentSessionId  // ✅ 使用当前的 sessionId
           });
-          
-          console.log('[ChatViewProvider] Sent session list to frontend:', sessions.length, 'sessions');
         } catch (error) {
           console.error('[ChatViewProvider] Failed to send session list:', error);
         }
@@ -114,10 +106,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         const historyEvent = event as any;
         const payload = historyEvent.payload || historyEvent;
         
-        console.log('[ChatViewProvider] SessionHistoryLoadedEvent received');
-        console.log('[ChatViewProvider] Session ID:', payload.sessionId);
-        console.log('[ChatViewProvider] Messages count:', payload.messages?.length || 0);
-        
         // 通知前端加载会话历史
         const messageData = {
           type: 'loadSession',
@@ -127,9 +115,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           }
         };
         
-        console.log('[ChatViewProvider] Sending loadSession to webview...');
         this.view?.webview.postMessage(messageData);
-        console.log('[ChatViewProvider] loadSession message sent');
       })
     );
   }
@@ -161,13 +147,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             // ✅ 会话恢复：通知前端恢复上次的会话（由前端主导切换）
             const savedSessionId = this.context.workspaceState.get<string>('currentSessionId');
             if (savedSessionId) {
-              console.log('[ChatViewProvider] Sending restoreSession to frontend:', savedSessionId);
               this.view?.webview.postMessage({
                 type: 'restoreSession',
                 sessionId: savedSessionId
               });
-            } else {
-              console.log('[ChatViewProvider] No saved session, frontend will start fresh');
             }
             break;
             
@@ -185,15 +168,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             break;
           case 'feedback':
             // ✅ 修复 #3：处理用户反馈，激活学习闭环
-            console.log('[ChatViewProvider] Feedback received:', message);
-            
             const { query, memoryId, dwellTimeMs } = message;
             if (query && memoryId && dwellTimeMs !== undefined) {
               // 发布反馈事件，ExpertSelector 会订阅并处理
               this.eventBus.publish(new FeedbackGivenEvent(query, memoryId, dwellTimeMs));
-              console.log('[ChatViewProvider] FeedbackGivenEvent published:', { query, memoryId, dwellTimeMs });
-            } else {
-              console.warn('[ChatViewProvider] Invalid feedback message:', message);
             }
             break;
         }
@@ -221,7 +199,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     if (!this.currentSessionId) {
       this.currentSessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       await this.context.workspaceState.update('currentSessionId', this.currentSessionId);
-      console.log('[ChatViewProvider] Auto-created session for first message:', this.currentSessionId);
       
       // ✅ 直接调用 memoryPort 创建会话（绕过 IntentDispatcher，避免 sessionId 冲突）
       const now = new Date();
@@ -290,7 +267,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       // ✅ 2. 更新当前会话 ID
       this.currentSessionId = newSessionId;
       await this.context.workspaceState.update('currentSessionId', newSessionId);
-      console.log('[ChatViewProvider] Created new session:', newSessionId);
       
       // ✅ 3. 清空前端的消息区
       this.view?.webview.postMessage({ type: 'clearMessages' });
