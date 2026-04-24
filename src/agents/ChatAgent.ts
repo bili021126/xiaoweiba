@@ -2,7 +2,7 @@ import { IAgent, AgentCapability, AgentMetadata, AgentResult } from '../core/age
 import { ILLMPort, LLMMessage } from '../core/ports/ILLMPort';
 import { IMemoryPort } from '../core/ports/IMemoryPort';
 import { IEventBus } from '../core/ports/IEventBus';
-import { MemoryContext } from '../core/domain/MemoryContext';
+import { ChatMemoryContext } from '../core/domain/MemoryContext'; // ✅ 任务2：使用聊天专用上下文
 import { Intent } from '../core/domain/Intent';
 import { AssistantResponseEvent, StreamChunkEvent, TaskCompletedEvent } from '../core/events/DomainEvent';
 import { injectable, inject } from 'tsyringe';
@@ -45,7 +45,7 @@ export class ChatAgent implements IAgent {
 
   async execute(params: {
     intent: Intent;
-    memoryContext: MemoryContext;
+    memoryContext: ChatMemoryContext; // ✅ 任务2：使用聊天专用上下文
   }): Promise<AgentResult> {
     if (!this.initialized) {
       throw new Error('Agent未初始化');
@@ -185,7 +185,7 @@ export class ChatAgent implements IAgent {
   /**
    * 构建消息历史（从MemoryContext中获取）
    */
-  private buildMessageHistory(memoryContext: MemoryContext, intent: Intent): LLMMessage[] {
+  private buildMessageHistory(memoryContext: ChatMemoryContext, intent: Intent): LLMMessage[] {
     // 从记忆上下文中获取会话历史
     const sessionHistory = memoryContext.sessionHistory || [];
     
@@ -242,7 +242,7 @@ export class ChatAgent implements IAgent {
   /**
    * 构建系统提示
    */
-  private buildSystemPrompt(intent: Intent, memoryContext: MemoryContext): string {
+  private buildSystemPrompt(intent: Intent, memoryContext: ChatMemoryContext): string {
     // ✅ L1: 委托给 PromptComposer，保持 Agent 精简
     return this.promptComposer.buildSystemPrompt(intent, memoryContext);
   }

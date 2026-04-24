@@ -9,7 +9,7 @@
 import { injectable } from 'tsyringe';
 import { Intent } from '../domain/Intent';
 import { PathUtils } from '../../utils/ProjectFingerprint'; // ✅ 统一路径处理
-import { MemoryContext } from '../domain/MemoryContext';
+import { MemoryContext, ChatMemoryContext } from '../domain/MemoryContext'; // ✅ 任务2：支持聊天上下文
 
 @injectable()
 export class PromptComposer {
@@ -17,7 +17,7 @@ export class PromptComposer {
   /**
    * 构建完整的系统提示词
    */
-  buildSystemPrompt(intent: Intent, memoryContext: MemoryContext): string {
+  buildSystemPrompt(intent: Intent, memoryContext: MemoryContext | ChatMemoryContext): string {
     const parts: string[] = [];
 
     // 1. 基础角色设定

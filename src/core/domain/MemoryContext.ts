@@ -59,7 +59,9 @@ export interface CommitStylePreference {
 }
 
 /**
- * 记忆上下文
+ * 记忆上下文（基础版）
+ * 
+ * 适用于所有意图类型，包含通用的记忆检索结果
  */
 export interface MemoryContext {
   episodicMemories: EpisodicMemoryItem[];
@@ -68,14 +70,22 @@ export interface MemoryContext {
     preferredAgent?: string;
     commitStylePreference?: CommitStylePreference;  // ✅ 添加提交风格偏好
   };
-  /** 会话历史（用于多轮对话） */
-  sessionHistory?: Array<{ role: string; content: string }>;
   /** 原始查询文本（可选） */
   originalQuery?: string;
   /** 检索耗时（ms，可选） */
   retrievalDuration?: number;
-  /** ✅ 新增：L2 关键决策（本次会话累积） */
-  keyDecisions?: KeyDecision[];
-  /** ✅ 新增：L3 会话摘要（由 SessionCompressor 生成） */
+}
+
+/**
+ * 聊天记忆上下文（扩展版）
+ * 
+ * 仅用于 chat/qa 意图，包含多轮对话所需的额外字段
+ */
+export interface ChatMemoryContext extends MemoryContext {
+  /** 会话历史（用于多轮对话） */
+  sessionHistory: Array<{ role: string; content: string }>;
+  /** ✅ L2 关键决策（本次会话累积） */
+  keyDecisions: KeyDecision[];
+  /** ✅ L3 会话摘要（由 SessionCompressor 生成） */
   sessionSummary?: string;
 }
