@@ -233,9 +233,10 @@ export class LLMTool implements ILLMTool {
     
     // ✅ 调试日志：帮助排查 Provider 找不到的问题
     if (!provider) {
-      console.error(`[LLMTool] Provider not found: ${providerId}`);
-      console.error(`[LLMTool] Available providers:`, config.model.providers.map(p => p.id));
+      console.error(`[LLMTool] ❌ Provider not found: ${providerId}`);
+      console.error(`[LLMTool] Available providers:`, config.model.providers.map(p => ({ id: p.id, modelName: p.modelName })));
       console.error(`[LLMTool] Default model:`, config.model.default);
+      console.error(`[LLMTool] Config file path:`, (this.configManager as any).configPath);
     }
     
     return provider;
