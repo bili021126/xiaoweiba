@@ -229,7 +229,16 @@ export class LLMTool implements ILLMTool {
    */
   private getProviderConfig(providerId: string): ModelProviderConfig | undefined {
     const config = this.configManager.getConfig();
-    return config.model.providers.find((p) => p.id === providerId);
+    const provider = config.model.providers.find((p) => p.id === providerId);
+    
+    // ✅ 调试日志：帮助排查 Provider 找不到的问题
+    if (!provider) {
+      console.error(`[LLMTool] Provider not found: ${providerId}`);
+      console.error(`[LLMTool] Available providers:`, config.model.providers.map(p => p.id));
+      console.error(`[LLMTool] Default model:`, config.model.default);
+    }
+    
+    return provider;
   }
 
   /**
