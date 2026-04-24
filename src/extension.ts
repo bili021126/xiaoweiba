@@ -312,6 +312,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
  */
 export async function deactivate(): Promise<void> {
   try {
+    // ✅ 修复 #14：先记录日志，再销毁 ConfigManager（AuditLogger 依赖 ConfigManager）
+    if (auditLogger) {
+      await auditLogger.log('extension_deactivate', 'success', 0);
+    }
+
     if (databaseManager) {
       databaseManager.close();
     }
@@ -332,9 +337,6 @@ export async function deactivate(): Promise<void> {
     }
     if (preferenceMemory) {
       // PreferenceMemory暂无dispose，预留
-    }
-    if (auditLogger) {
-      await auditLogger.log('extension_deactivate', 'success', 0);
     }
     
     // Phase 2: 清理新架构组件

@@ -3,7 +3,6 @@ import { inject, injectable } from 'tsyringe';
 import { IEventBus } from '../core/ports/IEventBus';
 import { IntentDispatcher } from '../core/application/IntentDispatcher';
 import { IntentFactory } from '../core/factory/IntentFactory';
-import { ContextEnricher } from '../core/application/ContextEnricher';
 import { IMemoryPort } from '../core/ports/IMemoryPort'; // ✅ DeepSeek 风格：注入 MemoryPort
 import { AssistantResponseEvent, StreamChunkEvent, SessionListUpdatedEvent, SessionHistoryLoadedEvent } from '../core/events/DomainEvent'; // ✅ P1-04: 引入新事件
 import { generateChatViewHtml } from './ChatViewHtml';
@@ -30,7 +29,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   constructor(
     @inject('IEventBus') private eventBus: IEventBus,
     @inject(IntentDispatcher) private intentDispatcher: IntentDispatcher,
-    @inject(ContextEnricher) private contextEnricher: ContextEnricher,
     @inject('IMemoryPort') private memoryPort: IMemoryPort, // ✅ DeepSeek 风格：注入 MemoryPort
     @inject('extensionContext') private context: vscode.ExtensionContext
   ) {
