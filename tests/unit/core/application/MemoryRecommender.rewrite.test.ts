@@ -10,9 +10,11 @@ const mockMemoryPort = createMockMemoryPort();
 
 describe('MemoryRecommender (Global Mock)', () => {
   let recommender: MemoryRecommender;
+  let mockMemoryPort: any;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockMemoryPort = createMockMemoryPort();
     recommender = new MemoryRecommender(mockMemoryPort);
   });
 
@@ -22,7 +24,7 @@ describe('MemoryRecommender (Global Mock)', () => {
         { id: 'mem1', summary: 'Test memory 1', timestamp: 1000 },
         { id: 'mem2', summary: 'Test memory 2', timestamp: 2000 }
       ];
-      (mockMemoryPort.search as jest.Mock).mockResolvedValue(mockMemories);
+      mockMemoryPort.search.mockResolvedValue(mockMemories);
 
       const result = await recommender.recommendForFile('/path/to/file.ts');
 
@@ -33,11 +35,21 @@ describe('MemoryRecommender (Global Mock)', () => {
     });
 
     it('should return empty array on error', async () => {
-      (mockMemoryPort.search as jest.Mock).mockRejectedValue(new Error('Search failed'));
+      mockMemoryPort.search.mockRejectedValue(new Error('Search failed'));
 
       const result = await recommender.recommendForFile('/path/to/file.ts');
 
       expect(result).toEqual([]);
+    });
+
+    it('should handle missing summary gracefully', async () => {
+      const mockMemories = [{ id: 'mem1', timestamp: 1000 }];
+      mockMemoryPort.search.mockResolvedValue(mockMemories);
+
+      const result = await recommender.recommendForFile('/path/to/test.ts');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].title).toContain('test.ts');
     });
   });
 });
