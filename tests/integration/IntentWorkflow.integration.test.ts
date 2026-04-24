@@ -6,11 +6,8 @@ import 'reflect-metadata';
 import { container } from 'tsyringe';
 import { IntentDispatcher } from '../../src/core/application/IntentDispatcher';
 import { IntentFactory } from '../../src/core/factory/IntentFactory';
-import { IMemoryPort } from '../../src/core/ports/IMemoryPort';
-import { ILLMPort } from '../../src/core/ports/ILLMPort';
-import { IAgentRegistry } from '../../src/core/ports/IAgentRegistry';
 import { ChatAgent } from '../../src/agents/ChatAgent';
-import { LLMCallOptions, LLMCallResult } from '../../src/core/ports/ILLMPort';
+import { createMockMemoryPort, createMockLLMPort, createMockAgentRegistry } from '../__mocks__/globalMocks';
 
 jest.mock('vscode', () => ({
   workspace: { getConfiguration: jest.fn() },
@@ -19,29 +16,20 @@ jest.mock('vscode', () => ({
 
 describe('Intent-Driven Workflow Integration', () => {
   let dispatcher: IntentDispatcher;
-  let mockMemoryPort: Partial<IMemoryPort>;
-  let mockLLM: Partial<ILLMPort>;
 
   beforeEach(() => {
     container.clearInstances();
 
-    // 1. 模拟基础设施
-    mockMemoryPort = {
-      recordMemory: jest.fn().mockResolvedValue('mem_123'),
-      retrieveContext: jest.fn().mockResolvedValue({ memories: [], preferences: [] }),
-      search: jest.fn().mockResolvedValue([])
-    };
-    
-    mockLLM = {
-      call: jest.fn().mockResolvedValue({ success: true, content: 'Hello! How can I help you today?' } as LLMCallResult)
-    };
+    // 1. 使用全局 Mock 工厂
+    const mockMemoryPort = createMockMemoryPort();
+    const mockLLM = createMockLLMPort();
 
     // 2. 注册 Mock 依赖
-    container.registerInstance('IMemoryPort', mockMemoryPort as IMemoryPort);
-    container.registerInstance('ILLMPort', mockLLM as ILLMPort);
+    container.registerInstance('IMemoryPort', mockMemoryPort);
+    container.registerInstance('ILLMPort', mockLLM);
     
     // 3. 注册 Agent
-    const registry = container.resolve('IAgentRegistry') as IAgentRegistry;
+    const registry = createMockAgentRegistry();
     const chatAgent = container.resolve(ChatAgent);
     registry.register(chatAgent);
     container.registerInstance('IAgentRegistry', registry);
@@ -51,6 +39,12 @@ describe('Intent-Driven Workflow Integration', () => {
   });
 
   it('should process a chat intent and record memory', async () => {
+    const mockMemoryPort = createMockMemoryPort();
+    container.registerInstance('IMemoryPort', mockMemoryPort);
+    
+    // 重新解析 Dispatcher 以获取最新的 Mock
+    dispatcher = container.resolve(IntentDispatcher);
+
     // 构建意图
     const intent = await IntentFactory.buildChatIntent('Hello, XiaoWeiba');
     
@@ -70,9 +64,12 @@ describe('Intent-Driven Workflow Integration', () => {
   });
 
   it('should handle LLM failure gracefully in integration flow', async () => {
-    // 模拟 LLM 故障
-    (mockLLM.call as jest.Mock).mockRejectedValue(new Error('Network error'));
+    const mockLLM = createMockLLMPort({ call: jest.fn().mockRejectedValue(new Error('Network error')) });
+    container.registerInstance('ILLMPort', mockLLM);
     
+    // 重新解析 Dispatcher 以获取最新的 Mock
+    dispatcher = container.resolve(IntentDispatcher);
+
     const intent = await IntentFactory.buildChatIntent('Test failure');
     const result = await dispatcher.dispatch(intent);
 

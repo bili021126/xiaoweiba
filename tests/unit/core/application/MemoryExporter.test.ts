@@ -1,18 +1,15 @@
 import 'reflect-metadata';
 import { MemoryExporter } from '../../../../src/core/application/MemoryExporter';
-import { IMemoryPort } from '../../../../src/core/ports/IMemoryPort';
+import { createMockMemoryPort } from '../../../__mocks__/globalMocks';
 
-const mockMemoryPort: Partial<IMemoryPort> = {
-  retrieveAll: jest.fn(),
-  recordMemory: jest.fn()
-};
+const mockMemoryPort = createMockMemoryPort();
 
 describe('MemoryExporter', () => {
   let exporter: MemoryExporter;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    exporter = new MemoryExporter(mockMemoryPort as IMemoryPort);
+    exporter = new MemoryExporter(mockMemoryPort);
   });
 
   describe('retrieveAll', () => {

@@ -1,18 +1,15 @@
 import 'reflect-metadata';
 import { SpecializedRetriever } from '../../../../src/core/application/SpecializedRetriever';
-import { IMemoryPort } from '../../../../src/core/ports/IMemoryPort';
+import { createMockMemoryPort } from '../../../__mocks__/globalMocks';
 
-const mockMemoryPort: Partial<IMemoryPort> = {
-  search: jest.fn(),
-  retrieveAll: jest.fn()
-};
+const mockMemoryPort = createMockMemoryPort();
 
 describe('SpecializedRetriever', () => {
   let retriever: SpecializedRetriever;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    retriever = new SpecializedRetriever(mockMemoryPort as IMemoryPort);
+    retriever = new SpecializedRetriever(mockMemoryPort);
   });
 
   describe('retrieveForExplainCode', () => {
