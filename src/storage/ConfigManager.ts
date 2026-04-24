@@ -318,10 +318,7 @@ export class ConfigManager {
       console.log(`[ConfigManager] Default model: ${config.model.default}`);
 
       
-      // ✅ 验证：确保 currentConfig 已正确更新
-      console.log(`[ConfigManager] 🔒 Verifying currentConfig after load...`);
-      console.log(`[ConfigManager] 🔒 this.currentConfig.model.default:`, this.currentConfig?.model?.default);
-      console.log(`[ConfigManager] 🔒 this.currentConfig === config:`, this.currentConfig === config);
+
 
       return config;
     } catch (error) {
@@ -440,10 +437,7 @@ export class ConfigManager {
    * 合并用户配置与默认配置
    */
   private mergeWithDefaults(userConfig: Partial<XiaoWeibaConfig>): XiaoWeibaConfig {
-    console.log('[ConfigManager] 🔍 mergeWithDefaults called');
-    console.log('[ConfigManager] userConfig.model?.default:', userConfig.model?.default);
-    console.log('[ConfigManager] userConfig.model?.providers count:', userConfig.model?.providers?.length);
-    console.log('[ConfigManager] DEFAULT_CONFIG.model.default:', DEFAULT_CONFIG.model.default);
+    
     
     const merged = {
       ...DEFAULT_CONFIG,
@@ -475,8 +469,7 @@ export class ConfigManager {
       }
     };
     
-    console.log('[ConfigManager] ✅ Merged config default:', merged.model.default);
-    console.log('[ConfigManager] ✅ Merged providers count:', merged.model.providers.length);
+    
     
     return merged;
   }
