@@ -222,6 +222,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       this.currentSessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       await this.context.workspaceState.update('currentSessionId', this.currentSessionId);
       console.log('[ChatViewProvider] Auto-created session for first message:', this.currentSessionId);
+      
+      // ✅ 通过IntentDispatcher创建会话（触发SessionListUpdatedEvent刷新侧边栏）
+      const intent = IntentFactory.buildNewSessionIntent();
+      intent.metadata.sessionId = this.currentSessionId;
+      await this.intentDispatcher.dispatch(intent);
     }
 
     try {
