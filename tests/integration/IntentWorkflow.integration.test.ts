@@ -8,7 +8,7 @@ import { IntentDispatcher } from '../../src/core/application/IntentDispatcher';
 import { IntentFactory } from '../../src/core/factory/IntentFactory';
 import { IMemoryPort } from '../../src/core/ports/IMemoryPort';
 import { ILLMPort } from '../../src/core/ports/ILLMPort';
-import { IAgentRegistry } from '../../src/core/agents/IAgentRegistry';
+import { IAgentRegistry } from '../../src/core/ports/IAgentRegistry';
 import { ChatAgent } from '../../src/agents/ChatAgent';
 import { LLMCallOptions, LLMCallResult } from '../../src/core/ports/ILLMPort';
 
@@ -41,7 +41,7 @@ describe('Intent-Driven Workflow Integration', () => {
     container.registerInstance('ILLMPort', mockLLM as ILLMPort);
     
     // 3. 注册 Agent
-    const registry = container.resolve(IAgentRegistry) as IAgentRegistry;
+    const registry = container.resolve('IAgentRegistry') as IAgentRegistry;
     const chatAgent = container.resolve(ChatAgent);
     registry.register(chatAgent);
     container.registerInstance('IAgentRegistry', registry);
