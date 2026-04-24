@@ -54,7 +54,6 @@ export class DatabaseManager {
         // VS Code 扩展环境：使用 require.resolve 定位 WASM 文件
         try {
           wasmPath = require.resolve('sql.js/dist/sql-wasm.wasm');
-          console.log('[DatabaseManager] Resolved WASM path:', wasmPath);
         } catch (resolveError) {
           // 降级方案：手动构建路径
           const projectRoot = path.join(__dirname, '..', '..');
@@ -71,8 +70,6 @@ export class DatabaseManager {
         wasmPath = require.resolve('sql.js/dist/sql-wasm.wasm');
       }
       
-      console.log('[DatabaseManager] Loading WASM from:', wasmPath);
-      
       this.SqlJs = await initSqlJs({
         locateFile: (file) => {
           if (file === 'sql-wasm.wasm') {
@@ -86,10 +83,8 @@ export class DatabaseManager {
       if (fs.existsSync(this.dbPath)) {
         const fileBuffer = fs.readFileSync(this.dbPath);
         this.db = new this.SqlJs.Database(fileBuffer);
-        console.log('[DatabaseManager] Existing database loaded');
       } else {
         this.db = new this.SqlJs.Database();
-        console.log('[DatabaseManager] New database created');
       }
 
       // 创建表结构
@@ -99,8 +94,7 @@ export class DatabaseManager {
       try {
         this.migrateAddMemoryTier();
       } catch (migrationError) {
-        console.warn('[DatabaseManager] Migration skipped:', 
-          migrationError instanceof Error ? migrationError.message : String(migrationError));
+        // 迁移失败不影响初始化，记录警告
       }
 
       // 创建索引
@@ -110,12 +104,8 @@ export class DatabaseManager {
       try {
         this.saveDatabase();
       } catch (saveError) {
-        console.warn('[DatabaseManager] Initial save failed, will retry on next write:', 
-          saveError instanceof Error ? saveError.message : String(saveError));
-        // 不抛出异常，允许插件继续激活
+        // 初始保存失败不影响初始化，将在下次写入时重试
       }
-
-      console.log('[DatabaseManager] Database initialized successfully at:', this.dbPath);
     } catch (error) {
       const homeDir = os.homedir();
       const detailedError = error instanceof Error ? error.message : String(error);
@@ -161,7 +151,7 @@ export class DatabaseManager {
     try {
       fs.writeFileSync(tempPath, buffer);
     } catch (error) {
-      console.error('[DatabaseManager] Failed to write temp file:', error);
+      // 临时文件写入失败，抛出异常
       throw error;
     }
 
@@ -174,7 +164,7 @@ export class DatabaseManager {
         renameSuccess = true;
         break;
       } catch (error) {
-        console.warn(`[DatabaseManager] Rename attempt ${i + 1} failed:`, error instanceof Error ? error.message : String(error));
+        // 重命名失败，记录警告并重试
         if (i < maxRetries - 1) {
           // ✅ 修复 #2：使用异步延迟替代忙等待
           await new Promise(resolve => setTimeout(resolve, 100));
@@ -184,24 +174,20 @@ export class DatabaseManager {
 
     // 3. 降级策略：如果重命名失败，直接覆盖写入
     if (!renameSuccess) {
-      console.warn('[DatabaseManager] Atomic rename failed, falling back to direct write');
       try {
         // 直接写入目标文件（非原子操作，但兼容性更好）
         fs.writeFileSync(this.dbPath, buffer);
         
-        // 清理临时文件
+        // 清理临时文件并确认保存成功
         if (fs.existsSync(tempPath)) {
           fs.unlinkSync(tempPath);
         }
-        
-        console.log('[DatabaseManager] Database saved successfully (direct write)');
       } catch (error) {
         console.error('[DatabaseManager] Direct write also failed:', error);
         throw error;
       }
-    } else {
-      console.log('[DatabaseManager] Database saved successfully (atomic rename)');
     }
+    // 原子重命名成功，无需额外日志
   }
 
   /**
@@ -235,9 +221,7 @@ export class DatabaseManager {
     const isWriteOperation = writeOpRegex.test(sql);
       
     if (isWriteOperation) {
-      console.log(`[DatabaseManager] Write operation detected, saving to disk...`);
       this.saveDatabase();  // 立即落盘
-      console.log(`[DatabaseManager] Database saved successfully`);
     }
   }
 
@@ -249,7 +233,6 @@ export class DatabaseManager {
       this.saveDatabase();
       this.db.close();
       this.db = null;
-      console.log('[DatabaseManager] Database closed');
     }
   }
 
@@ -442,16 +425,15 @@ export class DatabaseManager {
       if (result.length > 0 && result[0].values.length > 0) {
         const checkResult = result[0].values[0][0] as string;
         if (checkResult === 'ok') {
-          console.log('[DatabaseManager] Database integrity check passed');
           return true;
         } else {
-          console.warn('[DatabaseManager] Database integrity check failed:', checkResult);
+          // 完整性检查失败
           return false;
         }
       }
       return false;
     } catch (error) {
-      console.error('[DatabaseManager] Database repair failed:', error);
+      // 修复失败，记录错误
       return false;
     }
   }
@@ -477,7 +459,6 @@ export class DatabaseManager {
       // 复制数据库文件
       fs.copyFileSync(this.dbPath, backupPath);
       
-      console.log('[DatabaseManager] Database backed up to:', backupPath);
       return backupPath;
     } catch (error) {
       console.error('[DatabaseManager] Backup failed:', error);
@@ -507,11 +488,10 @@ export class DatabaseManager {
       if (files.length > maxFiles) {
         files.slice(maxFiles).forEach(file => {
           fs.unlinkSync(file.path);
-          console.log('[DatabaseManager] Deleted old backup:', file.name);
         });
       }
     } catch (error) {
-      console.warn('[DatabaseManager] Failed to cleanup old backups:', error);
+      // 清理失败不影响主流程
     }
   }
 
@@ -659,7 +639,6 @@ export class DatabaseManager {
 
     // 保存更改
     this.saveDatabase();
-    console.log('[DatabaseManager] Data imported successfully');
   }
 
   /**
@@ -720,9 +699,7 @@ export class DatabaseManager {
     const isWriteOperation = writeOpRegex.test(sql);
       
     if (isWriteOperation) {
-      console.log(`[DatabaseManager] Write operation detected in runMutation, saving to disk...`);
       this.saveDatabase();
-      console.log(`[DatabaseManager] Database saved successfully`);
     }
     
     return { changes: db.getRowsModified() };
@@ -741,11 +718,8 @@ export class DatabaseManager {
       
       const hasMemoryTier = columnsResult[0].values.some((row: any[]) => row[1] === 'memory_tier');
       if (hasMemoryTier) {
-        console.log('[DatabaseManager] memory_tier column already exists, skip migration');
         return;
       }
-      
-      console.log('[DatabaseManager] Adding memory_tier column...');
       
       // SQLite不支持直接添加带默认值的列到已有数据的表，需要重建表
       db.run(`ALTER TABLE episodic_memory ADD COLUMN memory_tier TEXT DEFAULT 'LONG_TERM'`);
@@ -753,9 +727,6 @@ export class DatabaseManager {
       // 根据时间自动分类：7天内的为SHORT_TERM，其他为LONG_TERM
       const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
       db.run(`UPDATE episodic_memory SET memory_tier = 'SHORT_TERM' WHERE timestamp >= ?`, [sevenDaysAgo]);
-      
-      const updatedCount = db.getRowsModified();
-      console.log(`[DatabaseManager] Migrated ${updatedCount} memories to SHORT_TERM tier`);
       
       this.saveDatabase();
     } catch (error) {
