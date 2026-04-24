@@ -31,6 +31,10 @@ export const CHAT_SCRIPTS = `
   // 页面加载完成后立即隐藏loading
   window.addEventListener('DOMContentLoaded', () => {
     hideLoading();
+    
+    // ✅ 会话恢复：Webview 就绪后通知后端，触发会话历史加载
+    vscode.postMessage({ type: 'webviewReady' });
+    console.log('[Frontend] Webview ready, notified backend');
   });
 
   // 缓存正则表达式（性能优化）

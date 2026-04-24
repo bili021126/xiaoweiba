@@ -152,19 +152,23 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
       webviewView.webview.html = this.getHtmlForWebview(webviewView.webview);
 
-      // ✅ 修复：从 workspaceState 恢复之前的会话 ID
-      const savedSessionId = this.context.workspaceState.get<string>('currentSessionId');
-      if (savedSessionId) {
-        this.currentSessionId = savedSessionId;
-        console.log('[ChatViewProvider] Restored session:', savedSessionId);
-        
-        // ✅ 恢复会话后，自动加载历史消息
-        await this.handleSwitchSession(savedSessionId);
-      }
+      // ✅ 会话恢复逻辑已移至 'webviewReady' 消息处理中，确保 Webview 完全就绪后再加载历史
 
       // 处理来自Webview的消息
       webviewView.webview.onDidReceiveMessage(async (message) => {
         switch (message.type) {
+          case 'webviewReady':
+            // ✅ 会话恢复：Webview 就绪后，加载保存的会话历史
+            console.log('[ChatViewProvider] Webview ready, checking for saved session...');
+            const savedSessionId = this.context.workspaceState.get<string>('currentSessionId');
+            if (savedSessionId) {
+              console.log('[ChatViewProvider] Restored session:', savedSessionId);
+              await this.handleSwitchSession(savedSessionId);
+            } else {
+              console.log('[ChatViewProvider] No saved session, starting fresh');
+            }
+            break;
+            
           case 'sendMessage':
             await this.handleUserInput(message.text);
             break;
