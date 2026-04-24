@@ -6,7 +6,7 @@ import { Intent } from '../core/domain/Intent';
 import { AssistantResponseEvent, SessionListUpdatedEvent, SessionHistoryLoadedEvent } from '../core/events/DomainEvent'; // ✅ P1-04: 引入新事件
 import { injectable, inject } from 'tsyringe';
 import * as vscode from 'vscode';
-import * as crypto from 'crypto'; // ✅ 修复 #5：引入加密模块
+import * as crypto from 'crypto';
 
 /**
  * 会话管理Agent
@@ -88,7 +88,7 @@ export class SessionManagementAgent implements IAgent {
    * 处理新建会话
    */
   private async handleNewSession(startTime: number): Promise<AgentResult> {
-    // ✅ 修复 #5：使用 crypto.randomBytes 替代 Math.random
+    // 使用 crypto.randomBytes 生成更安全的 ID
     const randomPart = crypto.randomBytes(8).toString('hex');
     const sessionId = `session_${Date.now()}_${randomPart}`;
     const now = new Date();

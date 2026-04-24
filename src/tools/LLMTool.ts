@@ -234,7 +234,7 @@ export class LLMTool implements ILLMTool {
     console.log(`[LLMTool] 🔍 Looking for provider: ${providerId}`);
     console.log(`[LLMTool] Config default model: ${config.model.default}`);
     console.log(`[LLMTool] Available providers:`, config.model.providers.map(p => ({ id: p.id, modelName: p.modelName })));
-    console.log(`[LLMTool] ConfigManager instance:`, this.configManager.constructor.name);
+
     
     const provider = config.model.providers.find((p) => p.id === providerId);
     

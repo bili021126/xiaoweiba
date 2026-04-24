@@ -285,19 +285,19 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
    */
   private async handleSwitchSession(sessionId: string): Promise<void> {
     try {
-      console.log('[ChatViewProvider] Handling switchSession:', sessionId);
+      
       this.currentSessionId = sessionId;
       
       // ✅ 修复：保存当前会话 ID 到 workspaceState
       await this.context.workspaceState.update('currentSessionId', sessionId);
-      console.log('[ChatViewProvider] Saved session to workspaceState:', sessionId);
+      
       
       // ✅ P1-04: 通过IntentDispatcher处理切换逻辑
       // SessionManagementAgent 会发布 SessionHistoryLoadedEvent，由 ChatViewProvider 订阅并转发给前端
       const intent = IntentFactory.buildSwitchSessionIntent(sessionId);
-      console.log('[ChatViewProvider] Dispatching switch_session intent...');
+      
       await this.intentDispatcher.dispatch(intent);
-      console.log('[ChatViewProvider] Switch session completed');
+      
     } catch (error) {
       console.error('[ChatViewProvider] Switch session error:', error);
       vscode.window.showWarningMessage('切换会话失败，请重试');
@@ -320,7 +320,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         
         // ✅ 修复：清除 workspaceState 中的会话 ID
         await this.context.workspaceState.update('currentSessionId', undefined);
-        console.log('[ChatViewProvider] Cleared session from workspaceState');
+        
         
         this.view?.webview.postMessage({ type: 'clearMessages' });
         
@@ -335,13 +335,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
               
               // ✅ 修复：保存新的会话 ID
               await this.context.workspaceState.update('currentSessionId', firstSession.id);
-              console.log('[ChatViewProvider] Saved auto-switched session:', firstSession.id);
+              
               
               // 触发切换逻辑
               const switchIntent = IntentFactory.buildSwitchSessionIntent(firstSession.id);
               await this.intentDispatcher.dispatch(switchIntent);
               
-              console.log('[ChatViewProvider] Auto-switched to session:', firstSession.id);
+              
             }
           } catch (error) {
             console.error('[ChatViewProvider] Failed to auto-switch session:', error);

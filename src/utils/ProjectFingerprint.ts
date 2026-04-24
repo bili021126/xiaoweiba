@@ -3,11 +3,11 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as vscode from 'vscode';
 import { injectable } from 'tsyringe';
-import * as path from 'path'; // ✅ 修复 #39：引入 path 模块
+import * as path from 'path';
 
 const execAsync = promisify(exec);
 
-// ✅ 修复 #39：统一路径处理工具函数
+// 统一路径处理工具函数
 export class PathUtils {
   /**
    * 从完整路径中提取文件名（跨平台兼容）

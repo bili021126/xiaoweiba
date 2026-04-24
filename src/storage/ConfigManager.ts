@@ -188,7 +188,7 @@ export class ConfigManager {
 
   constructor(@inject('SecretStorage') private secretStorage: vscode.SecretStorage) {
     this.instanceId = ++ConfigManager.instanceCount;
-    console.log(`[ConfigManager] 🆔 Instance #${this.instanceId} created`);
+
     
     const homeDir = os.homedir();
     this.configPath = path.join(homeDir, '.xiaoweiba', 'config.yaml');
@@ -196,7 +196,7 @@ export class ConfigManager {
     
     // 初始化时设置默认配置，避免 getConfig() 在 loadConfig() 之前调用时失败
     this.currentConfig = { ...DEFAULT_CONFIG };
-    console.log(`[ConfigManager] 🆔 Instance #${this.instanceId} initialized with DEFAULT_CONFIG`);
+    
   }
 
   /**
@@ -316,7 +316,7 @@ export class ConfigManager {
 
       console.log(`[ConfigManager] ✅ Config loaded successfully from: ${this.configPath}`);
       console.log(`[ConfigManager] Default model: ${config.model.default}`);
-      console.log(`[ConfigManager] Providers:`, config.model.providers.map(p => p.id));
+
       
       // ✅ 验证：确保 currentConfig 已正确更新
       console.log(`[ConfigManager] 🔒 Verifying currentConfig after load...`);
@@ -350,8 +350,7 @@ export class ConfigManager {
     
     // ✅ 调试日志：追踪配置访问
     if (this.currentConfig.model.default === 'deepseek') {
-      console.warn(`[ConfigManager] 🆔#${this.instanceId} ⚠️ getConfig() returning OLD config (default: deepseek)`);
-      console.warn(`[ConfigManager] 🆔#${this.instanceId} currentConfig was set at constructor?`, this.currentConfig === require('../storage/ConfigManager').DEFAULT_CONFIG);
+
     }
     
     return this.currentConfig;
