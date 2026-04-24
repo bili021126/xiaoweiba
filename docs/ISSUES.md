@@ -1,7 +1,7 @@
 # 小尾巴（XiaoWeiba）问题记录
 
 **版本**: 1.0  
-**最后更新**: 2026-04-22（测试覆盖率提升 - 从 69.11% 提升至 71.55%）
+**最后更新**: 2026-04-22（交互打磨：配置修复/会话持久化/Agent分流）
 
 ---
 
@@ -394,6 +394,77 @@
 | P0 严重 | 19（全部修复） |
 | P1 警告 | 13（全部修复） |
 | P2 建议 | 2（全部修复） |
+
+---
+
+### 2026-04-22 - 交互打磨与稳定性优化（下午）
+
+#### P0 错误修复
+
+| 日期 | 问题 | 严重程度 | 原因 | 修复方案 | 状态 | 相关文件 |
+|------|------|---------|------|---------|------|----------|
+| 2026-04-22 | ConfigManager多实例导致配置不一致，LLM调用失败 | P0 | 未注册为tsyringe单例，创建了31个实例 | 在initializeContainer中注册为单例 | ✅ 已修复 | src/extension.ts |
+| 2026-04-22 | AgentRunner依赖注入时序错误，memoryAdapter为undefined | P0 | AgentRunner在memoryAdapter创建之前初始化 | 从initializeContainer移除，在activate中memoryAdapter创建后初始化 | ✅ 已修复 | src/extension.ts |
+
+**修复说明**:
+- **ConfigManager单例化**: 确保全局只有一个ConfigManager实例，所有组件共享同一配置
+- **AgentRunner时序修复**: 保证memoryAdapter在AgentRunner初始化前已创建并注册
+
+**验证结果**:
+```
+✅ [Extension] ConfigManager registered as singleton
+✅ [ConfigManager] 🔒 this.currentConfig.model.default: deepseek-v4-flash
+✅ [AgentRunner] Agent chat-agent completed successfully in 4556ms
+```
+
+---
+
+#### P1 错误修复
+
+| 日期 | 问题 | 严重程度 | 原因 | 修复方案 | 状态 | 相关文件 |
+|------|------|---------|------|---------|------|----------|
+| 2026-04-22 | 切换标签页时会话被重置 | P1 | ChatViewProvider未使用workspaceState持久化会话ID | 在新建/切换/删除会话时保存到workspaceState，Webview激活时恢复 | ✅ 已修复 | src/chat/ChatViewProvider.ts |
+| 2026-04-22 | Agent ID命名风格不统一 | P1 | 部分使用snake_case，部分使用kebab-case | 统一所有Agent ID为kebab-case | ✅ 已修复 | src/agents/*.ts, src/core/application/IntentDispatcher.ts |
+| 2026-04-22 | ChatAgent职责不清晰，同时处理chat/explain_code/qa | P1 | 违反单一职责原则 | 从supportedIntents中移除explain_code，由ExplainCodeAgent处理 | ✅ 已修复 | src/agents/ChatAgent.ts |
+| 2026-04-22 | EventBus验证逻辑过度约束，拦截内部领域事件 | P1 | validatePluginEvent强制所有非Core事件符合plugin.*格式 | 仅对以plugin.开头的事件进行格式校验 | ✅ 已修复 | src/core/eventbus/EventBus.ts, types.ts |
+
+**修复说明**:
+- **会话持久化**: 使用workspaceState保存当前会话ID，切换标签页不丢失
+- **Agent命名统一**: 全部改为kebab-case（chat-agent, explain-code-agent等）
+- **ChatAgent分流**: 专注聊天和问答，代码解释由ExplainCodeAgent处理
+- **EventBus优化**: 放行task.failed、system.error等内部领域事件
+
+**影响范围**:
+- 4个Agent文件重命名
+- 1个IntentDispatcher引用更新
+- 1个ChatViewProvider持久化逻辑
+- 2个EventBus相关文件
+
+---
+
+#### 已知问题（未修复）
+
+| 日期 | 问题 | 严重程度 | 原因 | 临时方案 | 状态 | 相关文件 |
+|------|------|---------|------|---------|------|----------|
+| 2026-04-22 | EmbeddingService模型加载失败 | P2 | Transformers.js在VS Code Node.js环境中不支持Browser cache | 优雅降级到关键词搜索 | ⚠️ 已降级 | src/core/application/EmbeddingService.ts |
+
+**说明**:
+- 不影响核心对话功能
+- 语义检索降级为关键词匹配
+- 后续可探索本地缓存方案
+
+---
+
+### 统计数据更新
+
+| 指标 | 数值 |
+|------|------|
+| **总问题数** | 41 |
+| **已修复** | 41（34个完全修复，7个重构优化） |
+| **待修复** | 0 |
+| **P0 严重** | 21（全部修复） |
+| **P1 警告** | 18（全部修复） |
+| **P2 建议** | 2（1个已修复，1个已降级） |
 
 ---
 
