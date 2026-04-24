@@ -112,6 +112,7 @@ export class ChatAgent implements IAgent {
         },
         (chunk: string) => {
           fullContent += chunk;
+          console.log('[ChatAgent] onChunk called, chunk length:', chunk.length, 'total:', fullContent.length);  // 临时加这行
           // ✅ 发布流式块事件
           this.eventBus.publish(new StreamChunkEvent(messageId, chunk));
         }

@@ -42,12 +42,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     // ✅ 订阅流式块事件（逐字更新）
     this.unsubscribers.push(
       this.eventBus.subscribe(StreamChunkEvent.type, (event) => {
-        // ✅ 类型安全：StreamChunkEvent有明确的messageId和chunk字段
-        const streamEvent = event as StreamChunkEvent;
+        // ✅ 修复：从 payload 中提取 chunk 数据
+        const streamEvent = event as any;
+        const payload = streamEvent.payload || streamEvent;
+        
+        // ✅ 调试日志
+        console.log('[ChatViewProvider] received streamChunk:', payload.chunk);
+        
         this.view?.webview.postMessage({
           type: 'streamChunk',
-          messageId: streamEvent.messageId,
-          chunk: streamEvent.chunk
+          messageId: payload.messageId,
+          chunk: payload.chunk
         });
       })
     );
