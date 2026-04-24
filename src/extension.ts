@@ -200,12 +200,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // ✅ 注册 CommitStyleLearner
     const commitStyleLearner = container.resolve(CommitStyleLearner);
     container.registerInstance(CommitStyleLearner, commitStyleLearner);
-    console.log('[Extension] CommitStyleLearner registered');
+
 
     // ✅ 注册 TaskTokenManager
     const taskTokenManager = new TaskTokenManager();
     container.registerInstance(TaskTokenManager, taskTokenManager);
-    console.log('[Extension] TaskTokenManager registered');
+
 
     // 初始化记忆系统
     await memorySystem.initialize();
@@ -215,7 +215,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const agentRegistryForRunner = container.resolve('IAgentRegistry') as any;
     const agentRunnerInstance = new AgentRunner(eventBusAdapter, agentRegistryForRunner, auditLogger, memoryAdapter);
     container.registerInstance(AgentRunner, agentRunnerInstance);
-    console.log('[Extension] AgentRunner initialized with real memoryAdapter (auto-subscribed to events)');
+
 
     // Phase 2: 初始化新架构组件
     // Phase 2: 初始化意图驱动架构
@@ -284,7 +284,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const activationTime = Date.now() - startTime;
     await auditLogger.log('extension_activate', 'success', activationTime);
 
-    console.log(`小尾巴 (XiaoWeiba) 已激活，耗时: ${activationTime}ms`);
+    
   } catch (error) {
     const activationTime = Date.now() - startTime;
     
@@ -376,7 +376,7 @@ async function initializeContainer(context: vscode.ExtensionContext): Promise<vo
   
   // ✅ 关键修复：将 ConfigManager 注册为单例，避免多次实例化
   container.registerSingleton(ConfigManager);
-  console.log('[Extension] ConfigManager registered as singleton');
+
   
   // 1. ✅ 初始化基础设施
   const legacyEventBus = new EventBus();
@@ -398,14 +398,14 @@ async function initializeContainer(context: vscode.ExtensionContext): Promise<vo
   container.register('LLMAdapterConfig', { useValue: { defaultModelId: 'deepseek-v4-flash' } });
   const llmAdapterFlash = container.resolve(LLMAdapter);
   container.register('ILLMPort', { useValue: llmAdapterFlash }); // ✅ 默认端口改为Flash
-  console.log('[System] V4-Flash 已注册为默认 Agent 模型（成本降低90%）');
+
   
   // 2️⃣ Pro Adapter（用于复杂推理任务）
   // 用于：ChatAgent, ExplainCodeAgent, GenerateCommitAgent, CodeGenerationAgent
   container.register('LLMAdapterConfig', { useValue: { defaultModelId: 'deepseek-v4-pro' } });
   const llmAdapterPro = container.resolve(LLMAdapter);
   container.register('ILLMPortPro', { useValue: llmAdapterPro }); // 显式Pro端口
-  console.log('[System] V4-Pro 已注册为元 Agent 模型（顶级推理能力）');
+
   
   // 2. ✅ 创建 Agent 注册表
   const agentRegistry = new AgentRegistryImpl();
@@ -422,12 +422,12 @@ async function initializeContainer(context: vscode.ExtensionContext): Promise<vo
   container.registerSingleton(WeightCalculator); // ✅ L2.5: 注册权重计算器
   container.registerSingleton(IndexSyncService); // ✅ L2.5: 注册索引同步服务
   container.registerSingleton(HybridRetriever); // ✅ L2: 注册混合检索器
-  console.log('[Extension] L2 Semantic Retrieval components registered');
+  
 
   // ⚠️ AgentRunner 已移至 activate() 函数中，在 memoryAdapter 创建之后初始化
   // （避免依赖注入时序问题：memoryAdapter 此时还未创建）
   
-  console.log('[Extension] Step 3 complete');
+  
 }
 
 /**
@@ -437,7 +437,7 @@ function registerCommands(context: vscode.ExtensionContext): void {
   // ✅ 从容器解析IntentDispatcher
   const intentDispatcher = container.resolve(IntentDispatcher);
   
-  console.log('[Extension] Registering commands with IntentDispatcher...');
+  
 
   // ========== P0 Commands（核心功能）==========
   
