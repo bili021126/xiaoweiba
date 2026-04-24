@@ -429,7 +429,12 @@ export class ConfigManager {
    * 合并用户配置与默认配置
    */
   private mergeWithDefaults(userConfig: Partial<XiaoWeibaConfig>): XiaoWeibaConfig {
-    return {
+    console.log('[ConfigManager] 🔍 mergeWithDefaults called');
+    console.log('[ConfigManager] userConfig.model?.default:', userConfig.model?.default);
+    console.log('[ConfigManager] userConfig.model?.providers count:', userConfig.model?.providers?.length);
+    console.log('[ConfigManager] DEFAULT_CONFIG.model.default:', DEFAULT_CONFIG.model.default);
+    
+    const merged = {
       ...DEFAULT_CONFIG,
       ...userConfig,
       model: {
@@ -458,6 +463,11 @@ export class ConfigManager {
         ...userConfig.bestPractice
       }
     };
+    
+    console.log('[ConfigManager] ✅ Merged config default:', merged.model.default);
+    console.log('[ConfigManager] ✅ Merged providers count:', merged.model.providers.length);
+    
+    return merged;
   }
 
   /**
