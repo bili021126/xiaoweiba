@@ -44,14 +44,17 @@ export class LLMAdapter implements ILLMPort {
 
       // ✅ 验证至少有一个用户消息（除了系统消息）
       const hasUserMessage = options.messages.some(msg => msg.role === 'user');
+      
+      // ✅ 修复 #17：不要修改入参，创建副本
+      let messagesToUse = options.messages;
       if (!hasUserMessage) {
         console.warn('[LLMAdapter] No user message found, adding placeholder');
         // 添加占位用户消息，避免LLM调用失败
-        options.messages.push({ role: 'user', content: '请回答' });
+        messagesToUse = [...options.messages, { role: 'user' as const, content: '请回答' }];
       }
 
       // 转换消息格式
-      const messages = options.messages.map((msg: any) => ({
+      const messages = messagesToUse.map((msg: any) => ({
         role: msg.role,
         content: msg.content
       }));
@@ -118,14 +121,17 @@ export class LLMAdapter implements ILLMPort {
 
       // ✅ 验证至少有一个用户消息（除了系统消息）
       const hasUserMessage = options.messages.some(msg => msg.role === 'user');
+      
+      // ✅ 修复 #17：不要修改入参，创建副本
+      let messagesToUse = options.messages;
       if (!hasUserMessage) {
         console.warn('[LLMAdapter] No user message found in stream call, adding placeholder');
         // 添加占位用户消息，避免LLM调用失败
-        options.messages.push({ role: 'user', content: '请回答' });
+        messagesToUse = [...options.messages, { role: 'user' as const, content: '请回答' }];
       }
 
       // 转换消息格式
-      const messages = options.messages.map((msg: any) => ({
+      const messages = messagesToUse.map((msg: any) => ({
         role: msg.role,
         content: msg.content
       }));

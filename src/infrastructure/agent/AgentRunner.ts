@@ -73,7 +73,13 @@ export class AgentRunner {
       if (nextTask) {
         console.log('[AgentRunner] Executing queued task...');
         setTimeout(() => {
-          this.handleAgentSelected(nextTask.event).then(nextTask.resolve);
+          // ✅ 修复 #5：添加错误处理，防止 Promise 永远不 resolve
+          this.handleAgentSelected(nextTask.event)
+            .then(nextTask.resolve)
+            .catch((error) => {
+              console.error('[AgentRunner] Queued task failed:', error);
+              nextTask.resolve(); // 即使失败也要 resolve，避免死锁
+            });
         }, 0);
       }
     }
