@@ -71,7 +71,7 @@ export class IntentDispatcher {
       
       if (candidates.length === 0) {
         // ✅ 降级策略1：尝试使用默认ChatAgent
-        const defaultAgent = this.agentRegistry.getAll().find(a => a.id === 'chat_agent');
+        const defaultAgent = this.agentRegistry.getAll().find(a => a.id === 'chat-agent');
         if (defaultAgent) {
           
           // 发布Agent选定事件

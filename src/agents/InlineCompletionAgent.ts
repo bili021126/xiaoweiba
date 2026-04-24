@@ -12,7 +12,7 @@ import { injectable, inject } from 'tsyringe';
  */
 @injectable()
 export class InlineCompletionAgent implements IAgent {
-  readonly id = 'inline_completion_agent';
+  readonly id = 'inline-completion-agent';
   readonly name = '行内补全';
   readonly supportedIntents = ['inline_completion'];
 

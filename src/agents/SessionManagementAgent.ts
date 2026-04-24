@@ -19,7 +19,7 @@ import * as crypto from 'crypto'; // ✅ 修复 #5：引入加密模块
  */
 @injectable()
 export class SessionManagementAgent implements IAgent {
-  readonly id = 'session_management_agent';
+  readonly id = 'session-management-agent';
   readonly name = '会话管理助手';
   readonly supportedIntents = ['new_session', 'switch_session', 'delete_session'];
   
