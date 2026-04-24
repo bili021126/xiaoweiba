@@ -87,11 +87,14 @@ describe('EventBus', () => {
       eventBus.subscribe(CoreEventType.TASK_COMPLETED, handler1);
       eventBus.subscribe(CoreEventType.TASK_COMPLETED, handler2);
       
-      eventBus.publish(CoreEventType.TASK_COMPLETED, {
-        actionId: 'test',
-        result: {},
-        durationMs: 0
-      });
+      // ✅ EventBus.publish 是同步的，错误会在 publish 内部被捕获
+      expect(() => {
+        eventBus.publish(CoreEventType.TASK_COMPLETED, {
+          actionId: 'test',
+          result: {},
+          durationMs: 0
+        });
+      }).not.toThrow();
 
       await new Promise(resolve => setTimeout(resolve, 10));
       
