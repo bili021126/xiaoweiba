@@ -10,7 +10,8 @@ import { ConfigManager } from '../../../src/storage/ConfigManager';
 jest.mock('vscode', () => ({
   window: {
     showInputBox: jest.fn(),
-    showWarningMessage: jest.fn()
+    showWarningMessage: jest.fn(),
+    showErrorMessage: jest.fn()
   }
 }));
 

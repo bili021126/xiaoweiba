@@ -15,6 +15,7 @@ jest.mock('vscode', () => ({
   },
   window: {
     showWarningMessage: jest.fn(),
+    showErrorMessage: jest.fn(),
     withProgress: jest.fn((_: any, callback: any) => callback({ report: jest.fn() }))
   },
   ProgressLocation: {

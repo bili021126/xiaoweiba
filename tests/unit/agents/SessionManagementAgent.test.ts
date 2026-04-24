@@ -10,7 +10,8 @@ import { createMockMemoryPort, createMockEventBus } from '../../__mocks__/global
 jest.mock('vscode', () => ({
   window: {
     showInformationMessage: jest.fn(),
-    showQuickPick: jest.fn()
+    showQuickPick: jest.fn(),
+    showErrorMessage: jest.fn()
   }
 }));
 
