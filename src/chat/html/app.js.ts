@@ -15,6 +15,11 @@ export const CHAT_SCRIPTS = `
   let currentMessageId = null;
   let currentMessageContent = '';
 
+  // ✅ 反馈闭环：记忆卡片点击计时器
+  let memoryCardMousedownTime = 0;
+  let memoryCardQuery = '';
+  let memoryCardId = '';
+
   // 隐藏loading指示器
   function hideLoading() {
     const loading = document.getElementById('loadingIndicator');
@@ -232,6 +237,39 @@ export const CHAT_SCRIPTS = `
       this.style.height = Math.min(this.scrollHeight, 120) + 'px';
     });
   }
+
+  // ✅ 反馈闭环：监听记忆卡片点击，计算 dwellTimeMs
+  document.addEventListener('mousedown', (e) => {
+    const card = e.target.closest('.memory-card');
+    if (card) {
+      memoryCardMousedownTime = Date.now();
+      memoryCardQuery = card.dataset.query || '';
+      memoryCardId = card.dataset.memoryId || '';
+      console.log('[Frontend] Memory card mousedown:', { memoryCardId, query: memoryCardQuery });
+    }
+  });
+
+  document.addEventListener('mouseup', (e) => {
+    const card = e.target.closest('.memory-card');
+    if (card && memoryCardMousedownTime > 0) {
+      const dwellTimeMs = Date.now() - memoryCardMousedownTime;
+      
+      // 发送反馈消息到后端
+      vscode.postMessage({
+        type: 'feedback',
+        query: memoryCardQuery,
+        memoryId: memoryCardId,
+        dwellTimeMs: dwellTimeMs
+      });
+      
+      console.log('[Frontend] Feedback sent:', { query: memoryCardQuery, memoryId: memoryCardId, dwellTimeMs });
+      
+      // 重置计时器
+      memoryCardMousedownTime = 0;
+      memoryCardQuery = '';
+      memoryCardId = '';
+    }
+  });
 
   // 处理来自扩展的消息
   window.addEventListener('message', event => {
