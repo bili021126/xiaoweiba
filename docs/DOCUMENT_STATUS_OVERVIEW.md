@@ -55,7 +55,7 @@ docs/
 |------|---------|--------|------|
 | PROGRESS.md | 每次提交 | AI 助手 | ✅ 最新 |
 | CORE_PRINCIPLES.md | 重大架构变更时 | 架构师 | ✅ 最新 |
-| INTENT_DRIVEN_ARCHITECTURE.md | 架构调整时 | 架构师 | ⚠️ 需同步会话管理重构 |
+| INTENT_DRIVEN_ARCHITECTURE.md | 架构调整时 | 架构师 | ✅ 已同步（v6.1） |
 | MEMORY_DRIVEN_ARCHITECTURE.md | 记忆系统变更时 | 架构师 | ✅ 最新 |
 | ROADMAP_550W.md | 季度规划 | 产品负责人 | ✅ 最新 |
 
