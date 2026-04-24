@@ -4,7 +4,7 @@ import { IMemoryPort } from '../core/ports/IMemoryPort';
 import { IEventBus } from '../core/ports/IEventBus';
 import { MemoryContext } from '../core/domain/MemoryContext';
 import { Intent } from '../core/domain/Intent';
-import { AssistantResponseEvent, StreamChunkEvent } from '../core/events/DomainEvent';
+import { AssistantResponseEvent, StreamChunkEvent, TaskCompletedEvent } from '../core/events/DomainEvent';
 import { injectable, inject } from 'tsyringe';
 import { PromptComposer } from '../core/application/PromptComposer'; // ✅ L1: 引入提示词编排器
 import { DialogManager } from '../chat/DialogManager'; // ✅ P2: 引入对话管理器
@@ -125,6 +125,24 @@ export class ChatAgent implements IAgent {
         timestamp: Date.now()
       }));
 
+      // ✅ P1-02: 发布任务完成事件（触发记忆记录）
+      const durationMs = Date.now() - startTime;
+      if (this.shouldRecordMemory(intent, userMessage, fullContent)) {
+        this.eventBus.publish(new TaskCompletedEvent(
+          intent,
+          'chat-agent',
+          { messageId, content: fullContent },
+          durationMs,
+          undefined, // modelId
+          {
+            taskType: 'CHAT_COMMAND',
+            summary: `讨论了：${userMessage.substring(0, 50)}${userMessage.length > 50 ? '...' : ''}`,
+            entities: this.extractEntitiesFromMessage(userMessage),
+            outcome: 'SUCCESS'
+          }
+        ));
+      }
+
       // 5. 返回结果
       return {
         success: true,
@@ -132,8 +150,7 @@ export class ChatAgent implements IAgent {
           messageId,
           content: fullContent
         },
-        durationMs: Date.now() - startTime,
-        // ✅ P1-02: 添加记忆元数据（仅对有意义的对话记录）
+        durationMs,
         memoryMetadata: this.shouldRecordMemory(intent, userMessage, fullContent) ? {
           taskType: 'CHAT_COMMAND',
           summary: `讨论了：${userMessage.substring(0, 50)}${userMessage.length > 50 ? '...' : ''}`,
