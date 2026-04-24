@@ -40,12 +40,15 @@ export class PromptComposer {
       parts.push(this.buildEpisodicMemorySection(memoryContext.episodicMemories));
     }
 
-    // 5. 注入用户偏好
+    // 5. ✅ 550B: 注入动态语气指令
+    parts.push(this.buildDynamicToneInstruction(memoryContext));
+
+    // 6. 注入用户偏好
     if (memoryContext.preferenceRecommendations?.length > 0) {
       parts.push(this.buildPreferenceSection(memoryContext.preferenceRecommendations));
     }
 
-    // 6. 回答规范
+    // 7. 回答规范
     parts.push(this.buildResponseGuidelines());
 
     return parts.join('\n');
@@ -112,6 +115,26 @@ export class PromptComposer {
     });
     
     return lines.join('\n');
+  }
+
+  /**
+   * ✅ 550B: 根据记忆丰富程度生成动态语气指令
+   */
+  private buildDynamicToneInstruction(context: MemoryContext): string {
+    const memoryCount = context.episodicMemories?.length || 0;
+    let tone = '';
+
+    if (memoryCount === 0) {
+      tone = '\n## 🗣️ 语气指令\n- **新手引导模式**: 用户是第一次使用，请保持耐心、详细解释每一个步骤，多用鼓励性语言。';
+    } else if (memoryCount < 10) {
+      tone = '\n## 🗣️ 语气指令\n- **学习成长模式**: 我们刚刚开始合作，请保持礼貌和细致，适当确认用户的意图。';
+    } else if (memoryCount < 50) {
+      tone = '\n## 🗣️ 语气指令\n- **专业协作模式**: 我们已经有一定默契，请直接切入重点，保持专业且高效的沟通。';
+    } else {
+      tone = '\n## 🗣️ 语气指令\n- **资深伙伴模式**: 我们是老搭档了，请极度简洁，直接给出核心结论或代码，无需客套。';
+    }
+
+    return tone;
   }
 
   private buildPreferenceSection(prefs: any[]): string {
