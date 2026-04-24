@@ -15,8 +15,7 @@ module.exports = {
     '/tests/integration/ExplainCodeFullStack.test.ts', // Mocha语法，需VS Code环境
     '/tests/integration/GenerateCommitFullStack.test.ts', // Mocha语法，需VS Code环境
     '/tests/integration/EpisodicMemoryDatabase.test.ts', // Mocha语法，需VS Code环境
-    '/tests/unit/core/knowledge/BestPracticeLibrary.test.ts', // TS模块解析问题，核心功能已验证
-    '/tests/performance/baselines.test.ts' // EpisodicMemoryRecord接口变化，需更新
+    '/tests/unit/core/knowledge/BestPracticeLibrary.test.ts' // TS模块解析问题，核心功能已验证
   ],
   transform: {
     '^.+\\.tsx?$': [
