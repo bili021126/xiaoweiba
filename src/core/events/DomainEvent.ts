@@ -331,3 +331,30 @@ export class SessionListUpdatedEvent extends DomainEvent<SessionListUpdatedPaylo
     });
   }
 }
+
+/**
+ * ✅ 任务10：事件命名规范总结
+ * 
+ * 本项目使用三类事件，命名规则如下：
+ * 
+ * 1. **领域事件** (Domain Events)
+ *    - 格式：<domain>.<action>
+ *    - 示例：'intent.received', 'task.completed', 'agent.selected'
+ *    - 用途：核心业务流程中的关键状态变化
+ * 
+ * 2. **系统事件** (System Events)
+ *    - 格式：system.<event>
+ *    - 示例：'system.error'
+ *    - 用途：系统级错误、警告等
+ * 
+ * 3. **插件事件** (Plugin Events) ⚠️ 必须严格遵循
+ *    - 格式：plugin.<pluginId>.<event>
+ *    - 示例：'plugin.xiaoweiba.session_list_updated'
+ *    - 用途：VS Code 插件特有的 UI 更新、用户交互等
+ *    - 注意：pluginId 必须与 package.json 中的插件 ID 一致
+ * 
+ * ❌ 禁止的命名方式：
+ * - 不使用下划线分隔（如 session_list_updated）
+ * - 不使用大写字母（如 IntentReceived）
+ * - 不使用无前缀的通用名称（如 'update', 'refresh'）
+ */
