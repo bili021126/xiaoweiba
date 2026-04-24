@@ -10,9 +10,9 @@ import { ConfigManager } from '../../storage/ConfigManager';
 import { pipeline, env } from '@xenova/transformers';
 import * as vscode from 'vscode'; // ✅ 修复：导入 vscode 用于用户通知
 
-// 配置 Transformers.js 不使用本地缓存路径，避免权限问题
-env.allowLocalModels = false;
-env.useBrowserCache = false;
+// ✅ 修复：允许使用本地缓存，避免网络请求失败
+env.allowLocalModels = true;
+env.useBrowserCache = true;
 
 @injectable()
 export class EmbeddingService {
