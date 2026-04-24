@@ -19,9 +19,6 @@ export interface BestPractice {
  */
 export class BestPracticeLibrary {
   private practices: Map<string, BestPractice> = new Map();
-  // ✅ 修复 #42：添加分类索引和标签索引
-  private categoryIndex: Map<BestPractice['category'], Set<string>> = new Map();
-  private tagIndex: Map<string, Set<string>> = new Map();
 
   constructor() {
     this.loadBuiltInPractices();
@@ -123,60 +120,25 @@ export class BestPracticeLibrary {
 
     for (const practice of builtInPractices) {
       this.practices.set(practice.id, practice);
-      // ✅ 修复 #42：构建索引
-      this.addToCategoryIndex(practice);
-      this.addToTagIndex(practice);
-    }
-  }
-
-  /**
-   * 添加到分类索引
-   */
-  private addToCategoryIndex(practice: BestPractice): void {
-    if (!this.categoryIndex.has(practice.category)) {
-      this.categoryIndex.set(practice.category, new Set());
-    }
-    this.categoryIndex.get(practice.category)!.add(practice.id);
-  }
-
-  /**
-   * 添加到标签索引
-   */
-  private addToTagIndex(practice: BestPractice): void {
-    for (const tag of practice.tags) {
-      if (!this.tagIndex.has(tag)) {
-        this.tagIndex.set(tag, new Set());
-      }
-      this.tagIndex.get(tag)!.add(practice.id);
     }
   }
 
   /**
    * 根据分类获取最佳实践
-   * ✅ 修复 #42：使用索引优化，从 O(n) 提升到 O(1)
+   * ✅ 修复 #6：移除冗余索引，直接 filter（10条静态数据无需索引）
    */
   getByCategory(category: BestPractice['category']): BestPractice[] {
-    const ids = this.categoryIndex.get(category);
-    if (!ids) return [];
-    
-    return Array.from(ids).map(id => this.practices.get(id)!).filter(Boolean);
+    return this.getAll().filter(p => p.category === category);
   }
 
   /**
    * 根据标签搜索最佳实践
-   * ✅ 修复 #42：使用索引优化，从 O(n*m) 提升到 O(m)
+   * ✅ 修复 #6：移除冗余索引，直接 filter
    */
   searchByTags(tags: string[]): BestPractice[] {
-    const resultIds = new Set<string>();
-    
-    for (const tag of tags) {
-      const ids = this.tagIndex.get(tag);
-      if (ids) {
-        ids.forEach(id => resultIds.add(id));
-      }
-    }
-    
-    return Array.from(resultIds).map(id => this.practices.get(id)!).filter(Boolean);
+    return this.getAll().filter(p => 
+      tags.some(tag => p.tags.includes(tag))
+    );
   }
 
   /**
@@ -233,9 +195,6 @@ export class BestPracticeLibrary {
       for (const practice of practices) {
         if (!this.practices.has(practice.id)) {
           this.practices.set(practice.id, practice);
-          // ✅ 修复 #42：更新索引
-          this.addToCategoryIndex(practice);
-          this.addToTagIndex(practice);
           imported++;
         }
       }

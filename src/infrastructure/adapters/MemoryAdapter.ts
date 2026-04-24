@@ -171,18 +171,26 @@ export class MemoryAdapter implements IMemoryPort {
       if (memoryMetadata) {
         console.log('[MemoryAdapter] Recording with memoryMetadata:', memoryMetadata.taskType);
         
+        // ✅ 修复 #4：剔除 enrichedContext 中的 visibleCode，避免污染记忆流
+        const cleanMetadata = { ...memoryMetadata } as any;
+        if (cleanMetadata.enrichedContext) {
+          const { visibleCode, ...restContext } = cleanMetadata.enrichedContext;
+          cleanMetadata.enrichedContext = restContext;
+        }
+        
         // 使用提供的元数据记录 - 委托给存储端口
         await this.storage.recordEpisodic({
-          taskType: memoryMetadata.taskType,
-          summary: memoryMetadata.summary,
-          entities: memoryMetadata.entities || [],
-          outcome: memoryMetadata.outcome || (result.success ? 'SUCCESS' : 'FAILED'),
+          taskType: cleanMetadata.taskType,
+          summary: cleanMetadata.summary,
+          entities: cleanMetadata.entities || [],
+          outcome: cleanMetadata.outcome || (result.success ? 'SUCCESS' : 'FAILED'),
           modelId: modelId || result.modelId || 'unknown',
           durationMs: durationMs || 0,
           metadata: {
             agentId,
             intentName: intent.name,
-            timestamp: event.timestamp
+            timestamp: event.timestamp,
+            enrichedContext: cleanMetadata.enrichedContext // ✅ 使用清理后的上下文
           }
         });
         return;
