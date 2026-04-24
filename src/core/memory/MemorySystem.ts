@@ -442,6 +442,15 @@ export class MemorySystem {
     try {
       const { actionId, result, durationMs, memoryMetadata, modelId } = payload;
       
+      console.log('[MemorySystem] Destructured values:', {
+        hasActionId: !!actionId,
+        hasResult: !!result,
+        hasDurationMs: !!durationMs,
+        hasMemoryMetadata: !!memoryMetadata,
+        hasModelId: !!modelId,
+        memoryMetadataContent: memoryMetadata ? JSON.stringify(memoryMetadata) : 'undefined'
+      });
+      
       if (!memoryMetadata) {
         console.warn('[MemorySystem] No memoryMetadata in TASK_COMPLETED event, skipping record');
         console.warn('[MemorySystem] Available payload keys:', Object.keys(payload));

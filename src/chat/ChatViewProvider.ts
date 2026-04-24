@@ -81,13 +81,20 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         console.log('[ChatViewProvider] Session list updated:', payload.action, payload.sessionId);
         
         try {
+          // ✅ 修复：如果是新建会话，保存当前会话 ID
+          if (payload.action === 'created' && payload.sessionId) {
+            this.currentSessionId = payload.sessionId;
+            await this.context.workspaceState.update('currentSessionId', payload.sessionId);
+            console.log('[ChatViewProvider] Saved new session to workspaceState:', payload.sessionId);
+          }
+          
           // ✅ 通过 IMemoryPort 获取完整的会话列表
           const sessions = await this.memoryPort.listSessions();
           
           this.view?.webview.postMessage({
             type: 'updateSessionList',
             sessions,
-            currentSessionId: payload.sessionId
+            currentSessionId: this.currentSessionId  // ✅ 使用当前的 sessionId
           });
           
           console.log('[ChatViewProvider] Sent session list to frontend:', sessions.length, 'sessions');
@@ -140,6 +147,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       };
 
       webviewView.webview.html = this.getHtmlForWebview(webviewView.webview);
+
+      // ✅ 修复：从 workspaceState 恢复之前的会话 ID
+      const savedSessionId = this.context.workspaceState.get<string>('currentSessionId');
+      if (savedSessionId) {
+        this.currentSessionId = savedSessionId;
+        console.log('[ChatViewProvider] Restored session:', savedSessionId);
+      }
 
       // 处理来自Webview的消息
       webviewView.webview.onDidReceiveMessage(async (message) => {
@@ -249,6 +263,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       console.log('[ChatViewProvider] Handling switchSession:', sessionId);
       this.currentSessionId = sessionId;
       
+      // ✅ 修复：保存当前会话 ID 到 workspaceState
+      await this.context.workspaceState.update('currentSessionId', sessionId);
+      console.log('[ChatViewProvider] Saved session to workspaceState:', sessionId);
+      
       // ✅ P1-04: 通过IntentDispatcher处理切换逻辑
       // SessionManagementAgent 会发布 SessionHistoryLoadedEvent，由 ChatViewProvider 订阅并转发给前端
       const intent = IntentFactory.buildSwitchSessionIntent(sessionId);
@@ -274,6 +292,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       // 如果删除的是当前会话，清空并尝试切换到第一个可用会话
       if (this.currentSessionId === sessionId) {
         this.currentSessionId = undefined;
+        
+        // ✅ 修复：清除 workspaceState 中的会话 ID
+        await this.context.workspaceState.update('currentSessionId', undefined);
+        console.log('[ChatViewProvider] Cleared session from workspaceState');
+        
         this.view?.webview.postMessage({ type: 'clearMessages' });
         
         // ✅ DeepSeek 风格：删除当前会话后，自动切换到第一个可用会话
@@ -284,6 +307,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
               // 切换到第一个会话
               const firstSession = sessions[0];
               this.currentSessionId = firstSession.id;
+              
+              // ✅ 修复：保存新的会话 ID
+              await this.context.workspaceState.update('currentSessionId', firstSession.id);
+              console.log('[ChatViewProvider] Saved auto-switched session:', firstSession.id);
               
               // 触发切换逻辑
               const switchIntent = IntentFactory.buildSwitchSessionIntent(firstSession.id);
