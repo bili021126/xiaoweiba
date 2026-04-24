@@ -56,6 +56,17 @@ export interface AgentInput {
 }
 
 /**
+ * ✅ P1: Agent执行上下文（用于类型安全）
+ * 替代 any 类型，提升代码可维护性
+ */
+export interface IAgentContext {
+  /** 意图对象 */
+  intent: Intent;
+  /** 记忆上下文 */
+  memoryContext: MemoryContext;
+}
+
+/**
  * Agent执行结果（泛型）
  */
 export interface AgentResult<T = any> {

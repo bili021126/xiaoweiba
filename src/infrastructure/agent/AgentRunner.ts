@@ -17,7 +17,7 @@ import {
   TaskCompletedEvent, 
   TaskFailedEvent 
 } from '../../core/events/DomainEvent';
-import { IAgent } from '../../core/agent/IAgent';
+import { IAgent, IAgentContext } from '../../core/agent/IAgent'; // ✅ P1: 导入IAgentContext
 import { AuditLogger } from '../../core/security/AuditLogger';
 
 @injectable()
@@ -161,7 +161,7 @@ export class AgentRunner {
    */
   private async executeWithTimeout(
     agent: IAgent,
-    input: { intent: any; memoryContext: any },
+    input: IAgentContext, // ✅ P1: 使用IAgentContext替代any
     timeoutMs: number = 30000
   ): Promise<any> {
     let timeoutId: NodeJS.Timeout;
