@@ -84,7 +84,8 @@ describe('HybridRetriever', () => {
 
       expect(mockQueryExecutor.searchByKeywords).toHaveBeenCalledWith(query, {
         limit: 10,
-        offset: 0
+        offset: 0,
+        taskType: undefined
       });
       expect(results).toEqual(mockRecords);
     });
