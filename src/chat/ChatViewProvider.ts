@@ -270,17 +270,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
    */
   private async handleNewSession(): Promise<void> {
     try {
-      // ✅ 清除保存的会话 ID，防止重启后恢复旧会话
-      this.currentSessionId = undefined;
-      await this.context.workspaceState.update('currentSessionId', undefined);
-      console.log('[ChatViewProvider] Cleared saved session ID for new session');
+      // ✅ 新建会话时，只清空前端界面，不清除 workspaceState
+      // workspaceState 会在用户发送第一条消息时自动更新为新会话 ID
       
-      // 通过IntentDispatcher调度新建会话意图
+      // 通过IntentDispatcher调度新建会话意图（会创建新会话并发布 SessionListUpdatedEvent）
       const intent = IntentFactory.buildNewSessionIntent();
       await this.intentDispatcher.dispatch(intent);
       
       // 通知UI清空消息列表
       this.view?.webview.postMessage({ type: 'clearMessages' });
+      
+      console.log('[ChatViewProvider] New session created, waiting for first message to update workspaceState');
     } catch (error) {
       vscode.window.showWarningMessage('新建会话失败，请重试');
       throw error;
