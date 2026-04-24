@@ -146,15 +146,15 @@
 | 2026-04-22 | TaskTokenManager和AuditLogger使用Math.random()生成ID | P1 | Math.random()可被预测，安全性低 | 改用crypto.randomBytes(8)生成加密安全随机数 | ✅ 已修复 | src/core/security/TaskTokenManager.ts, AuditLogger.ts |
 | 2026-04-22 | DiffService中文文本硬编码 | P2 | UI文本直接写在代码中，不利于国际化 | 提取12个文本常量到DIFF_SERVICE_TEXT对象 | ✅ 已优化 | src/tools/DiffService.ts |
 | 2026-04-22 | 路径处理不统一，跨平台兼容性差 | P1 | 多处使用split('/')或split('\\')分割路径 | 创建PathUtils工具类，提供getFileName和safeJoin方法 | ✅ 已修复 | src/utils/ProjectFingerprint.ts, src/core/application/MemoryRecommender.ts |
-| 2026-04-22 | BestPracticeLibrary查询效率低 | P1 | getByCategory和searchByTags每次遍历整个Map，O(n)复杂度 | 添加分类索引和标签索引，查询复杂度提升到O(1) | ✅ 已优化 | src/core/knowledge/BestPracticeLibrary.ts |
+| 2026-04-22 | BestPracticeLibrary查询效率低 | P1 | getByCategory和searchByTags每次遍历整个Map，O(n)复杂度 | ~~添加分类索引和标签索引~~ → **文件已删除**（未使用代码） | ✅ 已清理 | ~~src/core/knowledge/BestPracticeLibrary.ts~~
 | 2026-04-22 | 双重事件系统混用造成架构混乱 | P1 | 同时存在旧EventBus和新IEventBus+DomainEvent | EventPublisher迁移到新事件系统，BaseCommand移除事件发布逻辑，代码精简39% | ✅ 彻底修复 | src/core/memory/EventPublisher.ts, BaseCommand.ts |
 
 **修复说明**:
 - **事件系统统一**: 完全移除向后兼容代码，统一使用 IEventBus + DomainEvent
-- **性能优化**: BestPracticeLibrary 查询速度提升 100 倍（O(n) → O(1)）
+- ~~**性能优化**: BestPracticeLibrary 查询速度提升 100 倍（O(n) → O(1)）~~ → **文件已删除**（未使用代码）
 - **安全性提升**: 使用 crypto.randomBytes 替代 Math.random，熵值从 47 bits 提升到 64 bits
 - **跨平台兼容**: 统一路径处理，支持 Windows/macOS/Linux
-- **代码精简**: 移除 39% 冗余代码（146 → 89 行）
+- **代码精简**: 移除 39% 冗余代码（146 → 89 行）+ 删除 333 行未使用的元Agent代码
 
 **验证结果**:
 - ✅ TypeScript 编译通过
