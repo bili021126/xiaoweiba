@@ -25,6 +25,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private view?: vscode.WebviewView;
   private currentSessionId: string | undefined;
   private unsubscribers: Array<() => void> = []; // ✅ 保存取消订阅函数
+  private hasRestoredSession = false; // ✅ 防止会话恢复逻辑重复执行
 
   constructor(
     @inject('IEventBus') private eventBus: IEventBus,
@@ -158,20 +159,25 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       webviewView.webview.onDidReceiveMessage(async (message) => {
         switch (message.type) {
           case 'webviewReady':
-            // ✅ 会话恢复：Webview 就绪后，加载保存的会话历史
-            console.log('[ChatViewProvider] ========== Webview Ready Signal Received ==========');
-            const savedSessionId = this.context.workspaceState.get<string>('currentSessionId');
-            console.log('[ChatViewProvider] Saved session ID from workspaceState:', savedSessionId);
-            
-            if (savedSessionId) {
-              console.log('[ChatViewProvider] Restoring session:', savedSessionId);
-              this.currentSessionId = savedSessionId; // ✅ 修复：先设置 currentSessionId
-              await this.handleSwitchSession(savedSessionId);
-              console.log('[ChatViewProvider] Session restoration completed');
+            // ✅ 会话恢复：Webview 就绪后，加载保存的会话历史（仅执行一次）
+            if (!this.hasRestoredSession) {
+              this.hasRestoredSession = true;
+              console.log('[ChatViewProvider] ========== Webview Ready Signal Received (First Time) ==========');
+              const savedSessionId = this.context.workspaceState.get<string>('currentSessionId');
+              console.log('[ChatViewProvider] Saved session ID from workspaceState:', savedSessionId);
+              
+              if (savedSessionId) {
+                console.log('[ChatViewProvider] Restoring session:', savedSessionId);
+                this.currentSessionId = savedSessionId; // ✅ 修复：先设置 currentSessionId
+                await this.handleSwitchSession(savedSessionId);
+                console.log('[ChatViewProvider] Session restoration completed');
+              } else {
+                console.log('[ChatViewProvider] No saved session, starting fresh');
+              }
+              console.log('[ChatViewProvider] ================================================');
             } else {
-              console.log('[ChatViewProvider] No saved session, starting fresh');
+              console.log('[ChatViewProvider] Webview ready signal ignored (already restored)');
             }
-            console.log('[ChatViewProvider] ================================================');
             break;
             
           case 'sendMessage':
@@ -269,6 +275,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
    */
   private async handleNewSession(): Promise<void> {
     try {
+      // ✅ 清除保存的会话 ID，防止重启后恢复旧会话
+      this.currentSessionId = undefined;
+      await this.context.workspaceState.update('currentSessionId', undefined);
+      console.log('[ChatViewProvider] Cleared saved session ID for new session');
+      
       // 通过IntentDispatcher调度新建会话意图
       const intent = IntentFactory.buildNewSessionIntent();
       await this.intentDispatcher.dispatch(intent);
