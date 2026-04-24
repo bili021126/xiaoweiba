@@ -100,7 +100,7 @@ export class SessionManagementAgent implements IAgent {
       createdAt: Date.now()
     });
 
-    console.log('[SessionManagementAgent] Created session:', sessionId);
+
 
     // ✅ 发布会话列表更新事件（通知前端刷新列表）
     this.eventBus.publish(new SessionListUpdatedEvent('created', sessionId));

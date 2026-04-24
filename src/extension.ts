@@ -673,7 +673,7 @@ function registerCommands(context: vscode.ExtensionContext): void {
     const codeLanguages = ['typescript', 'javascript', 'python', 'java', 'go', 'rust', 'cpp', 'c'];
     if (!codeLanguages.includes(document.languageId)) return;
     
-    console.log('[Auto-Check] File saved, checking naming conventions...');
+
     // TODO: 实现后台静默检查，仅在发现问题时提示
   });
 
@@ -686,7 +686,7 @@ function registerCommands(context: vscode.ExtensionContext): void {
     
     // 检测是否打开SCM面板
     if (editor.document.uri.scheme === 'scm' || editor.document.uri.path.includes('scm')) {
-      console.log('[Auto-Suggest] SCM panel visible, suggesting commit message generation');
+      
       // 显示通知提示
       vscode.window.showInformationMessage(
         '💡 检测到Git变更，需要生成提交信息吗？',
@@ -725,7 +725,7 @@ function registerCommands(context: vscode.ExtensionContext): void {
     const codeLanguages = ['typescript', 'javascript', 'python', 'java', 'go', 'rust', 'cpp', 'c'];
     if (!codeLanguages.includes(document.languageId)) return;
     
-    console.log(`[Memory-Driven] File opened: ${document.fileName}`);
+
     await memorySystem.proactiveRecommend(document.fileName);
   });
 

@@ -104,8 +104,7 @@ export class GenerateCommitAgent implements IAgent {
         // ✅ 增强 #5: 变更规模分析
         const changedFilesCount = (diff.match(/diff --git/g) || []).length;
         if (changedFilesCount > 5) {
-          console.log(`[GenerateCommitAgent] Large change detected: ${changedFilesCount} files`);
-          // 可以在这里添加逻辑：建议用户拆分提交
+          // 大型变更检测：建议用户拆分提交
         }
 
         // ✅ 增强 #6: 预提交安全检查 - 检测敏感文件
@@ -296,7 +295,7 @@ ${diff.substring(0, 8000)}
       throw new Error('写操作授权令牌无效或已过期，请重新尝试');
     }
     
-    console.log(`[GenerateCommitAgent] TaskToken validated: ${taskToken}`);
+
     
     try {
       await execAsync(`git commit -m "${message.replace(/"/g, '\\"')}"`, { 
@@ -305,7 +304,7 @@ ${diff.substring(0, 8000)}
       
       // ✅ 修复 #28：提交成功后撤销 Token（一次性使用）
       this.taskTokenManager.revokeToken(taskToken);
-      console.log(`[GenerateCommitAgent] TaskToken revoked after successful commit`);
+      
     } catch (error) {
       // 提交应用失败，重新抛出由调用方处理
       throw error;
@@ -320,7 +319,7 @@ ${diff.substring(0, 8000)}
       const { stdout } = await execAsync('git diff', { cwd: workspacePath });
       return stdout;
     } catch (error) {
-      console.warn('[GenerateCommitAgent] Failed to get unstaged diff:', error);
+
       return '';
     }
   }
@@ -331,7 +330,7 @@ ${diff.substring(0, 8000)}
   private async stageAllChanges(workspacePath: string): Promise<void> {
     try {
       await execAsync('git add .', { cwd: workspacePath });
-      console.log('[GenerateCommitAgent] All changes staged');
+      
     } catch (error) {
       throw new Error(`暂存变更失败: ${error instanceof Error ? error.message : String(error)}`);
     }

@@ -85,7 +85,7 @@ export class ExportMemoryAgent implements IAgent {
         throw new Error('写操作授权令牌无效或已过期，请重新尝试');
       }
       
-      console.log(`[ExportMemoryAgent] TaskToken validated: ${taskToken}`);
+      
 
       // 5. 写入文件
       const jsonContent = JSON.stringify(exportData, null, 2);
@@ -93,7 +93,7 @@ export class ExportMemoryAgent implements IAgent {
       
       // ✅ 修复 #28：导出成功后撤销 Token（一次性使用）
       this.taskTokenManager.revokeToken(taskToken);
-      console.log(`[ExportMemoryAgent] TaskToken revoked after successful export`);
+      
 
       vscode.window.showInformationMessage(
         `✅ 成功导出 ${allMemories.length} 条记忆到 ${saveUri.fsPath}`

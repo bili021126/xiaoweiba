@@ -73,7 +73,7 @@ export class ImportMemoryAgent implements IAgent {
         throw new Error('写操作授权令牌无效或已过期，请重新尝试');
       }
       
-      console.log(`[ImportMemoryAgent] TaskToken validated: ${taskToken}`);
+      
 
       // 4. ✅ 通过IMemoryPort端口导入记忆
       let importedCount = 0;
@@ -99,7 +99,7 @@ export class ImportMemoryAgent implements IAgent {
       
       // ✅ 修复 #28：导入成功后撤销 Token（一次性使用）
       this.taskTokenManager.revokeToken(taskToken);
-      console.log(`[ImportMemoryAgent] TaskToken revoked after successful import`);
+      
 
       vscode.window.showInformationMessage(
         `✅ 成功导入 ${importedCount} 条记忆，跳过 ${skippedCount} 条`
