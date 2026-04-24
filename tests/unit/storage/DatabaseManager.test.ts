@@ -556,7 +556,7 @@ describe('DatabaseManager - 数据库管理器', () => {
       expect(data.data.episodicMemories.length).toBeGreaterThan(0);
     });
 
-    it.skip('应该在表为空时返回空数组', async () => {
+    it('应该在表为空时返回空数组', async () => {
       // 创建全新的临时数据库
       const tempDbPath = path.join(__dirname, '../../temp-empty-test-' + Date.now() + '.db');
       

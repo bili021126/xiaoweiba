@@ -120,7 +120,7 @@ describe('ExpertSelector - 深度测试', () => {
       jest.useFakeTimers();
     });
 
-    it.skip('应该在积累足够反馈后更新权重', async () => {
+    it('应该在积累足够反馈后更新权重', async () => {
       const intent: IntentVector = { temporal: 0.5, entity: 0.3, semantic: 0.2, distantTemporal: 0 };
       const weights: RetrievalWeights = { k: 0.4, t: 0.2, e: 0.2, v: 0.2 }; // 偏好关键词
       
@@ -139,7 +139,7 @@ describe('ExpertSelector - 深度测试', () => {
       expect(mockContext.workspaceState.update).toHaveBeenCalled();
     });
 
-    it.skip('应该应用学习率衰减', async () => {
+    it('应该应用学习率衰减', async () => {
       const intent: IntentVector = { temporal: 0.5, entity: 0.3, semantic: 0.2, distantTemporal: 0 };
       const weights: RetrievalWeights = { k: 0.3, t: 0.2, e: 0.2, v: 0.3 };
       
@@ -235,7 +235,7 @@ describe('ExpertSelector - 深度测试', () => {
   });
 
   describe('快照与回滚机制', () => {
-    it.skip('应该在更新前保存快照', async () => {
+    it('应该在更新前保存快照', async () => {
       const intent: IntentVector = { temporal: 0.5, entity: 0.3, semantic: 0.2, distantTemporal: 0 };
       const weights: RetrievalWeights = { k: 0.3, t: 0.2, e: 0.2, v: 0.3 };
       
@@ -251,7 +251,7 @@ describe('ExpertSelector - 深度测试', () => {
       expect(mockContext.workspaceState.update).toHaveBeenCalledTimes(2); // 一次快照，一次权重
     });
 
-    it.skip('应该在连续异常时触发熔断', async () => {
+    it('应该在连续异常时触发熔断', async () => {
       const intent: IntentVector = { temporal: 0.5, entity: 0.3, semantic: 0.2, distantTemporal: 0 };
       const weights: RetrievalWeights = { k: 0.3, t: 0.2, e: 0.2, v: 0.3 };
       
@@ -279,7 +279,7 @@ describe('ExpertSelector - 深度测试', () => {
   });
 
   describe('定期归一化', () => {
-    it.skip('应该在超过24小时后执行带平滑因子的归一化', async () => {
+    it('应该在超过24小时后执行带平滑因子的归一化', async () => {
       const intent: IntentVector = { temporal: 0.5, entity: 0.3, semantic: 0.2, distantTemporal: 0 };
       const weights: RetrievalWeights = { k: 0.3, t: 0.2, e: 0.2, v: 0.3 };
       
@@ -426,7 +426,7 @@ describe('ExpertSelector - 深度测试', () => {
       jest.useFakeTimers();
     });
 
-    it.skip('应该在积累5条反馈后延迟3秒更新权重', async () => {
+    it('应该在积累5条反馈后延迟3秒更新权重', async () => {
       const intent: IntentVector = { temporal: 0.5, entity: 0.3, semantic: 0.2, distantTemporal: 0 };
       const weights: RetrievalWeights = { k: 0.3, t: 0.2, e: 0.2, v: 0.3 };
       
