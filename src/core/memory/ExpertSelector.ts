@@ -105,7 +105,6 @@ export class ExpertSelector {
     // 限制2: 反馈有效性验证
     const validation = this.validateFeedback(query, dwellTimeMs);
     if (!validation.isValid) {
-      console.debug(`[ExpertSelector] Feedback rejected: ${validation.reason}`);
       return;
     }
 
@@ -122,13 +121,12 @@ export class ExpertSelector {
 
     // 全局护栏: 准入控制 - 最小反馈量
     if (this.feedbackHistory.length < this.MIN_FEEDBACK_THRESHOLD) {
-      console.debug(`[ExpertSelector] Accumulating feedback: ${this.feedbackHistory.length}/${this.MIN_FEEDBACK_THRESHOLD}`);
       return;
     }
 
     // 全局护栏: 准入控制 - 意图分布均衡检查
     if (!this.checkIntentDistribution()) {
-      console.warn('[ExpertSelector] Intent distribution imbalanced, skipping update');
+      // ✅ 意图分布不均衡，跳过更新（正常情况）
       return;
     }
 
@@ -186,7 +184,7 @@ export class ExpertSelector {
     const total = recentFeedback.length;
     for (const count of Object.values(dominantCounts)) {
       if (count / total > this.INTENT_DOMINANCE_THRESHOLD) {
-        console.warn(`[ExpertSelector] Intent dominance detected: ${count}/${total} (${(count/total*100).toFixed(1)}%)`);
+        // ✅ 意图主导度过高，可能是数据偏差
         return false;
       }
     }
@@ -256,7 +254,6 @@ export class ExpertSelector {
       this.totalFeedbackCount++;
       if (this.totalFeedbackCount % this.LR_DECAY_INTERVAL === 0) {
         this.currentLearningRate *= this.LR_DECAY_FACTOR;
-        console.log(`[ExpertSelector] Learning rate decayed to ${this.currentLearningRate.toFixed(4)}`);
       }
 
       // 梯度更新（使用自适应学习率）
@@ -280,7 +277,6 @@ export class ExpertSelector {
           newWeights[factor]! = (1 - smoothingFactor) * (newWeights[factor]! / total) + smoothingFactor * 0.25;
         }
         this.lastNormalizationTime = now;
-        console.log('[ExpertSelector] Periodic renormalization with smoothing');
       } else {
         // 常规归一化
         for (const factor of ['k', 't', 'e', 'v'] as const) {
@@ -293,7 +289,6 @@ export class ExpertSelector {
 
       // 保存到workspaceState
       await this.context.workspaceState.update(this.STORAGE_KEY, newWeights);
-      console.log('[ExpertSelector] Weights updated:', newWeights, '(learning rates:', this.adaptiveLearningRates, ')');
 
       // 重置异常计数
       this.consecutiveAnomalies = 0;
@@ -302,7 +297,6 @@ export class ExpertSelector {
       // 全局护栏: 回滚与熔断 - 连续异常检测
       this.consecutiveAnomalies++;
       if (this.consecutiveAnomalies >= this.MAX_CONSECUTIVE_ANOMALIES) {
-        console.warn('[ExpertSelector] Consecutive anomalies detected, rolling back...');
         await this.rollbackToLastStable();
       }
     }
@@ -336,7 +330,6 @@ export class ExpertSelector {
       }
 
       await this.context.workspaceState.update(this.SNAPSHOTS_KEY, snapshots);
-      console.log(`[ExpertSelector] Snapshot saved (${snapshots.length} total)`);
     } catch (error) {
       console.error('[ExpertSelector] Failed to save snapshot:', error);
     }
@@ -367,7 +360,7 @@ export class ExpertSelector {
     }
 
     if (maxDrift > this.WEIGHT_DRIFT_THRESHOLD) {
-      console.warn(`[ExpertSelector] Weight drift detected: ${maxDrift.toFixed(3)} in 24h`);
+      // ✅ 权重漂移超过阈值，需要关注
     }
 
     // 更新检查点
@@ -384,15 +377,12 @@ export class ExpertSelector {
     try {
       const snapshots = this.context.workspaceState.get<WeightSnapshot[]>(this.SNAPSHOTS_KEY) || [];
       if (snapshots.length === 0) {
-        console.warn('[ExpertSelector] No snapshots available for rollback');
         return;
       }
 
       // 使用倒数第二个快照（最后一个是异常前的）
       const stableSnapshot = snapshots[snapshots.length - 2] || snapshots[0];
       await this.context.workspaceState.update(this.STORAGE_KEY, stableSnapshot.weights);
-
-      console.log('[ExpertSelector] Rolled back to snapshot:', stableSnapshot);
 
       // 重置状态
       this.consecutiveAnomalies = 0;
@@ -413,8 +403,6 @@ export class ExpertSelector {
     this.currentLearningRate = this.baseLearningRate;
     this.totalFeedbackCount = 0;
     this.consecutiveAnomalies = 0;
-
-    console.log('[ExpertSelector] Reset to default weights');
   }
 
   /**
@@ -471,7 +459,6 @@ export class ExpertSelector {
     }
 
     if (best !== this.currentExpert) {
-      console.log(`[ExpertSelector] Switched expert: ${this.currentExpert} → ${best} (score: ${bestScore.toFixed(2)})`);
       this.currentExpert = best;
     }
   }
@@ -496,7 +483,6 @@ export class ExpertSelector {
   reset(): void {
     this.currentExpert = 'balanced';
     this.feedbackHistory = [];
-    console.log('[ExpertSelector] Expert state reset to balanced');
   }
 
   /**
@@ -509,7 +495,6 @@ export class ExpertSelector {
     if (state.feedbackHistory && Array.isArray(state.feedbackHistory)) {
       this.feedbackHistory = state.feedbackHistory.slice(-this.MAX_HISTORY);
     }
-    console.log(`[ExpertSelector] Restored expert: ${this.currentExpert}, history: ${this.feedbackHistory.length} records`);
   }
 
   /**
