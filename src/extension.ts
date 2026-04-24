@@ -218,12 +218,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // 初始化记忆系统
     await memorySystem.initialize();
 
+    // ✅ 修复：在 memoryAdapter 创建并注册 IMemoryPort 之后，初始化 AgentRunner
+    // （避免依赖注入时序问题：memoryAdapter 必须在 AgentRunner 之前创建）
+    const agentRegistryForRunner = container.resolve('IAgentRegistry') as any;
+    const agentRunnerInstance = new AgentRunner(eventBusAdapter, agentRegistryForRunner, auditLogger, memoryAdapter);
+    container.registerInstance(AgentRunner, agentRunnerInstance);
+    console.log('[Extension] AgentRunner initialized with real memoryAdapter (auto-subscribed to events)');
+
     // Phase 2: 初始化新架构组件
     // Phase 2: 初始化意图驱动架构
     llmAdapter = container.resolve(LLMAdapter);
     // ✅ 使用已注册的IAgentRegistry实例，不要重新创建
     const agentRegistry = container.resolve('IAgentRegistry') as any;
-    agentRunner = container.resolve(AgentRunner);
+    agentRunner = container.resolve(AgentRunner);  // ✅ 现在可以安全 resolve 了
     intentDispatcher = container.resolve(IntentDispatcher);
     
     // 注册所有Agents到AgentRegistry
@@ -423,10 +430,8 @@ async function initializeContainer(context: vscode.ExtensionContext): Promise<vo
   container.registerSingleton(HybridRetriever); // ✅ L2: 注册混合检索器
   console.log('[Extension] L2 Semantic Retrieval components registered');
 
-  // 5. ✅ 初始化 AgentRunner（自动订阅事件）
-  const agentRunner = new AgentRunner(eventBusAdapter, agentRegistry, auditLogger, memoryAdapter!);
-  container.registerInstance(AgentRunner, agentRunner);
-  console.log('[Extension] AgentRunner initialized (auto-subscribed to events)');
+  // ⚠️ AgentRunner 已移至 activate() 函数中，在 memoryAdapter 创建之后初始化
+  // （避免依赖注入时序问题：memoryAdapter 此时还未创建）
   
   console.log('[Extension] Step 3 complete');
   console.log('[Extension] Dependency injection container initialized successfully');
