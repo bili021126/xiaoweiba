@@ -1,0 +1,32 @@
+/**
+ * DatabaseManager 单元测试 - 简化版
+ */
+
+import 'reflect-metadata';
+import { container } from 'tsyringe';
+import { DatabaseManager } from '../../../src/storage/DatabaseManager';
+import { ConfigManager } from '../../../src/storage/ConfigManager';
+
+jest.mock('fs');
+jest.mock('path');
+jest.mock('os', () => ({
+  homedir: jest.fn().mockReturnValue('/mock/home')
+}));
+
+describe('DatabaseManager Simplified', () => {
+  let dbManager: DatabaseManager;
+  const mockSecretStorage = { get: jest.fn(), store: jest.fn() };
+
+  beforeEach(() => {
+    container.clearInstances();
+    
+    const mockConfigManager = new ConfigManager(mockSecretStorage as any);
+    container.registerInstance(ConfigManager, mockConfigManager);
+    
+    dbManager = container.resolve(DatabaseManager);
+  });
+
+  it('should initialize without errors', async () => {
+    await expect(dbManager.initialize()).resolves.toBeUndefined();
+  });
+});
