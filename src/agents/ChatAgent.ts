@@ -143,6 +143,18 @@ export class ChatAgent implements IAgent {
         ));
       }
 
+      // ✅ 保存用户消息和 AI 回复到数据库（会话持久化）
+      try {
+        const sessionId = intent.metadata.sessionId;
+        if (sessionId) {
+          await this.memoryPort.saveMessage(sessionId, 'user', userMessage);
+          await this.memoryPort.saveMessage(sessionId, 'assistant', fullContent);
+        }
+      } catch (error) {
+        console.error('[ChatAgent] Failed to save messages:', error);
+        // 不阻断流程，继续返回结果
+      }
+
       // 5. 返回结果
       return {
         success: true,
