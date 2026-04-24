@@ -1,29 +1,22 @@
 /**
- * FeedbackRecorder 单元测试 - 重写以适配 IMemoryPort
+ * FeedbackRecorder 单元测试 - 使用全局 Mock 配置
  */
 
 import 'reflect-metadata';
 import { container } from 'tsyringe';
 import { FeedbackRecorder } from '../../../../src/core/application/FeedbackRecorder';
-import { ProjectFingerprint } from '../../../../src/utils/ProjectFingerprint';
-import { DatabaseManager } from '../../../../src/storage/DatabaseManager';
+import { createMockDatabaseManager, createMockProjectFingerprint } from '../../../__mocks__/globalMocks';
 
-const mockDbManager = {
-  query: jest.fn(),
-  run: jest.fn()
-};
+const mockDbManager = createMockDatabaseManager();
+const mockFingerprint = createMockProjectFingerprint();
 
-const mockFingerprint = {
-  getFingerprint: jest.fn().mockResolvedValue('fp_123')
-};
-
-describe('FeedbackRecorder (Rewritten)', () => {
+describe('FeedbackRecorder (Global Mock)', () => {
   let recorder: FeedbackRecorder;
 
   beforeEach(() => {
     container.clearInstances();
-    container.registerInstance(DatabaseManager, mockDbManager as unknown as DatabaseManager);
-    container.registerInstance(ProjectFingerprint, mockFingerprint as unknown as ProjectFingerprint);
+    container.registerInstance('DatabaseManager', mockDbManager);
+    container.registerInstance('ProjectFingerprint', mockFingerprint);
     
     recorder = container.resolve(FeedbackRecorder);
   });

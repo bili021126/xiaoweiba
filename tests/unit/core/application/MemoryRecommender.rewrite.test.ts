@@ -1,21 +1,19 @@
 /**
- * MemoryRecommender 单元测试 - 重写以适配 IMemoryPort
+ * MemoryRecommender 单元测试 - 使用全局 Mock 配置
  */
 
 import 'reflect-metadata';
 import { MemoryRecommender } from '../../../../src/core/application/MemoryRecommender';
-import { IMemoryPort } from '../../../../src/core/ports/IMemoryPort';
+import { createMockMemoryPort } from '../../../__mocks__/globalMocks';
 
-const mockMemoryPort: Partial<IMemoryPort> = {
-  search: jest.fn()
-};
+const mockMemoryPort = createMockMemoryPort();
 
-describe('MemoryRecommender (Rewritten)', () => {
+describe('MemoryRecommender (Global Mock)', () => {
   let recommender: MemoryRecommender;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    recommender = new MemoryRecommender(mockMemoryPort as IMemoryPort);
+    recommender = new MemoryRecommender(mockMemoryPort);
   });
 
   describe('recommendForFile', () => {
