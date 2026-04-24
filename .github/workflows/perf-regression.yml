@@ -1,0 +1,105 @@
+name: Performance Regression Check
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main]
+
+jobs:
+  perf-check:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Compile TypeScript
+        run: npm run compile
+      
+      - name: Run performance tests
+        run: npm run test:performance -- --no-coverage
+      
+      - name: Check performance regression
+        run: npm run perf:check
+        continue-on-error: true  # 允许失败，仅作为警告
+      
+      - name: Upload performance results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: perf-results
+          path: |
+            docs/performance-current.json
+            docs/performance-baseline.json
+          retention-days: 30
+      
+      - name: Comment PR with results
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            // 读取性能结果
+            const currentPath = path.join(process.env.GITHUB_WORKSPACE, 'docs', 'performance-current.json');
+            const baselinePath = path.join(process.env.GITHUB_WORKSPACE, 'docs', 'performance-baseline.json');
+            
+            let comment = '## 📊 性能测试结果\n\n';
+            
+            if (fs.existsSync(currentPath)) {
+              const current = JSON.parse(fs.readFileSync(currentPath, 'utf-8'));
+              comment += `**测试时间**: ${new Date(current.timestamp).toLocaleString('zh-CN')}\n`;
+              comment += `**Node 版本**: ${current.nodeVersion}\n`;
+              comment += `**平台**: ${current.platform} (${current.arch})\n\n`;
+              
+              if (current.results && current.results.length > 0) {
+                comment += '| 测试项 | 平均耗时 | P95 | Ops/sec |\n';
+                comment += '|--------|---------|-----|----------|\n';
+                
+                current.results.forEach(r => {
+                  comment += `| ${r.name} | ${r.avgTime.toFixed(2)}ms | ${r.p95.toFixed(2)}ms | ${r.opsPerSecond.toFixed(0)} |\n`;
+                });
+              }
+            } else {
+              comment += '⚠️ 未找到性能测试结果\n';
+            }
+            
+            comment += '\n---\n*此评论由自动化脚本生成*\n';
+            
+            // 查找现有评论并更新
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const existingComment = comments.find(c => 
+              c.user.type === 'Bot' && c.body.includes('📊 性能测试结果')
+            );
+            
+            if (existingComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existingComment.id,
+                body: comment
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: comment
+              });
+            }

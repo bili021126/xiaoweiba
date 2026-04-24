@@ -22,6 +22,8 @@
     "test:unit": "jest tests/unit",
     "test:phase0": "jest --testPathPattern='(ExplainCodeCommand|GenerateCommitCommand|CodeGenerationCommand|CheckNamingCommand)\\.test\\.ts'",
     "test:performance": "jest tests/performance --runInBand --verbose",
+    "perf:check": "node scripts/perf-regression-check.js",
+    "perf:update-baseline": "cp docs/performance-current.json docs/performance-baseline.json && echo '✅ 基线已更新'",
     "test:integration": "npm run compile:integration && node out/tests/tests/integration/runIntegrationTests.js",
     "test:integration:watch": "tsc -p ./tsconfig.integration.json -w",
     "lint": "eslint src --ext ts",

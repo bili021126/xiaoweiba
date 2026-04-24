@@ -326,7 +326,21 @@ bestPractice:
    */
   afterAll(() => {
     const outputDir = path.join(__dirname, '..', '..', 'docs');
-    const outputPath = path.join(outputDir, 'performance-baseline.json');
-    benchmarkRunner.saveResults(outputPath);
+    
+    // 保存基线文件（用于手动更新）
+    const baselinePath = path.join(outputDir, 'performance-baseline.json');
+    benchmarkRunner.saveResults(baselinePath);
+    
+    // 保存当前结果文件（用于回归检测）
+    const currentPath = path.join(outputDir, 'performance-current.json');
+    const report = {
+      timestamp: new Date().toISOString(),
+      nodeVersion: process.version,
+      platform: process.platform,
+      arch: process.arch,
+      results: benchmarkRunner.getResults()
+    };
+    fs.writeFileSync(currentPath, JSON.stringify(report, null, 2), 'utf-8');
+    console.log(`💾 Current results saved to: ${currentPath}`);
   });
 });
