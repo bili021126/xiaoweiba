@@ -55,7 +55,12 @@ export class MemoryEventSubscriber {
           memoryMetadata: payload.memoryMetadata
         };
         
-        await onTaskCompleted(taskEvent);
+        // ✅ 修复 #10：添加错误处理，防止静默失败
+        try {
+          await onTaskCompleted(taskEvent);
+        } catch (error) {
+          console.error('[MemoryEventSubscriber] onTaskCompleted failed:', error);
+        }
       }
     );
 

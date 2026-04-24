@@ -96,26 +96,25 @@ export class SessionContextManager {
   private async loadSessionHistory(sessionId: string): Promise<Array<{ role: string; content: string }>> {
     try {
       const db = this.dbManager.getDatabase();
-      const result = db.exec(
+      // ✅ 修复 #7：使用参数化查询防止 SQL 注入
+      const stmt = db.prepare(
         `SELECT role, content FROM chat_messages 
-         WHERE session_id = '${sessionId}' 
+         WHERE session_id = ? 
          ORDER BY timestamp ASC`
       );
+      stmt.bind([sessionId]);
       
-      if (!result || result.length === 0) {
-        return [];
+      const messages: Array<{ role: string; content: string }> = [];
+      while (stmt.step()) {
+        const row = stmt.get() as any[];
+        messages.push({
+          role: row[0] as string,
+          content: row[1] as string
+        });
       }
-
-      const columns = result[0].columns;
-      const values = result[0].values;
+      stmt.free();
       
-      const roleIndex = columns.indexOf('role');
-      const contentIndex = columns.indexOf('content');
-      
-      return values.map(row => ({
-        role: row[roleIndex] as string,
-        content: row[contentIndex] as string
-      }));
+      return messages;
     } catch (error) {
       console.error('[SessionContextManager] Failed to load session history:', error);
       return [];

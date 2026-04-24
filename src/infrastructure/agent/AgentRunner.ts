@@ -164,7 +164,7 @@ export class AgentRunner {
     input: IAgentContext, // ✅ P1: 使用IAgentContext替代any
     timeoutMs: number = 30000
   ): Promise<any> {
-    let timeoutId: NodeJS.Timeout;
+    let timeoutId: NodeJS.Timeout | undefined = undefined;
     
     const timeoutPromise = new Promise<never>((_, reject) => {
       timeoutId = setTimeout(() => {
@@ -178,8 +178,8 @@ export class AgentRunner {
         timeoutPromise
       ]);
     } finally {
-      // ✅ 清理定时器，防止内存泄漏
-      clearTimeout(timeoutId!);
+      // ✅ 修复 #8：清理定时器，防止内存泄漏
+      if (timeoutId) clearTimeout(timeoutId);
     }
   }
 
