@@ -360,59 +360,7 @@ export class DatabaseManager {
       )
     `);
 
-    // ✅ MetaAgent: 编排模板表（P0阶段）
-    db.run(`
-      CREATE TABLE IF NOT EXISTS orchestration_templates (
-        id TEXT PRIMARY KEY,
-        intent_name TEXT NOT NULL,
-        intent_vector TEXT NOT NULL,
-        tool_sequence TEXT NOT NULL,
-        parameters TEXT,
-        success_rate REAL DEFAULT 1.0,
-        usage_count INTEGER DEFAULT 1,
-        last_used INTEGER NOT NULL,
-        created_at INTEGER NOT NULL,
-        compiled_agent_name TEXT
-      )
-    `);
 
-    // ✅ MetaAgent: 知识碎片表（P0阶段）
-    db.run(`
-      CREATE TABLE IF NOT EXISTS knowledge_fragments (
-        id TEXT PRIMARY KEY,
-        content TEXT NOT NULL,
-        vector TEXT NOT NULL,
-        source_task_id TEXT NOT NULL,
-        tags TEXT,
-        created_at INTEGER NOT NULL,
-        last_used INTEGER,
-        score REAL DEFAULT 0.5
-      )
-    `);
-
-    // ✅ MetaAgent: 反思报告表（P0阶段）
-    db.run(`
-      CREATE TABLE IF NOT EXISTS task_reflections (
-        id TEXT PRIMARY KEY,
-        task_id TEXT NOT NULL,
-        reflection TEXT NOT NULL,
-        suggestions TEXT,
-        fragment_ids TEXT,
-        created_at INTEGER NOT NULL
-      )
-    `);
-
-    // ✅ MetaAgent: 虚拟Agent表（P0阶段）
-    db.run(`
-      CREATE TABLE IF NOT EXISTS virtual_agents (
-        name TEXT PRIMARY KEY,
-        description TEXT,
-        template_id TEXT NOT NULL,
-        agent_code TEXT NOT NULL,
-        status TEXT DEFAULT 'review',
-        created_at INTEGER NOT NULL
-      )
-    `);
   }
 
   /**
