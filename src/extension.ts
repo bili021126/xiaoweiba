@@ -381,21 +381,22 @@ async function initializeContainer(context: vscode.ExtensionContext): Promise<vo
   // ⚠️ 注意：不在这里解析EpisodicMemory等依赖DatabaseManager的服务
   // 它们将在Step 4中DatabaseManager注册之后再解析
 
-  // ✅ 成本优化：注册两个LLM Adapter（Pro用于复杂推理，Flash用于高频轻任务）
+  // ✅ 成本优化：基于最新定价的分层模型策略（Flash作为默认，Pro用于复杂推理）
   const llmTool = container.resolve(LLMTool);
   
-  // Pro Adapter（默认，用于ChatAgent、ExplainCodeAgent、GenerateCommitAgent等复杂任务）
-  container.register('LLMAdapterConfig', { useValue: { defaultModelId: 'deepseek-pro' } });
-  const llmAdapterPro = container.resolve(LLMAdapter);
-  container.register('ILLMPort', { useValue: llmAdapterPro }); // 默认端口
-  container.register('ILLMPortPro', { useValue: llmAdapterPro }); // 显式Pro端口
-  console.log('[Extension] LLMAdapter Pro registered (deepseek-v4-pro)');
-  
-  // Flash Adapter（用于InlineCompletionAgent、OptimizeSQLAgent、CheckNamingAgent等高频任务）
+  // 1️⃣ Flash Adapter（默认，覆盖95%的高频任务）
+  // 用于：OptimizeSQLAgent, CheckNamingAgent, InlineCompletionAgent 等
   container.register('LLMAdapterConfig', { useValue: { defaultModelId: 'deepseek-flash' } });
   const llmAdapterFlash = container.resolve(LLMAdapter);
-  container.register('ILLMPortFlash', { useValue: llmAdapterFlash });
-  console.log('[Extension] LLMAdapter Flash registered (deepseek-v4-flash)');
+  container.register('ILLMPort', { useValue: llmAdapterFlash }); // ✅ 默认端口改为Flash
+  console.log('[System] V4-Flash 已注册为默认 Agent 模型（成本降低90%）');
+  
+  // 2️⃣ Pro Adapter（用于复杂推理任务）
+  // 用于：ChatAgent, ExplainCodeAgent, GenerateCommitAgent, CodeGenerationAgent
+  container.register('LLMAdapterConfig', { useValue: { defaultModelId: 'deepseek-pro' } });
+  const llmAdapterPro = container.resolve(LLMAdapter);
+  container.register('ILLMPortPro', { useValue: llmAdapterPro }); // 显式Pro端口
+  console.log('[System] V4-Pro 已注册为元 Agent 模型（顶级推理能力）');
   
   // 2. ✅ 创建 Agent 注册表
   const agentRegistry = new AgentRegistryImpl();

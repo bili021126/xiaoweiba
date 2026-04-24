@@ -30,7 +30,7 @@ export class ChatAgent implements IAgent {
   private initialized = false;
 
   constructor(
-    @inject('ILLMPort') private llmPort: ILLMPort,  // ✅ 使用端口接口
+    @inject('ILLMPortPro') private llmPort: ILLMPort,  // ✅ 成本优化：复杂推理使用Pro模型
     @inject('IMemoryPort') private memoryPort: IMemoryPort,  // ✅ 使用端口接口
     @inject('IEventBus') private eventBus: IEventBus,  // ✅ 注入全局单例
     @inject(PromptComposer) private promptComposer: PromptComposer, // ✅ L1: 注入提示词编排器

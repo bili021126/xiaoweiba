@@ -23,7 +23,7 @@ export class CodeGenerationAgent implements IAgent {
   readonly supportedIntents = ['generate_code'];
 
   constructor(
-    @inject('ILLMPort') private llmPort: ILLMPort,
+    @inject('ILLMPortPro') private llmPort: ILLMPort, // ✅ 成本优化：复杂推理使用Pro模型
     @inject('IMemoryPort') private memoryPort: IMemoryPort
   ) {}
 

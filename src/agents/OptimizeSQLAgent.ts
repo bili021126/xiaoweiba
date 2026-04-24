@@ -26,7 +26,7 @@ export class OptimizeSQLAgent implements IAgent {
   private cache: LLMResponseCache;
 
   constructor(
-    @inject('ILLMPortFlash') private llmPort: ILLMPort, // ✅ 成本优化：使用Flash模型
+    @inject('ILLMPort') private llmPort: ILLMPort, // ✅ 成本优化：默认使用Flash模型
     @inject('IEventBus') private eventBus: IEventBus // ✅ 修复 #7：注入事件总线
   ) {
     this.cache = new LLMResponseCache();

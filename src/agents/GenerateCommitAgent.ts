@@ -32,7 +32,7 @@ export class GenerateCommitAgent implements IAgent {
   readonly supportedIntents = ['generate_commit'];
 
   constructor(
-    @inject('ILLMPort') private llmPort: ILLMPort,
+    @inject('ILLMPortPro') private llmPort: ILLMPort, // ✅ 成本优化：复杂推理使用Pro模型
     @inject('IMemoryPort') private memoryPort: IMemoryPort,
     @inject('IEventBus') private eventBus: IEventBus, // ✅ P1-04: 注入事件总线
     @inject(TaskTokenManager) private taskTokenManager: TaskTokenManager, // ✅ 修复 #28：注入 TaskTokenManager

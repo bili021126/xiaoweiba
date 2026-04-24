@@ -35,7 +35,7 @@ export class ExplainCodeAgent implements IAgent {
   private cache: LLMResponseCache;
 
   constructor(
-    @inject('ILLMPort') private llmPort: ILLMPort,
+    @inject('ILLMPortPro') private llmPort: ILLMPort, // ✅ 成本优化：复杂推理使用Pro模型
     @inject('IMemoryPort') private memoryPort: IMemoryPort,
     @inject('IEventBus') private eventBus: IEventBus // ✅ 修复 #7：注入事件总线
   ) {
