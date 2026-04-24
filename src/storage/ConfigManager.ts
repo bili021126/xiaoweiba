@@ -307,6 +307,10 @@ export class ConfigManager {
       this.currentConfig = config;
       this.setupWatcher();
 
+      console.log(`[ConfigManager] ✅ Config loaded successfully from: ${this.configPath}`);
+      console.log(`[ConfigManager] Default model: ${config.model.default}`);
+      console.log(`[ConfigManager] Providers:`, config.model.providers.map(p => p.id));
+
       return config;
     } catch (error) {
       // 配置加载失败，尝试回滚
