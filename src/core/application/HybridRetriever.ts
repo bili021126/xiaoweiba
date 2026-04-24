@@ -75,7 +75,7 @@ export class HybridRetriever {
   }
 
   /**
-   * 加权融合两组结果
+   * ✅ 550B: 加权融合两组结果，应用四因子权重
    */
   private fuseResults(
     keywordResults: EpisodicMemoryRecord[],
@@ -86,30 +86,45 @@ export class HybridRetriever {
   ): EpisodicMemoryRecord[] {
     const scoreMap = new Map<string, { record: EpisodicMemoryRecord; score: number }>();
 
-    // 关键词结果赋予权重分（假设按原始排序给分，位置越前分数越高）
+    // 1. 关键词匹配分数
     keywordResults.forEach((record, index) => {
-      const positionScore = 1 - index / keywordResults.length;
-      scoreMap.set(record.id, {
-        record,
-        score: positionScore * keywordWeight
-      });
+      const keywordScore = 1 - index / keywordResults.length;
+      // 计算时间衰减（假设越近分数越高）
+      const recencyScore = Math.max(0, 1 - (Date.now() - record.timestamp) / (1000 * 60 * 60 * 24 * 30)); 
+      
+      const totalScore = this.vectorEngine.calculateHybridScore(
+        0, // 关键词检索不直接提供向量分，除非重排
+        keywordScore,
+        recencyScore,
+        0, // 实体匹配暂定为 0
+        { vector: vectorWeight, keyword: keywordWeight, recency: 0.2, entity: 0.1 }
+      );
+
+      scoreMap.set(record.id, { record, score: totalScore });
     });
 
-    // 语义结果赋予权重分
+    // 2. 语义向量分数
     semanticResults.forEach((record, index) => {
-      const positionScore = 1 - index / semanticResults.length;
+      const vectorScore = 1 - index / semanticResults.length;
       const existing = scoreMap.get(record.id);
+      
       if (existing) {
-        existing.score += positionScore * vectorWeight;
+        // 如果已存在，累加向量权重
+        existing.score += vectorScore * vectorWeight;
       } else {
-        scoreMap.set(record.id, {
-          record,
-          score: positionScore * vectorWeight
-        });
+        const recencyScore = Math.max(0, 1 - (Date.now() - record.timestamp) / (1000 * 60 * 60 * 24 * 30));
+        const totalScore = this.vectorEngine.calculateHybridScore(
+          vectorScore,
+          0,
+          recencyScore,
+          0,
+          { vector: vectorWeight, keyword: keywordWeight, recency: 0.2, entity: 0.1 }
+        );
+        scoreMap.set(record.id, { record, score: totalScore });
       }
     });
 
-    // 按总分排序返回
+    // 3. 按总分排序返回
     return Array.from(scoreMap.values())
       .sort((a, b) => b.score - a.score)
       .slice(0, limit)

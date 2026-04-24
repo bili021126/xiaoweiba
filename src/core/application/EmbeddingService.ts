@@ -8,11 +8,13 @@
 import { injectable, inject } from 'tsyringe';
 import { ConfigManager } from '../../storage/ConfigManager';
 import { pipeline, env } from '@xenova/transformers';
-import * as vscode from 'vscode'; // ✅ 修复：导入 vscode 用于用户通知
+import * as vscode from 'vscode';
+import * as path from 'path';
 
-// ✅ 修复：允许使用本地缓存，避免网络请求失败
+// ✅ 550B: 配置 Transformers.js 环境，优先使用本地缓存并指定 WASM 路径
 env.allowLocalModels = true;
-env.useBrowserCache = true;
+env.useBrowserCache = false; // 在 Node/VSCode 环境下禁用浏览器缓存
+env.localModelPath = path.join(__dirname, '..', '..', 'models'); // 指定本地模型路径
 
 @injectable()
 export class EmbeddingService {
