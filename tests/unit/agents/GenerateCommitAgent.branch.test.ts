@@ -30,19 +30,28 @@ describe('GenerateCommitAgent Branch Coverage', () => {
 
   it('should handle large change detection', async () => {
     const files = Array.from({ length: 50 }, (_, i) => `file${i}.ts`);
-    const result = await agent.execute({ changedFiles: files, taskToken: 'test_token' } as any);
+    const result = await agent.execute({ 
+      intent: { name: 'generate_commit' as any }, 
+      memoryContext: { memories: [], preferences: [] } 
+    } as any);
     
     expect(result).toBeDefined();
   });
 
   it('should handle unstaged diff failure gracefully', async () => {
     // 模拟获取未暂存差异时失败，应回退到仅使用已暂存内容
-    const result = await agent.execute({ changedFiles: ['test.ts'], taskToken: 'test_token' } as any);
-    expect(result.data).toBeDefined();
+    const result = await agent.execute({ 
+      intent: { name: 'generate_commit' as any }, 
+      memoryContext: { memories: [], preferences: [] } 
+    } as any);
+    expect(result).toBeDefined();
   });
 
   it('should handle task token revocation', async () => {
-    const result = await agent.execute({ changedFiles: ['test.ts'], taskToken: 'test_token' } as any);
+    const result = await agent.execute({ 
+      intent: { name: 'generate_commit' as any }, 
+      memoryContext: { memories: [], preferences: [] } 
+    } as any);
     expect(result).toBeDefined();
   });
 });

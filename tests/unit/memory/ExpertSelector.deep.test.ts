@@ -270,8 +270,7 @@ describe('ExpertSelector - 深度测试', () => {
       
       // 应该记录错误
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-        '[ExpertSelector] Failed to update weights:',
-        expect.any(Error)
+        expect.stringContaining('[ExpertSelector] Failed to update weights:')
       );
       
       consoleErrorSpy.mockRestore();
