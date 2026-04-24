@@ -14,7 +14,8 @@ import { LLMTool } from '../../tools/LLMTool';
 @injectable()
 export class LLMAdapter implements ILLMPort {
   constructor(
-    @inject(LLMTool) private llmTool: LLMTool
+    @inject(LLMTool) private llmTool: LLMTool,
+    private defaultModelId?: string // ✅ 成本优化：支持指定默认模型（如 'deepseek-flash'）
   ) {}
 
   /**
@@ -46,7 +47,7 @@ export class LLMAdapter implements ILLMPort {
       // 调用 LLMTool
       const result = await this.llmTool.call({
         messages,
-        model: options.modelId,
+        model: options.modelId || this.defaultModelId, // ✅ 优先使用传入的modelId，其次使用默认模型
         temperature: options.temperature,
         maxTokens: options.maxTokens
       });
@@ -118,13 +119,13 @@ export class LLMAdapter implements ILLMPort {
       }));
 
       let fullText = '';
-      let modelId = options.modelId;
+      let modelId = options.modelId || this.defaultModelId; // ✅ 优先使用传入的modelId，其次使用默认模型
 
       // 调用 LLMTool 的流式方法
       const result = await this.llmTool.callStream(
         {
           messages,
-          model: options.modelId,
+          model: options.modelId || this.defaultModelId, // ✅ 同上
           temperature: options.temperature,
           maxTokens: options.maxTokens
         },

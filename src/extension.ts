@@ -381,10 +381,19 @@ async function initializeContainer(context: vscode.ExtensionContext): Promise<vo
   // ⚠️ 注意：不在这里解析EpisodicMemory等依赖DatabaseManager的服务
   // 它们将在Step 4中DatabaseManager注册之后再解析
 
-  // 解析LLMTool并创建LLMAdapter
+  // ✅ 成本优化：注册两个LLM Adapter（Pro用于复杂推理，Flash用于高频轻任务）
   const llmTool = container.resolve(LLMTool);
-  const llmAdapter = new LLMAdapter(llmTool);
-  container.register('ILLMPort', { useValue: llmAdapter });
+  
+  // Pro Adapter（默认，用于ChatAgent、ExplainCodeAgent、GenerateCommitAgent等复杂任务）
+  const llmAdapterPro = new LLMAdapter(llmTool, 'deepseek-pro'); // ✅ 指定默认模型
+  container.register('ILLMPort', { useValue: llmAdapterPro }); // 默认端口
+  container.register('ILLMPortPro', { useValue: llmAdapterPro }); // 显式Pro端口
+  console.log('[Extension] LLMAdapter Pro registered (deepseek-v4-pro)');
+  
+  // Flash Adapter（用于InlineCompletionAgent、OptimizeSQLAgent、CheckNamingAgent等高频任务）
+  const llmAdapterFlash = new LLMAdapter(llmTool, 'deepseek-flash'); // ✅ 指定默认模型为flash
+  container.register('ILLMPortFlash', { useValue: llmAdapterFlash });
+  console.log('[Extension] LLMAdapter Flash registered (deepseek-v4-flash)');
   
   // 2. ✅ 创建 Agent 注册表
   const agentRegistry = new AgentRegistryImpl();

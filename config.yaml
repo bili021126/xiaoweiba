@@ -6,15 +6,26 @@
 
 model:
   # 默认使用的模型提供商ID
-  default: deepseek
+  default: deepseek-pro
   
   # 模型提供商列表
   providers:
-    # DeepSeek API
-    - id: deepseek
-      name: DeepSeek Chat
+    # DeepSeek V4-Pro（复杂推理任务）
+    - id: deepseek-pro
+      name: DeepSeek V4 Pro
       apiUrl: https://api.deepseek.com/v1
       apiKey: ${env:DEEPSEEK_API_KEY}  # 从环境变量读取，或直接填写 "sk-xxx"
+      modelName: deepseek-v4-pro
+      maxTokens: 16384
+      temperature: 0.6
+      enabled: true
+    
+    # DeepSeek V4-Flash（高频轻任务）
+    - id: deepseek-flash
+      name: DeepSeek V4 Flash
+      apiUrl: https://api.deepseek.com/v1
+      apiKey: ${env:DEEPSEEK_API_KEY}  # 共用同一个 API Key
+      modelName: deepseek-v4-flash
       maxTokens: 4096
       temperature: 0.6
       enabled: true

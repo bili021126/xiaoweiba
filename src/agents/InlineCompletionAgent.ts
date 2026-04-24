@@ -26,7 +26,7 @@ export class InlineCompletionAgent implements IAgent {
   private initialized = false;
 
   constructor(
-    @inject('ILLMPort') private llmPort: ILLMPort
+    @inject('ILLMPortFlash') private llmPort: ILLMPort // ✅ 成本优化：使用Flash模型
   ) {}
 
   async initialize(): Promise<void> {
