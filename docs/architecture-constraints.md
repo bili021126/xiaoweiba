@@ -294,3 +294,120 @@ npx madge --image deps.png src/
 5. 重构 Chat/Completion 目录（Phase 2.5）
 
 **预计工作量**: 2-3小时
+
+---
+
+## 六、依赖注入时序约束（Dependency Injection Timing）
+
+### 6.1 原则
+
+**在组合根（Composition Root）中，必须确保依赖对象的创建顺序正确。被依赖的对象必须先创建并注册到容器，依赖它的对象才能正确解析。**
+
+### 6.2 典型案例：AgentRunner 与 memoryAdapter
+
+**错误示例**：
+```typescript
+// ❌ 错误：memoryAdapter 还未创建
+function initializeContainer() {
+  const agentRunner = new AgentRunner(eventBus, registry, auditLogger, memoryAdapter!);
+  container.registerInstance(AgentRunner, agentRunner);
+}
+
+function activate() {
+  // memoryAdapter 在这里才创建
+  memoryAdapter = new MemoryAdapter(...);
+  container.register('IMemoryPort', { useValue: memoryAdapter });
+}
+```
+
+**正确示例**：
+```typescript
+// ✅ 正确：先创建 memoryAdapter，再创建 AgentRunner
+function activate() {
+  // Step 1: 创建 memoryAdapter
+  memoryAdapter = new MemoryAdapter(...);
+  container.register('IMemoryPort', { useValue: memoryAdapter });
+  
+  // Step 2: 创建 AgentRunner（此时 memoryAdapter 已存在）
+  const agentRunner = new AgentRunner(eventBus, registry, auditLogger, memoryAdapter);
+  container.registerInstance(AgentRunner, agentRunner);
+}
+```
+
+### 6.3 检查清单
+
+在编写组合根代码时，必须回答以下问题：
+
+- [ ] 这个对象依赖的其他对象是否已经创建？
+- [ ] 依赖对象是否已经注册到容器中？
+- [ ] 是否存在循环依赖？
+- [ ] 是否需要使用工厂模式延迟创建？
+
+### 6.4 常见陷阱
+
+| 陷阱 | 症状 | 解决方案 |
+|------|------|----------|
+| **过早解析** | `undefined` 错误 | 延迟到依赖对象创建后再解析 |
+| **单例未注册** | 多实例导致状态不一致 | 使用 `registerSingleton()` |
+| **循环依赖** | 栈溢出或初始化失败 | 重构代码，消除循环 |
+| **异步初始化** | 竞态条件 | 使用 `async/await` 确保顺序 |
+
+### 6.5 ConfigManager 单例化案例
+
+**问题**：ConfigManager 被创建了 31 个实例，只有其中一个加载了新配置。
+
+**修复**：
+```typescript
+// ✅ 在 initializeContainer 中注册为单例
+container.registerSingleton(ConfigManager);
+```
+
+**验证**：
+```
+✅ [Extension] ConfigManager registered as singleton
+✅ [ConfigManager] 🆔 Instance #1 created
+✅ [ConfigManager] 🔒 this.currentConfig.model.default: deepseek-v4-flash
+```
+
+---
+
+## 七、Agent 命名规范（Agent Naming Convention）
+
+### 7.1 原则
+
+**所有 Agent 的 ID 必须使用 kebab-case（短横线分隔），保持命名风格统一。**
+
+### 7.2 命名规则
+
+```typescript
+// ✅ 正确：kebab-case
+readonly id = 'chat-agent';
+readonly id = 'explain-code-agent';
+readonly id = 'session-management-agent';
+
+// ❌ 错误：snake_case
+readonly id = 'chat_agent';
+readonly id = 'explain_code_agent';
+
+// ❌ 错误：camelCase
+readonly id = 'chatAgent';
+readonly id = 'explainCodeAgent';
+```
+
+### 7.3 命名格式
+
+格式：`{功能}-{agent}`
+
+| Agent | ID | 说明 |
+|-------|----|------|
+| ChatAgent | `chat-agent` | 聊天助手 |
+| ExplainCodeAgent | `explain-code-agent` | 代码解释 |
+| GenerateCommitAgent | `generate-commit-agent` | 提交信息生成 |
+| SessionManagementAgent | `session-management-agent` | 会话管理 |
+
+### 7.4 影响范围
+
+修改 Agent ID 后，必须同步更新：
+- [ ] `IntentDispatcher` 中的引用
+- [ ] 测试文件中的 Mock
+- [ ] 文档中的示例代码

@@ -351,7 +351,7 @@ async dispatch(intent: Intent): Promise<void> {
 | **配置管理** | ConfigureApiKeyAgent | configure_api_key | 配置API密钥 |
 | **记忆管理** | ExportMemoryAgent | export_memory | 导出记忆数据 |
 | **记忆管理** | ImportMemoryAgent | import_memory | 导入记忆数据 |
-| **通用对话** | ChatAgent | chat, ask_question, explain_code | 降级Agent，处理未匹配意图 |
+| **通用对话** | ChatAgent | chat, qa | 处理纯聊天和问答（代码解释已分流到 ExplainCodeAgent） |
 | **代码补全** | InlineCompletionAgent | inline_completion | 行内代码补全 |
 
 ### 5.2 Agent接口规范
