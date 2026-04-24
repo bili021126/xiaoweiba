@@ -14,6 +14,7 @@
 
 import { injectable } from 'tsyringe';
 import * as vscode from 'vscode';
+import * as path from 'path';
 import { Intent } from '../domain/Intent';
 
 /**
@@ -68,9 +69,16 @@ export class ContextEnricher {
       const selection = editor.selection;
       const position = editor.selection.active;
 
+      // ✅ 修复 #1：使用相对于工作区的路径，保护用户隐私
+      let activeFilePath = document.fileName;
+      const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
+      if (workspaceFolder) {
+        activeFilePath = path.relative(workspaceFolder.uri.fsPath, document.fileName);
+      }
+
       // 采集基本信息
       const enrichedContext: EnrichedContext = {
-        activeFilePath: document.fileName,
+        activeFilePath,
         activeFileLanguage: document.languageId,
         cursorLine: position.line + 1, // VS Code行号从0开始，转换为从1开始
         timestamp: Date.now()
