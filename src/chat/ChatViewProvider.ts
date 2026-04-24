@@ -217,6 +217,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private async handleUserInput(text: string): Promise<void> {
     if (!text.trim()) return;
 
+    // ✅ 首次对话：如果还没有会话 ID，先创建
+    if (!this.currentSessionId) {
+      this.currentSessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      await this.context.workspaceState.update('currentSessionId', this.currentSessionId);
+      console.log('[ChatViewProvider] Auto-created session for first message:', this.currentSessionId);
+    }
+
     try {
       // 1. ✅ 截断超长消息，防止Webview崩溃（最多50000字符）
       const MAX_MESSAGE_LENGTH = 50000;
@@ -266,17 +273,20 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
    */
   private async handleNewSession(): Promise<void> {
     try {
-      // ✅ 新建会话时，只清空前端界面，不清除 workspaceState
-      // workspaceState 会在用户发送第一条消息时自动更新为新会话 ID
+      // ✅ 1. 立即生成新会话 ID（不等待后端）
+      const newSessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
-      // 通过IntentDispatcher调度新建会话意图（会创建新会话并发布 SessionListUpdatedEvent）
-      const intent = IntentFactory.buildNewSessionIntent();
-      await this.intentDispatcher.dispatch(intent);
+      // ✅ 2. 更新当前会话 ID
+      this.currentSessionId = newSessionId;
+      await this.context.workspaceState.update('currentSessionId', newSessionId);
+      console.log('[ChatViewProvider] Created new session:', newSessionId);
       
-      // 通知UI清空消息列表
+      // ✅ 3. 清空前端的消息区
       this.view?.webview.postMessage({ type: 'clearMessages' });
       
-      console.log('[ChatViewProvider] New session created, waiting for first message to update workspaceState');
+      // ✅ 4. 异步通知后端创建会话（后端负责持久化到数据库）
+      const intent = IntentFactory.buildNewSessionIntent();
+      await this.intentDispatcher.dispatch(intent);
     } catch (error) {
       vscode.window.showWarningMessage('新建会话失败，请重试');
       throw error;

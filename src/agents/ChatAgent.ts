@@ -57,26 +57,6 @@ export class ChatAgent implements IAgent {
       // ✅ 添加调试日志
       console.log('[ChatAgent] Intent:', intent.name, 'UserInput:', intent.userInput, 'CodeContext:', intent.codeContext);
 
-      // ✅ 确保当前有有效的会话 ID（首次对话时自动创建）
-      let sessionId = intent.metadata.sessionId;
-      if (!sessionId) {
-        // 自动生成会话 ID
-        const crypto = await import('crypto');
-        const randomPart = crypto.randomBytes(8).toString('hex');
-        sessionId = `session_${Date.now()}_${randomPart}`;
-        
-        // 创建新会话
-        await this.memoryPort.createSession(sessionId, {
-          title: `会话 ${new Date().getMonth() + 1}/${new Date().getDate()} ${new Date().getHours()}:${String(new Date().getMinutes()).padStart(2, '0')}`,
-          createdAt: Date.now()
-        });
-        
-        console.log('[ChatAgent] Auto-created session for first message:', sessionId);
-        
-        // 更新 Intent 中的 sessionId（用于后续保存消息）
-        intent.metadata.sessionId = sessionId;
-      }
-
       // ✅ 处理无用户输入的情况
       let userMessage = intent.userInput;
       
