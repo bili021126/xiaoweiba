@@ -35,3 +35,14 @@ jest.mock('vscode', () => ({
 
 // 全局超时设置
 jest.setTimeout(30000);
+
+// ✅ 任务1：修复 Worker 进程退出问题 - 全局清理定时器
+afterEach(() => {
+  // 清除所有待处理的定时器
+  jest.clearAllTimers();
+});
+
+afterAll(() => {
+  // 确保所有资源被释放
+  jest.useRealTimers();
+});
