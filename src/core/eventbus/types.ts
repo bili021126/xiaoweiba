@@ -18,9 +18,11 @@ export enum CoreEventType {
 
   // 任务相关
   TASK_COMPLETED = 'task.completed',
+  TASK_FAILED = 'task.failed',           // ✅ 新增：任务失败事件
 
   // 系统相关
   CONFIG_UPDATED = 'config.updated',
+  SYSTEM_ERROR = 'system.error',         // ✅ 新增：系统错误事件
   
   // Agent相关
   AGENT_REGISTERED = 'agent.registered',
@@ -84,7 +86,18 @@ export interface CoreEventPayloadMap {
       entities: string[];
     };
   };
+  [CoreEventType.TASK_FAILED]: {       // ✅ 新增：任务失败事件载荷
+    intent: any;
+    agentId: string;
+    error: Error;
+    durationMs: number;
+  };
   [CoreEventType.CONFIG_UPDATED]: { key: string; oldValue: unknown; newValue: unknown };
+  [CoreEventType.SYSTEM_ERROR]: {      // ✅ 新增：系统错误事件载荷
+    component: string;
+    context: string;
+    error: string;
+  };
   [CoreEventType.AGENT_REGISTERED]: { agentId: string; capabilities: unknown[] };
   [CoreEventType.INTENT_RECEIVED]: any;
   [CoreEventType.AGENT_SELECTED]: { intent: any; agentId: string; memoryContext: any };
