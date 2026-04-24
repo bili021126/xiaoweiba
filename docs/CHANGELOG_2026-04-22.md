@@ -387,6 +387,90 @@ getByCategory(category): BestPractice[] {
 
 ---
 
+## 🛠️ 交互打磨与稳定性优化（2026-04-22 下午）
+
+### ✅ 配置加载问题彻底解决
+
+**问题**: ConfigManager 存在多实例导致配置不一致，LLM 调用失败
+
+**修复**:
+- 在 `extension.ts` 中注册 `ConfigManager` 为 tsyringe 单例
+- 确保全局只有一个 ConfigManager 实例
+
+**验证**:
+```
+✅ [Extension] ConfigManager registered as singleton
+✅ [ConfigManager] 🔒 this.currentConfig.model.default: deepseek-v4-flash
+✅ LLM 调用成功，V4-Flash/Pro 分层策略生效
+```
+
+### ✅ AgentRunner 依赖注入时序修复
+
+**问题**: Agent 执行后无法记录操作记忆，报错 `Cannot read properties of undefined`
+
+**根因**: AgentRunner 在 memoryAdapter 创建之前初始化
+
+**修复**:
+- 从 `initializeContainer()` 移除 AgentRunner 创建
+- 在 `activate()` 中，memoryAdapter 创建后再初始化 AgentRunner
+
+**验证**:
+```
+✅ [AgentRunner] Agent chat-agent completed successfully in 4556ms
+✅ [MemoryAdapter] Recording with memoryMetadata: CODE_EXPLAIN
+```
+
+### ✅ 会话持久化修复
+
+**问题**: 在不同文件间切换时，当前会话被刷新/重置
+
+**修复**:
+- 使用 `workspaceState` 持久化当前会话 ID
+- 在新建、切换、删除会话时保存到 workspaceState
+- 在 Webview 重新激活时恢复会话 ID
+
+**验证**:
+```
+✅ [ChatViewProvider] Restored session: session_xxx
+✅ 切换标签页后会话状态保持不变
+```
+
+### ✅ Agent 命名统一
+
+**修改**:
+- `chat_agent` → `chat-agent`
+- `inline_completion_agent` → `inline-completion-agent`
+- `session_management_agent` → `session-management-agent`
+
+**影响文件**: 4 个文件（3 个 Agent + 1 个 IntentDispatcher）
+
+### ✅ ChatAgent 职责分流
+
+**修改**:
+- 从 `supportedIntents` 中移除 `explain_code`
+- `explain_code` 意图由专门的 ExplainCodeAgent 处理
+- ChatAgent 只负责纯聊天和问答
+
+**架构优势**:
+- ✅ 职责单一原则
+- ✅ 符合 IntentDispatcher 路由设计
+
+### ✅ EventBus 验证逻辑优化
+
+**修改**:
+- 仅对以 `plugin.` 开头的事件进行格式校验
+- 放行 Core 事件和 Domain 事件（如 `task.failed`、`system.error`）
+
+### ⚠️ EmbeddingService 降级策略
+
+**现状**:
+- Transformers.js 在 VS Code Node.js 环境中模型加载失败
+- 系统已实现优雅降级：向量检索失败时自动切换到关键词搜索
+
+**不影响核心功能**，语义检索降级为关键词匹配。
+
+---
+
 ## 🙏 致谢
 
 感谢所有参与代码审查和测试的团队成员！
