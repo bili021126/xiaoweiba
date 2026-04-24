@@ -40,7 +40,7 @@ export class HybridRetriever {
 
     // 2. 纯语义检索（可选，如果关键词召回不足或需要补充）
     let semanticResults: EpisodicMemoryRecord[] = [];
-    if (this.embeddingService.isEnabled()) {
+    if (this.embeddingService.isModelAvailable()) { // ✅ 修复：检查模型是否可用，而非仅检查 enabled
       const queryVector = await this.embeddingService.embed(query);
       if (queryVector.length > 0) {
         // 获取近期记忆作为候选池（或使用全量，性能考虑用近期）
@@ -57,6 +57,9 @@ export class HybridRetriever {
           limit * 2
         );
       }
+    } else if (this.embeddingService.isEnabled()) {
+      // ✅ 新增：enabled 但模型未加载时，记录日志（已通知用户）
+      console.log('[HybridRetriever] Vector model not available, falling back to keyword-only search');
     }
 
     // 3. 结果融合（使用加权分数合并）

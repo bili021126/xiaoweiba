@@ -19,6 +19,7 @@ export class EmbeddingService {
   private enabled = false;
   private extractor: any = null; // 模型提取器
   private isModelLoading = false;
+  private modelLoadFailed = false; // ✅ 修复：标记模型加载失败（但不禁用功能）
   private hasNotifiedFailure = false; // ✅ 修复：防止重复通知
 
   constructor(@inject(ConfigManager) private configManager: ConfigManager) {
@@ -46,20 +47,34 @@ export class EmbeddingService {
       console.log('[EmbeddingService] Loading local model: Xenova/all-MiniLM-L6-v2...');
       this.extractor = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
       console.log('[EmbeddingService] Local model loaded successfully.');
-      this.hasNotifiedFailure = false; // ✅ 修复：加载成功后重置标志
+      this.modelLoadFailed = false; // ✅ 修复：加载成功，重置失败标志
+      this.hasNotifiedFailure = false; // ✅ 修复：加载成功后重置通知标志
     } catch (error) {
       console.error('[EmbeddingService] Failed to load local model:', error);
-      this.enabled = false; // 加载失败则禁用功能
+      this.modelLoadFailed = true; // ✅ 修复：标记加载失败，但不禁用 enabled
       
-      // ✅ 修复：首次失败时通知用户
+      // ✅ 修复：首次失败时通知用户，提供降级提示
       if (!this.hasNotifiedFailure) {
         this.hasNotifiedFailure = true;
         vscode.window.showWarningMessage(
-          '向量模型加载失败，语义检索暂不可用，将使用关键词匹配。',
-          '重试' // ✅ 提供重试按钮
+          '⚠️ 向量模型加载失败，语义检索将降级为关键词匹配',
+          '查看详情',
+          '重试'
         ).then(selection => {
           if (selection === '重试') {
             this.retryLoadModel();
+          } else if (selection === '查看详情') {
+            vscode.window.showInformationMessage(
+              '由于网络或缓存问题，本地向量模型无法加载。\n\n' +
+              '当前行为：\n' +
+              '• 语义检索已自动降级为关键词匹配\n' +
+              '• 搜索精度可能略有下降，但功能仍可用\n' +
+              '• 可稍后点击“重试”重新加载模型\n\n' +
+              '建议：\n' +
+              '1. 检查网络连接\n' +
+              '2. 重启 VS Code 后再次尝试\n' +
+              '3. 如持续失败，可在配置中关闭 enableVectorSearch'
+            );
           }
         });
       }
@@ -108,6 +123,14 @@ export class EmbeddingService {
 
   isEnabled(): boolean {
     return this.enabled;
+  }
+
+  /**
+   * ✅ 新增：检查向量模型是否已加载
+   * @returns true=模型可用，false=将降级到关键词匹配
+   */
+  isModelAvailable(): boolean {
+    return this.enabled && !this.modelLoadFailed && !!this.extractor;
   }
 
   /**
