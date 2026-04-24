@@ -7,9 +7,13 @@ import { container } from 'tsyringe';
 import { ConfigManager } from '../../../src/storage/ConfigManager';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 
 jest.mock('fs');
 jest.mock('path');
+jest.mock('os', () => ({
+  homedir: jest.fn().mockReturnValue('/mock/home')
+}));
 
 describe('ConfigManager Branch Coverage', () => {
   let configManager: ConfigManager;
@@ -44,7 +48,9 @@ describe('ConfigManager Branch Coverage', () => {
     (fs.existsSync as jest.Mock).mockReturnValue(true);
     (fs.readFileSync as jest.Mock).mockReturnValue(JSON.stringify(userConfig));
     
-    // 重新实例化以触发加载逻辑
+    // 清除容器中的旧实例，确保重新加载配置
+    container.clearInstances();
+    container.registerInstance('SecretStorage', mockSecretStorage);
     const newManager = container.resolve(ConfigManager);
     const config = newManager.getConfig();
     expect(config.model.default).toBe('ollama');

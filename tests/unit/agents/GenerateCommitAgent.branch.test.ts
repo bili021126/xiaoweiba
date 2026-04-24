@@ -5,8 +5,7 @@
 import 'reflect-metadata';
 import { container } from 'tsyringe';
 import { GenerateCommitAgent } from '../../../src/agents/GenerateCommitAgent';
-import { ILLMPort } from '../../../src/core/ports/ILLMPort';
-import { IMemoryPort } from '../../../src/core/ports/IMemoryPort';
+import { createMockLLMPort, createMockMemoryPort } from '../../__mocks__/globalMocks';
 
 jest.mock('vscode', () => ({
   workspace: { getConfiguration: jest.fn() },
@@ -19,11 +18,11 @@ describe('GenerateCommitAgent Branch Coverage', () => {
   beforeEach(() => {
     container.clearInstances();
     
-    const mockLLM = { chat: jest.fn().mockResolvedValue({ content: 'feat: test commit' }) };
-    const mockMemory = { recordMemory: jest.fn(), retrieveContext: jest.fn() };
+    const mockLLM = createMockLLMPort({ call: jest.fn().mockResolvedValue({ success: true, text: 'feat: test commit' }) });
+    const mockMemory = createMockMemoryPort();
 
-    container.registerInstance('ILLMPort', mockLLM as unknown as ILLMPort);
-    container.registerInstance('IMemoryPort', mockMemory as unknown as IMemoryPort);
+    container.registerInstance('ILLMPort', mockLLM);
+    container.registerInstance('IMemoryPort', mockMemory);
     
     agent = container.resolve(GenerateCommitAgent);
   });
