@@ -34,9 +34,22 @@ export class EventBusAdapter implements IEventBus {
    * 订阅领域事件
    */
   subscribe<T extends DomainEvent>(eventType: string, handler: EventHandler<T>): () => void {
+    // ✅ 修复：包装 handler，使其接收完整的事件对象而非 payload
+    const wrappedHandler = (event: any) => {
+      // LegacyEventBus 传递的是 { type, timestamp, payload }
+      // 我们需要将其转换为 DomainEvent 格式
+      const domainEvent = {
+        type: event.type,
+        timestamp: event.timestamp,
+        payload: event.payload || event  // 兼容两种格式
+      } as T;
+      
+      handler(domainEvent);
+    };
+    
     return this.legacyEventBus.subscribe(
       eventType as any,
-      handler as any
+      wrappedHandler as any
     );
   }
 
