@@ -228,7 +228,7 @@
 
 | # | 问题 | 预计工时 | 说明 |
 |---|------|---------|------|
-| **#3** | 反馈闭环断裂 (dwellTimeMs) | 3h | 需要前端配合计算停留时间并传递给后端 |
+| **#3** | 反馈闭环断裂 (dwellTimeMs) | 3h | ✅ **后端已就绪**：ChatViewProvider 已实现 feedback 消息处理<br>⏸️ **待前端实现**：需要在 ChatViewHtml.ts 中添加：<br>1. 记忆推荐卡片 UI<br>2. mousedown/mouseup 事件监听计算 dwellTimeMs<br>3. vscode.postMessage({ type: 'feedback', query, memoryId, dwellTimeMs }) |
 
 ### 中优先级（P1）
 

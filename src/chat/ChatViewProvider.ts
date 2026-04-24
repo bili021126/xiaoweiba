@@ -4,7 +4,7 @@ import { IEventBus } from '../core/ports/IEventBus';
 import { IntentDispatcher } from '../core/application/IntentDispatcher';
 import { IntentFactory } from '../core/factory/IntentFactory';
 import { IMemoryPort } from '../core/ports/IMemoryPort'; // ✅ DeepSeek 风格：注入 MemoryPort
-import { AssistantResponseEvent, StreamChunkEvent, SessionListUpdatedEvent, SessionHistoryLoadedEvent } from '../core/events/DomainEvent'; // ✅ P1-04: 引入新事件
+import { AssistantResponseEvent, StreamChunkEvent, SessionListUpdatedEvent, SessionHistoryLoadedEvent, FeedbackGivenEvent } from '../core/events/DomainEvent'; // ✅ P1-04: 引入新事件
 import { generateChatViewHtml } from './ChatViewHtml';
 import { ChatMessage } from './types';
 
@@ -170,7 +170,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             await this.handleDeleteSession(message.sessionId);
             break;
           case 'feedback':
-            // TODO: 发布反馈事件
+            // ✅ 修复 #3：处理用户反馈，激活学习闭环
+            console.log('[ChatViewProvider] Feedback received:', message);
+            
+            const { query, memoryId, dwellTimeMs } = message;
+            if (query && memoryId && dwellTimeMs !== undefined) {
+              // 发布反馈事件，ExpertSelector 会订阅并处理
+              this.eventBus.publish(new FeedbackGivenEvent(query, memoryId, dwellTimeMs));
+              console.log('[ChatViewProvider] FeedbackGivenEvent published:', { query, memoryId, dwellTimeMs });
+            } else {
+              console.warn('[ChatViewProvider] Invalid feedback message:', message);
+            }
             break;
         }
       });

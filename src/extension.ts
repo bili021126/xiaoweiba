@@ -155,11 +155,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     memorySystem = container.resolve(MemorySystem);
     llmTool = container.resolve(LLMTool);
     
-    // ✅ L2: 注册 L2 核心组件
-    const embeddingService = container.resolve(EmbeddingService);
-    const vectorIndexManager = container.resolve(VectorIndexManager);
-    const semanticRetriever = container.resolve(SemanticRetriever);
-    
     // ✅ L2.5: 注册深度拆分组件
     const queryExecutor = container.resolve(QueryExecutor);
     const weightCalculator = container.resolve(WeightCalculator);
