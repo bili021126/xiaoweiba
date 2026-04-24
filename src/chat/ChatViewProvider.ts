@@ -157,6 +157,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       if (savedSessionId) {
         this.currentSessionId = savedSessionId;
         console.log('[ChatViewProvider] Restored session:', savedSessionId);
+        
+        // ✅ 恢复会话后，自动加载历史消息
+        await this.handleSwitchSession(savedSessionId);
       }
 
       // 处理来自Webview的消息
