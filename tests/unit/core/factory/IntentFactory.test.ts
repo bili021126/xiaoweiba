@@ -4,6 +4,21 @@
 
 import 'reflect-metadata';
 import { IntentFactory } from '../../../../src/core/factory/IntentFactory';
+import * as vscode from 'vscode';
+
+jest.mock('vscode', () => ({
+  window: {
+    activeTextEditor: {
+      document: {
+        getText: jest.fn().mockReturnValue('const x = 1;'),
+        fileName: '/test/file.ts'
+      },
+      selection: {
+        isEmpty: false
+      }
+    }
+  }
+}));
 
 describe('IntentFactory Unit Tests', () => {
   it('should build a chat intent', async () => {
