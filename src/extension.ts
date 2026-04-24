@@ -386,14 +386,14 @@ async function initializeContainer(context: vscode.ExtensionContext): Promise<vo
   
   // 1️⃣ Flash Adapter（默认，覆盖95%的高频任务）
   // 用于：OptimizeSQLAgent, CheckNamingAgent, InlineCompletionAgent 等
-  container.register('LLMAdapterConfig', { useValue: { defaultModelId: 'deepseek-flash' } });
+  container.register('LLMAdapterConfig', { useValue: { defaultModelId: 'deepseek-v4-flash' } });
   const llmAdapterFlash = container.resolve(LLMAdapter);
   container.register('ILLMPort', { useValue: llmAdapterFlash }); // ✅ 默认端口改为Flash
   console.log('[System] V4-Flash 已注册为默认 Agent 模型（成本降低90%）');
   
   // 2️⃣ Pro Adapter（用于复杂推理任务）
   // 用于：ChatAgent, ExplainCodeAgent, GenerateCommitAgent, CodeGenerationAgent
-  container.register('LLMAdapterConfig', { useValue: { defaultModelId: 'deepseek-pro' } });
+  container.register('LLMAdapterConfig', { useValue: { defaultModelId: 'deepseek-v4-pro' } });
   const llmAdapterPro = container.resolve(LLMAdapter);
   container.register('ILLMPortPro', { useValue: llmAdapterPro }); // 显式Pro端口
   console.log('[System] V4-Pro 已注册为元 Agent 模型（顶级推理能力）');
