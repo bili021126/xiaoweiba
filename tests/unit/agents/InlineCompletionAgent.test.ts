@@ -68,27 +68,33 @@ describe('InlineCompletionAgent (Branch Coverage)', () => {
     await agent.initialize();
     mockLLM.call.mockResolvedValue({ success: false, error: 'Completion failed' });
 
-    await expect(agent.execute({
+    const result = await agent.execute({
       intent: { 
         name: 'inline_completion' as any,
         userInput: 'const items = data',
         codeContext: { language: 'typescript' }
       } as any,
       memoryContext: {} as any
-    })).rejects.toThrow('LLM调用失败');
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('Completion failed');
   });
 
   it('should handle LLM errors gracefully', async () => {
     await agent.initialize();
     mockLLM.call.mockRejectedValue(new Error('LLM failed'));
 
-    await expect(agent.execute({
+    const result = await agent.execute({
       intent: { 
         name: 'inline_completion' as any,
         userInput: 'const items = data',
         codeContext: { language: 'typescript' }
       } as any,
       memoryContext: {} as any
-    })).rejects.toThrow('LLM failed');
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('LLM failed');
   });
 });
