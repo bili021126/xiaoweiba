@@ -573,6 +573,10 @@ describe('DatabaseManager - 数据库管理器', () => {
           delete: jest.fn().mockResolvedValue(undefined)
         };
         const tempConfigManager = new ConfigManager(tempSecretStorage as any);
+        (tempConfigManager as any).currentConfig.database.path = tempDbPath;
+        
+        const tempDbManager = new DatabaseManager(tempConfigManager);
+        await tempDbManager.initialize();
         (tempConfigManager as any).currentConfig = {
           mode: 'private',
           model: {

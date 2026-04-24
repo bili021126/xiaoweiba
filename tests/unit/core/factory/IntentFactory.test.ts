@@ -17,6 +17,9 @@ jest.mock('vscode', () => ({
         isEmpty: false
       }
     }
+  },
+  workspace: {
+    getConfiguration: jest.fn()
   }
 }));
 
