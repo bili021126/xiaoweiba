@@ -30,4 +30,13 @@ describe('GenerateCommitAgent Simplified', () => {
   it('should initialize without errors', () => {
     expect(agent).toBeDefined();
   });
+
+  it('should execute and generate commit message', async () => {
+    const result = await agent.execute({ 
+      intent: { name: 'generate_commit' as any }, 
+      memoryContext: { memories: [], preferences: [] } 
+    } as any);
+    
+    expect(result).toBeDefined();
+  });
 });

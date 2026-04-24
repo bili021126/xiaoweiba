@@ -29,4 +29,12 @@ describe('DatabaseManager Simplified', () => {
   it('should initialize without errors', async () => {
     await expect(dbManager.initialize()).resolves.toBeUndefined();
   });
+
+  it('should handle query execution', async () => {
+    await dbManager.initialize();
+    
+    // 执行一个简单的查询
+    const result = (dbManager as any).runQuery('SELECT 1 as test');
+    expect(result).toBeDefined();
+  });
 });
