@@ -93,6 +93,9 @@ export class ChatAgent implements IAgent {
 
       // 2. 构建系统提示
       const systemPrompt = this.buildSystemPrompt(intent, memoryContext);
+      
+      // ✅ 调试日志：打印系统提示词
+      console.log('[ChatAgent] System prompt:', systemPrompt);
 
       // 3. 调用LLM（流式）
       const messageId = `msg_${Date.now()}_assistant`;
