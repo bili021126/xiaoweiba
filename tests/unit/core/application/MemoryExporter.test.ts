@@ -6,16 +6,18 @@ const mockMemoryPort = createMockMemoryPort();
 
 describe('MemoryExporter', () => {
   let exporter: MemoryExporter;
+  let mockMemoryPort: any;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockMemoryPort = createMockMemoryPort();
     exporter = new MemoryExporter(mockMemoryPort);
   });
 
   describe('retrieveAll', () => {
     it('should retrieve all memories with default limit', async () => {
       const mockMemories = [{ id: '1' }, { id: '2' }];
-      (mockMemoryPort.retrieveAll as jest.Mock).mockResolvedValue(mockMemories);
+      mockMemoryPort.retrieveAll.mockResolvedValue(mockMemories);
 
       const result = await exporter.retrieveAll();
 
@@ -25,7 +27,7 @@ describe('MemoryExporter', () => {
 
     it('should retrieve with custom limit', async () => {
       const mockMemories = [{ id: '1' }];
-      (mockMemoryPort.retrieveAll as jest.Mock).mockResolvedValue(mockMemories);
+      mockMemoryPort.retrieveAll.mockResolvedValue(mockMemories);
 
       const result = await exporter.retrieveAll({ limit: 100 });
 
@@ -34,7 +36,7 @@ describe('MemoryExporter', () => {
     });
 
     it('should return empty array on error', async () => {
-      (mockMemoryPort.retrieveAll as jest.Mock).mockRejectedValue(new Error('Test error'));
+      mockMemoryPort.retrieveAll.mockRejectedValue(new Error('Test error'));
 
       const result = await exporter.retrieveAll();
 
@@ -50,7 +52,7 @@ describe('MemoryExporter', () => {
         entities: ['entity1'],
         outcome: 'SUCCESS'
       };
-      (mockMemoryPort.recordMemory as jest.Mock).mockResolvedValue('memory_id_123');
+      mockMemoryPort.recordMemory.mockResolvedValue('memory_id_123');
 
       const result = await exporter.recordMemory(record);
 
@@ -67,7 +69,7 @@ describe('MemoryExporter', () => {
         modelId: 'gpt-4',
         durationMs: 1500
       };
-      (mockMemoryPort.recordMemory as jest.Mock).mockResolvedValue('mem_456');
+      mockMemoryPort.recordMemory.mockResolvedValue('mem_456');
 
       const result = await exporter.recordMemory(record);
 
@@ -85,7 +87,7 @@ describe('MemoryExporter', () => {
         entities: [],
         outcome: 'SUCCESS'
       };
-      (mockMemoryPort.recordMemory as jest.Mock).mockRejectedValue(new Error('Record failed'));
+      mockMemoryPort.recordMemory.mockRejectedValue(new Error('Record failed'));
 
       await expect(exporter.recordMemory(record)).rejects.toThrow('Record failed');
     });
