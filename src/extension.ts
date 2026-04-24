@@ -30,7 +30,7 @@ try {
     require('dotenv').config({ path: envExamplePath });
   }
 } catch (err) {
-  console.warn('[Extension] Failed to load .env file:', err);
+  // .env 文件不存在不影响运行
 }
 
 // 生产环境不使用.env文件，改用VS Code SecretStorage API
@@ -126,11 +126,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     await initializeContainer(context);
 
     // Step 2: 加载配置
-    console.log('[Extension] Step 2: Loading configuration...');
     configManager = container.resolve(ConfigManager);
-    console.log('[Extension] ConfigManager resolved, calling loadConfig()...');
     await configManager.loadConfig();
-    console.log('[Extension] ✅ Configuration loaded successfully');
 
     // Step 3: 初始化数据库
     databaseManager = container.resolve(DatabaseManager);
@@ -140,7 +137,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     try {
       databaseManager.migrateAddMemoryTier();
     } catch (error) {
-      console.warn('[Extension] Memory tier migration failed:', error);
+      // 配置加载失败不影响核心功能
     }
     
     // ✅ 关键：将已初始化的DatabaseManager注册为单例，覆盖容器中的实例
@@ -431,7 +428,6 @@ async function initializeContainer(context: vscode.ExtensionContext): Promise<vo
   // （避免依赖注入时序问题：memoryAdapter 此时还未创建）
   
   console.log('[Extension] Step 3 complete');
-  console.log('[Extension] Dependency injection container initialized successfully');
 }
 
 /**
