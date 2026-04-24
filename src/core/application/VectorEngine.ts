@@ -34,6 +34,29 @@ export class VectorEngine {
   }
 
   /**
+   * 计算四因子混合权重分数
+   * @param vectorScore 向量相似度 (0-1)
+   * @param keywordScore 关键词匹配度 (0-1)
+   * @param recencyScore 时间衰减分数 (0-1)
+   * @param entityScore 实体匹配度 (0-1)
+   * @param weights 权重配置 { vector: 0.4, keyword: 0.3, recency: 0.2, entity: 0.1 }
+   */
+  calculateHybridScore(
+    vectorScore: number,
+    keywordScore: number,
+    recencyScore: number,
+    entityScore: number,
+    weights: { vector: number; keyword: number; recency: number; entity: number }
+  ): number {
+    return (
+      vectorScore * weights.vector +
+      keywordScore * weights.keyword +
+      recencyScore * weights.recency +
+      entityScore * weights.entity
+    );
+  }
+
+  /**
    * 批量计算查询向量与候选向量列表的相似度，并返回 Top-K
    */
   topKSimilarity<T>(
