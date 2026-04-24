@@ -5,7 +5,9 @@
 import 'reflect-metadata';
 import { container } from 'tsyringe';
 import { GenerateCommitAgent } from '../../../src/agents/GenerateCommitAgent';
-import { createMockLLMPort, createMockMemoryPort } from '../../__mocks__/globalMocks';
+import { createMockLLMPort, createMockMemoryPort, createMockEventBus } from '../../__mocks__/globalMocks';
+import { TaskTokenManager } from '../../../src/core/security/TaskTokenManager';
+import { CommitStyleLearner } from '../../../src/core/memory/CommitStyleLearner';
 
 jest.mock('vscode', () => ({
   workspace: { getConfiguration: jest.fn() },
@@ -20,9 +22,15 @@ describe('GenerateCommitAgent Simplified', () => {
     
     const mockLLM = createMockLLMPort({ call: jest.fn().mockResolvedValue({ success: true, text: 'feat: test' }) });
     const mockMemory = createMockMemoryPort();
+    const mockEventBus = createMockEventBus();
+    const mockTaskTokenManager = new TaskTokenManager();
+    const mockStyleLearner = { learn: jest.fn(), getStyle: jest.fn() };
 
-    container.registerInstance('ILLMPort', mockLLM);
+    container.registerInstance('ILLMPortPro', mockLLM);
     container.registerInstance('IMemoryPort', mockMemory);
+    container.registerInstance('IEventBus', mockEventBus);
+    container.registerInstance(TaskTokenManager, mockTaskTokenManager);
+    container.registerInstance(CommitStyleLearner, mockStyleLearner as any);
     
     agent = container.resolve(GenerateCommitAgent);
   });

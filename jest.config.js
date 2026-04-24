@@ -39,7 +39,8 @@ module.exports = {
     '!src/**/*.d.ts',
     '!src/extension.ts',
     '!src/chat/html/**', // ✅ 排除前端模板文件
-    '!src/core/memory/types.ts' // ✅ 排除纯类型定义文件
+    '!src/core/memory/types.ts', // ✅ 排除纯类型定义文件
+    '!src/constants.ts' // ✅ 排除常量定义文件
   ],
   coverageThreshold: {
     global: {
