@@ -25,4 +25,14 @@ describe('FeedbackRecorder Simplified', () => {
   it('should record click feedback without throwing', async () => {
     await expect(recorder.recordClickFeedback('query_123', 'mem_456', 5000)).resolves.toBeUndefined();
   });
+
+  it('should handle database errors gracefully', async () => {
+    const mockDbManager = createMockDatabaseManager({ run: jest.fn().mockRejectedValue(new Error('DB error')) });
+    container.clearInstances();
+    container.registerInstance('DatabaseManager', mockDbManager);
+    container.registerInstance('ProjectFingerprint', createMockProjectFingerprint());
+    
+    const errorRecorder = container.resolve(FeedbackRecorder);
+    await expect(errorRecorder.recordClickFeedback('q', 'm', 100)).resolves.toBeUndefined();
+  });
 });

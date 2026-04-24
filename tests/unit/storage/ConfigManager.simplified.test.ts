@@ -5,6 +5,7 @@
 import 'reflect-metadata';
 import { container } from 'tsyringe';
 import { ConfigManager } from '../../../src/storage/ConfigManager';
+import * as fs from 'fs';
 
 jest.mock('fs');
 jest.mock('path');
@@ -24,6 +25,18 @@ describe('ConfigManager Simplified', () => {
 
   it('should initialize with default config', () => {
     const config = configManager.getConfig();
+    expect(config).toBeDefined();
+    expect(config.model.default).toBe('deepseek');
+  });
+
+  it('should handle missing config file gracefully', () => {
+    (fs.existsSync as jest.Mock).mockReturnValue(false);
+    
+    container.clearInstances();
+    container.registerInstance('SecretStorage', mockSecretStorage);
+    const newManager = container.resolve(ConfigManager);
+    
+    const config = newManager.getConfig();
     expect(config).toBeDefined();
     expect(config.model.default).toBe('deepseek');
   });
