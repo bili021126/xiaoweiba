@@ -115,6 +115,11 @@ export interface IMemoryPort {
   retrieveAll(options?: { limit?: number }): Promise<EpisodicMemoryItem[]>;
 
   /**
+   * ✅ 语义搜索记忆
+   */
+  search(query: string, options?: { taskType?: string; limit?: number }): Promise<EpisodicMemoryItem[]>;
+
+  /**
    * ✅ 直接记录一条记忆（用于导入等操作）
    */
   recordMemory(record: {

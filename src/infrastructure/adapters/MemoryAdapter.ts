@@ -450,4 +450,15 @@ export class MemoryAdapter implements IMemoryPort {
     // ✅ 瘦身：委托给 MemoryExporter
     return await this.memoryExporter.recordMemory(record);
   }
+
+  /**
+   * ✅ 语义搜索记忆
+   */
+  async search(query: string, options?: { taskType?: string; limit?: number }): Promise<any[]> {
+    // ✅ 委托给 EpisodicMemory（通过 storage）
+    return await this.storage.searchEpisodic(query, {
+      taskType: options?.taskType,
+      limit: options?.limit || 5
+    });
+  }
 }

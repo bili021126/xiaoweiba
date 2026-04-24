@@ -8,12 +8,13 @@
 
 import { injectable, inject } from 'tsyringe';
 import { Intent } from '../domain/Intent';
-import { EpisodicMemory } from '../memory/EpisodicMemory';
+import { IMemoryPort } from '../ports/IMemoryPort'; // ✅ 架构合规：依赖端口
+import { PathUtils } from '../../utils/ProjectFingerprint'; // ✅ 统一路径处理
 
 @injectable()
 export class SpecializedRetriever {
   constructor(
-    @inject(EpisodicMemory) private episodicMemory: EpisodicMemory
+    @inject('IMemoryPort') private memoryPort: IMemoryPort
   ) {}
 
   /**
@@ -23,18 +24,18 @@ export class SpecializedRetriever {
     if (!intent.codeContext) return [];
 
     const filePath = intent.codeContext.filePath;
-    const fileName = filePath.split(/[/\\]/).pop() || '';
+    const fileName = PathUtils.getFileName(filePath);
     
     try {
       // 1. 检索该文件的历史解释
-      const fileMemories = await this.episodicMemory.search(fileName, {
+      const fileMemories = await this.memoryPort.search(fileName, {
         taskType: 'CODE_EXPLAIN',
         limit: 3
       });
 
       // 2. 检索相关概念的解释
       if (intent.userInput) {
-        const conceptMemories = await this.episodicMemory.search(intent.userInput, {
+        const conceptMemories = await this.memoryPort.search(intent.userInput, {
           taskType: 'CODE_EXPLAIN',
           limit: 2
         });
@@ -54,10 +55,8 @@ export class SpecializedRetriever {
   async retrieveForCommit(intent: Intent): Promise<any[]> {
     try {
       // 检索最近的提交记录，学习用户的提交风格
-      const recentCommits = await this.episodicMemory.retrieve({
-        taskType: 'COMMIT_GENERATE',
-        limit: 5
-      });
+      const recentCommits = await this.memoryPort.retrieveAll({ limit: 5 });
+
 
       return recentCommits;
     } catch (error) {
@@ -74,14 +73,14 @@ export class SpecializedRetriever {
 
     try {
       // 1. 语义搜索相关对话
-      const semanticResults = await this.episodicMemory.search(intent.userInput, {
+      const semanticResults = await this.memoryPort.search(intent.userInput, {
         limit: 5
       });
 
       // 2. 如果有文件上下文，也检索相关文件的历史
       if (intent.codeContext?.filePath) {
-        const fileName = intent.codeContext.filePath.split(/[/\\]/).pop() || '';
-        const fileResults = await this.episodicMemory.search(fileName, {
+        const fileName = PathUtils.getFileName(intent.codeContext.filePath);
+        const fileResults = await this.memoryPort.search(fileName, {
           limit: 3
         });
         
