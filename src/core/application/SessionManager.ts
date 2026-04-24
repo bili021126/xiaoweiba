@@ -42,11 +42,12 @@ export class SessionManager {
   async loadSessionHistory(sessionId: string): Promise<Array<{ role: string; content: string; timestamp: number }>> {
     try {
       const db = this.dbManager.getDatabase();
-      const result = db.exec(
+      const stmt = db.prepare(
         `SELECT role, content, timestamp FROM chat_messages 
-         WHERE session_id = '${sessionId}' 
+         WHERE session_id = ? 
          ORDER BY timestamp ASC`
       );
+      const result = stmt.bind([sessionId]).getAsObject();
       
       if (!result || result.length === 0) {
         return [];
@@ -59,7 +60,7 @@ export class SessionManager {
       const contentIndex = columns.indexOf('content');
       const timestampIndex = columns.indexOf('timestamp');
       
-      return values.map(row => ({
+      return (result as any[]).map((row: any) => ({
         role: row[roleIndex] as string,
         content: row[contentIndex] as string,
         timestamp: row[timestampIndex] as number

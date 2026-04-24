@@ -8,6 +8,7 @@
  */
 
 import { injectable, inject } from 'tsyringe';
+import { escapeHtml } from '../utils/html'; // ✅ 统一 HTML 转义
 import * as vscode from 'vscode';
 import { IAgent, AgentResult } from '../core/agent/IAgent';
 import { Intent } from '../core/domain/Intent';
@@ -225,32 +226,18 @@ export class CheckNamingAgent implements IAgent {
       <body>
         <h1>🔍 命名检查报告</h1>
         <div class="code">
-          <strong>检查的命名:</strong> ${this.escapeHtml(name)}<br>
+          <strong>检查的命名:</strong> ${escapeHtml(name)}<br>
           <strong>语言:</strong> ${languageId}
         </div>
         <div class="analysis">
           <h2>分析结果</h2>
-          ${this.escapeHtml(analysis).replace(/\n/g, '<br>')}
+          ${escapeHtml(analysis).replace(/\n/g, '<br>')}
         </div>
       </body>
       </html>
     `;
 
     panel.webview.html = html;
-  }
-
-  /**
-   * 转义HTML
-   */
-  private escapeHtml(text: string): string {
-    const map: { [key: string]: string } = {
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#039;'
-    };
-    return text.replace(/[&<>"']/g, m => map[m]);
   }
 
   /**

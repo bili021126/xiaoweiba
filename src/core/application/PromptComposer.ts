@@ -8,6 +8,7 @@
 
 import { injectable } from 'tsyringe';
 import { Intent } from '../domain/Intent';
+import { PathUtils } from '../../utils/ProjectFingerprint'; // ✅ 统一路径处理
 import { MemoryContext } from '../domain/MemoryContext';
 
 @injectable()
@@ -56,7 +57,7 @@ export class PromptComposer {
 
   private buildEnrichedContextSection(context: any): string {
     const lines = ['\n## 🖥️ 当前工作环境'];
-    const fileName = context.activeFilePath?.split(/[\\/]/).pop() || '未知文件';
+    const fileName = context.activeFilePath ? PathUtils.getFileName(context.activeFilePath) : '未知文件';
     
     lines.push(`- **文件**: ${fileName}`);
     if (context.activeFileLanguage) lines.push(`- **语言**: ${context.activeFileLanguage}`);

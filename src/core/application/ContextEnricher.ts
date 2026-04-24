@@ -16,6 +16,7 @@ import { injectable } from 'tsyringe';
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { Intent } from '../domain/Intent';
+import { PathUtils } from '../../utils/ProjectFingerprint'; // ✅ 统一路径处理
 
 /**
  *  enriched上下文 - 编辑器状态的详细信息
@@ -166,7 +167,7 @@ export class ContextEnricher {
 
     // 文件名
     if (context.activeFilePath) {
-      const fileName = context.activeFilePath.split(/[\\/]/).pop() || context.activeFilePath;
+      const fileName = context.activeFilePath ? PathUtils.getFileName(context.activeFilePath) : context.activeFilePath;
       parts.push(`在${fileName}`);
     }
 

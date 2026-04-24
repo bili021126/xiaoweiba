@@ -14,6 +14,7 @@
  */
 
 import { injectable, inject } from 'tsyringe';
+import { escapeHtml } from '../utils/html'; // ✅ 统一 HTML 转义
 import * as vscode from 'vscode';
 import { IAgent, AgentResult } from '../core/agent/IAgent';
 import { Intent } from '../core/domain/Intent';
@@ -274,7 +275,7 @@ ${code}
 
     const explanationCard = generateCard({
       title: '💡 AI 解释',
-      content: this.escapeHtml(explanation).replace(/\n/g, '<br>'),
+      content: escapeHtml(explanation).replace(/\n/g, '<br>'),
       icon: '🤖'
     });
 
@@ -317,20 +318,6 @@ ${code}
       content,
       generateCompleteStyles()
     );
-  }
-
-  /**
-   * 转义 HTML 特殊字符
-   */
-  private escapeHtml(text: string): string {
-    const map: { [key: string]: string } = {
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#039;'
-    };
-    return text.replace(/[&<>"']/g, m => map[m]);
   }
 
   /**

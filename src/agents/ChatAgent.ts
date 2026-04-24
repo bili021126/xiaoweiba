@@ -8,6 +8,7 @@ import { AssistantResponseEvent, StreamChunkEvent, TaskCompletedEvent } from '..
 import { injectable, inject } from 'tsyringe';
 import { PromptComposer } from '../core/application/PromptComposer'; // ✅ L1: 引入提示词编排器
 import { DialogManager } from '../chat/DialogManager'; // ✅ P2: 引入对话管理器
+import { escapeHtml } from '../utils/html'; // ✅ 统一 HTML 转义
 
 /**
  * 聊天Agent实现
@@ -199,18 +200,6 @@ export class ChatAgent implements IAgent {
     // ✅ 对于 explain_code 意图，即使没有会话历史，也要确保有用户消息
     // 这由 execute 方法中的 userMessage 保证，此处只需返回历史即可
     return history;
-  }
-
-  /**
-   * HTML转义，防止XSS攻击
-   */
-  private escapeHtml(text: string): string {
-    return text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
   }
 
   /**
