@@ -335,6 +335,13 @@ export class ConfigManager {
         '配置尚未加载，请先调用 loadConfig()'
       );
     }
+    
+    // ✅ 调试日志：追踪配置访问
+    if (this.currentConfig.model.default === 'deepseek') {
+      console.warn(`[ConfigManager] ⚠️ getConfig() returning OLD config (default: deepseek)`);
+      console.warn(`[ConfigManager] currentConfig was set at constructor?`, this.currentConfig === require('../storage/ConfigManager').DEFAULT_CONFIG);
+    }
+    
     return this.currentConfig;
   }
 

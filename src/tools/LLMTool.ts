@@ -229,14 +229,17 @@ export class LLMTool implements ILLMTool {
    */
   private getProviderConfig(providerId: string): ModelProviderConfig | undefined {
     const config = this.configManager.getConfig();
-    const provider = config.model.providers.find((p) => p.id === providerId);
     
     // ✅ 调试日志：帮助排查 Provider 找不到的问题
+    console.log(`[LLMTool] 🔍 Looking for provider: ${providerId}`);
+    console.log(`[LLMTool] Config default model: ${config.model.default}`);
+    console.log(`[LLMTool] Available providers:`, config.model.providers.map(p => ({ id: p.id, modelName: p.modelName })));
+    console.log(`[LLMTool] ConfigManager instance:`, this.configManager.constructor.name);
+    
+    const provider = config.model.providers.find((p) => p.id === providerId);
+    
     if (!provider) {
       console.error(`[LLMTool] ❌ Provider not found: ${providerId}`);
-      console.error(`[LLMTool] Available providers:`, config.model.providers.map(p => ({ id: p.id, modelName: p.modelName })));
-      console.error(`[LLMTool] Default model:`, config.model.default);
-      console.error(`[LLMTool] Config file path:`, (this.configManager as any).configPath);
     }
     
     return provider;
