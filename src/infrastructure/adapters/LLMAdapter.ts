@@ -11,12 +11,24 @@ import { injectable, inject } from 'tsyringe';
 import { ILLMPort, LLMCallOptions, LLMCallResult, StreamCallback } from '../../core/ports/ILLMPort';
 import { LLMTool } from '../../tools/LLMTool';
 
+/**
+ * LLM适配器配置
+ */
+export interface LLMAdapterConfig {
+  /** 默认模型ID（如 'deepseek-pro' 或 'deepseek-flash'） */
+  defaultModelId?: string;
+}
+
 @injectable()
 export class LLMAdapter implements ILLMPort {
+  private readonly defaultModelId?: string;
+
   constructor(
     @inject(LLMTool) private llmTool: LLMTool,
-    private defaultModelId?: string // ✅ 成本优化：支持指定默认模型（如 'deepseek-flash'）
-  ) {}
+    @inject('LLMAdapterConfig') config?: LLMAdapterConfig // ✅ 法典：通过容器注入配置
+  ) {
+    this.defaultModelId = config?.defaultModelId;
+  }
 
   /**
    * 调用LLM（同步模式）
