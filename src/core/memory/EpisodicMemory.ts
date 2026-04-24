@@ -222,38 +222,6 @@ export class EpisodicMemory {
   /**
    * ✅ L2.5: 委托给 QueryExecutor
    */
-  private async searchWithLike(
-    db: Database,
-    projectFingerprint: string,
-    query: string,
-    limit: number,
-    offset: number
-  ): Promise<EpisodicMemoryRecord[]> {
-    return this.queryExecutor.searchByKeywords(query, { limit, offset });
-  }
-
-  /**
-   * 清理搜索查询（防止注入和语法错误）
-   */
-  private sanitizeSearchQuery(query: string): string {
-    if (!query || query.trim().length === 0) {
-      return '';
-    }
-
-    // 移除特殊字符（保留字母、数字、中文、空格）
-    let sanitized = query
-      .replace(/[^\w\s\u4e00-\u9fa5]/g, ' ') // 保留单词字符、空格、中文
-      .replace(/\s+/g, ' ') // 合并多个空格
-      .trim();
-
-    // 如果清理后为空，返回原始查询的转义版本
-    if (sanitized.length === 0) {
-      return query.replace(/'/g, "''").substring(0, 200); // 限制长度
-    }
-
-    // 限制查询长度
-    return sanitized.substring(0, 200);
-  }
 
   /**
    * 删除过期记忆
@@ -350,155 +318,13 @@ export class EpisodicMemory {
     };
   }
 
-  // ========== 混合检索核心方法 ==========
-
-  /**
-   * ✅ 使用IndexManager构建索引
-   */
-  private async buildIndex(): Promise<void> {
-    return this.buildIndexWithNewManager();
-  }
-
-  /**
-   * 获取用于索引的文本（summary + entities + decision）
-   */
-  private getIndexText(memory: EpisodicMemoryRecord): string {
-    const parts = [memory.summary];
-    if (memory.entities && memory.entities.length) parts.push(memory.entities.join(' '));
-    if (memory.decision) parts.push(memory.decision);
-    return parts.join(' ');
-  }
-
-  /**
-   * 分词（支持中英文）
-   */
-  private tokenize(text: string): string[] {
-    // 转小写，保留字母数字中文，按空格拆分
-    const normalized = text.toLowerCase().replace(/[^\w\u4e00-\u9fa5]/g, ' ');
-    return normalized.split(/\s+/).filter(t => t.length > 1);
-  }
-
-  // ========== 意图感知与自适应权重 ==========
-
-  /**
-   * 获取自适应权重（根据查询意图动态调整）
-   */
-  private getAdaptiveWeights(query: string): RetrievalWeights {
-    const intent = this.intentAnalyzer.analyze(query);
-    const base = this.expertSelector.getBaseWeights();
-    
-    // 门控调制：根据意图增强对应因子
-    let k = base.k * (1 + intent.entity * 0.5);      // 实体敏感增强关键词
-    let t = base.t * (1 + intent.temporal * 0.8);    // 时间敏感增强时间
-    let e = base.e * (1 + intent.entity * 0.6);      // 实体敏感增强实体加分
-    let v = base.v * (1 + intent.semantic * 0.7);    // 语义敏感增强向量
-    
-    // 归一化（保持和为1）
-    const sum = k + t + e + v;
-    return { 
-      k: k / sum, 
-      t: t / sum, 
-      e: e / sum, 
-      v: v / sum 
-    };
-  }
-
-  /**
-   * 记录用户反馈（用于专家选择器学习）
-   * @param query 用户查询
-   * @param clickedMemoryId 用户点击的记忆ID
-   */
-  public recordFeedback(query: string, clickedMemoryId: string): void {
-    const intent = this.intentAnalyzer.analyze(query);
-    const weights = this.getAdaptiveWeights(query);
-    this.expertSelector.recordFeedback(intent, weights);
-    console.log(`[EpisodicMemory] Feedback recorded for query: "${query}", expert: ${this.expertSelector.getCurrentExpert()}`);
-  }
-
-  /**
-   * 重置专家选择（用于命令 xiaoweiba.reset-expert）
-   */
-  public resetExpert(): void {
-    this.expertSelector.reset();
-    console.log('[EpisodicMemory] Expert state reset');
-  }
-
-  /**
-   * 获取当前专家名称（用于调试）
-   */
-  public getCurrentExpert(): string {
-    return this.expertSelector.getCurrentExpert();
-  }
-
-  /**
-   * 检测时间指代查询
-   */
-  private isTemporalQuery(query: string): boolean {
-    const patterns = [/^刚才/, /^上次/, /^前一个/, /^刚刚/, /^最近/, /^上一个/];
-    return patterns.some(p => p.test(query));
-  }
-
-  /**
-   * ✅ 重构：使用SearchEngine进行语义检索
-   */
-  private async searchSemantic(query: string, limit: number = 5): Promise<EpisodicMemoryRecord[]> {
-    // 1. 从 IndexManager 获取候选ID
-    const candidateIds = this.indexManager.getCandidateIds(query);
-    
-    if (candidateIds.size === 0) {
-      console.log('[EpisodicMemory] No candidates found, returning recent memories');
-      return this.getRecentMemoriesFromDB(limit);
-    }
-
-    // 2. 批量加载候选记忆
-    const candidateMemories = await this.getMemoriesByIds(Array.from(candidateIds));
-    
-    if (candidateMemories.length === 0) {
-      console.log('[EpisodicMemory] No candidate memories loaded, returning recent memories');
-      return this.getRecentMemoriesFromDB(limit);
-    }
-
-    // 3. 使用 SearchEngine 评分和排序
-    const options: MemoryQueryOptions = { limit };
-    const results = this.searchEngine.rankAndRetrieve(candidateIds, candidateMemories, query, options);
-    
-    console.log(`[EpisodicMemory] SearchEngine returned ${results.length} results`);
-    return results;
-  }
-
   /**
    * 根据 ID 获取单条记忆
    */
   private async getMemoryById(id: string): Promise<EpisodicMemoryRecord | null> {
     // ✅ L2.5: 委托给 QueryExecutor
-    const memories = await this.queryExecutor.getRecentMemories(100); // 简单实现，后续可优化为 getById
+    const memories = await this.queryExecutor.getRecentMemories(100);
     return memories.find(m => m.id === id) || null;
-  }
-
-  /**
-   * 批量获取记忆（性能优化：避免N+1查询）
-   */
-  private async getMemoriesByIds(ids: string[]): Promise<EpisodicMemoryRecord[]> {
-    // ✅ L2.5: 委托给 QueryExecutor
-    const all = await this.queryExecutor.getRecentMemories(1000);
-    const memoryMap = new Map(all.map(m => [m.id, m]));
-    return ids.map(id => memoryMap.get(id)).filter((m): m is EpisodicMemoryRecord => m !== undefined);
-  }
-
-  /**
-   * LIKE 查询降级方案
-   */
-  private async searchWithLikeFallback(query: string, limit: number): Promise<EpisodicMemoryRecord[]> {
-    // ✅ L2.5: 委托给 QueryExecutor
-    return this.queryExecutor.searchByKeywords(query, { limit });
-  }
-
-  /**
-   * 从数据库获取最近记忆
-   */
-  private async getRecentMemoriesFromDB(limit: number, memoryTier?: MemoryTier): Promise<EpisodicMemoryRecord[]> {
-    // ✅ L2.5: 委托给 QueryExecutor
-    return this.queryExecutor.getRecentMemories(limit);
   }
 
   // ========== 初始化控制 ==========
@@ -560,7 +386,6 @@ export class EpisodicMemory {
     // ✅ 委托给IndexManager清理
     this.indexManager.clear();
     this.initPromise = null;
-    console.log('[EpisodicMemory] Disposed');
   }
 
   /**
