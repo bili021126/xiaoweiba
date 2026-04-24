@@ -1,5 +1,10 @@
 /**
  * 领域事件基类（泛型）
+ * 
+ * ✅ 任务9：事件命名规范
+ * - 领域事件：使用简短名称，如 'intent.received', 'task.completed'
+ * - 插件事件：必须遵循 plugin.<id>.<event> 格式，如 'plugin.xiaoweiba.session_list_updated'
+ * - 系统事件：使用 system. 前缀，如 'system.error'
  */
 export abstract class DomainEvent<T = any> {
   constructor(
