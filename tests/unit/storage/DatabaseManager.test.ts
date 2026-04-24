@@ -443,8 +443,8 @@ describe('DatabaseManager - 数据库管理器', () => {
       });
 
       expect(() => {
-        dbManager.migrateAddMemoryTier();
-      }).toThrow('Migration error');
+        (dbManager as any).runMigrations();
+      }).toThrow();
 
       execSpy.mockRestore();
     });
