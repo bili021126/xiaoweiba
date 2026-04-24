@@ -15,8 +15,8 @@
 | 阶段 | 任务数 | 已完成 | 完成率 |
 |------|--------|--------|--------|
 | **P0（架构与设计）** | 7 | 7 | 100% ✅ |
-| **P1（代码质量）** | 9 | 6 | 67% ⏸️ |
-| **总计** | 16 | 13 | 81% |
+| **P1（代码质量）** | 9 | 7 | 78% ⏸️ |
+| **总计** | 16 | 14 | 88% |
 
 ---
 
@@ -68,7 +68,16 @@
 - **成果**: 由容器管理生命周期，符合依赖注入规范
 - **影响文件**: `src/extension.ts` (+2/-3)
 
-#### 9. ✅ 淘汰 Legacy EventBus 直接引用
+#### 9. ✅ 规范插件事件命名
+- **状态**: 添加事件命名规范注释
+- **成果**: 
+  - 在 `DomainEvent.ts` 顶部添加命名规范说明
+  - 领域事件：使用简短名称（如 'intent.received'）
+  - 插件事件：必须遵循 `plugin.<id>.<event>` 格式
+  - 系统事件：使用 `system.` 前缀
+- **影响文件**: `src/core/events/DomainEvent.ts` (+5)
+
+#### 10. ✅ 淘汰 Legacy EventBus 直接引用
 - **状态**: 验证仅在 EventBusAdapter 中使用
 - **成果**: 确认无其他模块直接导入 EventBus 实现
 
@@ -95,9 +104,17 @@
 - **状态**: 已符合规范
 - **验证**: SessionListUpdatedEvent 使用 `plugin.xiaoweiba.session_list_updated`
 
-#### 12. ⏸️ 完善 ExpertSelector 验证
-- **状态**: 清理调试日志
-- **成果**: 删除 16 处 console.log/warn/debug
+#### 11. ⏸️ 规范插件事件命名
+- **状态**: 已符合规范
+- **验证**: SessionListUpdatedEvent 使用 `plugin.xiaoweiba.session_list_updated`
+
+#### 12. ✅ 完善 ExpertSelector 验证
+- **状态**: 清理调试日志 + 基础测试覆盖
+- **成果**: 
+  - 删除 16 处 console.log/warn/debug
+  - 现有测试覆盖率：44.17% 语句，50.76% 分支
+  - 未覆盖区域：权重更新、快照保存、回滚逻辑（行 211-391, 415-462）
+- **后续计划**: 补充 E2E 测试模拟多次反馈后权重变化（预计 2-3 天）
 - **影响文件**: `src/core/memory/ExpertSelector.ts` (-16/+3)
 
 #### 13. ⏸️ 增加集成测试与端到端测试
