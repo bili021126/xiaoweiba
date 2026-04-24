@@ -211,7 +211,7 @@ describe('MemorySystem - 记忆系统核心', () => {
       };
       
       const handler = (mockEventBus.subscribe as jest.Mock).mock.calls[0][1];
-      await handler(event.data);  // ✅ 传递event.data
+      await handler({ data: event.data });  // ✅ 传递包含 data 属性的对象
       
       expect(mockEpisodicMemory.record).not.toHaveBeenCalled();
     });
