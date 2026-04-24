@@ -428,7 +428,8 @@ export class MemorySystem {
       hasPayload: !!event.payload,
       hasData: !!event.data,
       payloadKeys: payload ? Object.keys(payload) : 'N/A',
-      memoryMetadata: payload?.memoryMetadata ? 'present' : 'missing'
+      memoryMetadata: payload?.memoryMetadata ? 'present' : 'missing',
+      fullPayload: JSON.stringify(payload, null, 2).substring(0, 500) // ✅ 打印完整 payload
     });
     
     // 防御性检查：如果payload为undefined，直接返回
