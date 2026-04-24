@@ -44,7 +44,9 @@ describe('ConfigManager Branch Coverage', () => {
     (fs.existsSync as jest.Mock).mockReturnValue(true);
     (fs.readFileSync as jest.Mock).mockReturnValue(JSON.stringify(userConfig));
     
-    const config = configManager.getConfig();
+    // 重新实例化以触发加载逻辑
+    const newManager = container.resolve(ConfigManager);
+    const config = newManager.getConfig();
     expect(config.model.default).toBe('ollama');
     // 确保其他默认值依然存在
     expect(config.model.providers).toBeDefined();

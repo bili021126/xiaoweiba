@@ -15,6 +15,7 @@ describe('IntentFactory Unit Tests', () => {
   it('should build an explain code intent', async () => {
     const intent = await IntentFactory.buildExplainCodeIntent();
     expect(intent.name).toBe('explain_code');
+    expect(intent.codeContext).toBeDefined();
   });
 
   it('should build a switch session intent', async () => {

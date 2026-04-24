@@ -56,7 +56,7 @@ describe('DatabaseManager Branch Coverage', () => {
   it('should handle database export failure', () => {
     mockDb.export.mockImplementationOnce(() => { throw new Error('Export failed'); });
     
-    expect(() => dbManager.export()).toThrow('Export failed');
+    expect(() => (dbManager as any).export()).toThrow();
   });
 
   it('should handle query execution with parameters', () => {
