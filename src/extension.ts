@@ -373,6 +373,10 @@ async function initializeContainer(context: vscode.ExtensionContext): Promise<vo
   // ✅ 注册ExtensionContext（DatabaseManager等模块依赖）
   container.registerInstance('extensionContext', context);
   
+  // ✅ 关键修复：将 ConfigManager 注册为单例，避免多次实例化
+  container.registerSingleton(ConfigManager);
+  console.log('[Extension] ConfigManager registered as singleton');
+  
   // 1. ✅ 初始化基础设施
   const legacyEventBus = new EventBus();
   container.registerInstance(EventBus, legacyEventBus);
