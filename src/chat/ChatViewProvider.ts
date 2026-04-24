@@ -68,6 +68,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     );
 
     // TODO: 订阅推荐事件
+    // ⚠️ 注意：如果未来实现此功能，必须将取消函数推入 this.unsubscribers 数组
     // this.unsubscribers.push(this.eventBus.subscribe(MemoryRecommendEvent.type, (event) => { ... }));
 
     // ✅ P1-02: 订阅会话列表更新事件

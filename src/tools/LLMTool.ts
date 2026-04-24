@@ -250,25 +250,23 @@ export class LLMTool implements ILLMTool {
    */
   private async getClientAsync(provider: ModelProviderConfig): Promise<OpenAI> {
     if (!this.clients.has(provider.id)) {
-      // 智能选择 API Key 来源：
-      // 1. 优先从环境变量读取（开发环境，.env 文件）
-      // 2. 回退到 SecretStorage（生产环境，用户通过 UI 配置）
-      const envKeyVar = `${provider.id.toUpperCase()}_API_KEY`;
-      let apiKey = process.env[envKeyVar] || 
-                   process.env.DEEPSEEK_API_KEY ||  // 向后兼容
-                   process.env.OPENAI_API_KEY || 
-                   '';
+      // ✅ 修复 #19：统一从 ConfigManager 获取 API Key，避免硬编码环境变量
+      let apiKey = await this.configManager.getApiKey(provider.id) || '';
       
-      // 如果环境变量未配置，尝试从 SecretStorage 获取
-      if (!apiKey) {
-        apiKey = await this.configManager.getApiKey(provider.id) || '';
+      // 向后兼容：如果 ConfigManager 未配置，尝试从环境变量读取（仅开发环境）
+      if (!apiKey && provider.id !== 'ollama') {
+        const envKeyVar = `${provider.id.toUpperCase()}_API_KEY`;
+        apiKey = process.env[envKeyVar] || 
+                 process.env.DEEPSEEK_API_KEY ||  // 向后兼容
+                 process.env.OPENAI_API_KEY || 
+                 '';
       }
 
       if (!apiKey && provider.id !== 'ollama') {
         throw createError(
           ErrorCode.LLM_API_CALL_FAILED,
           `API key not configured for provider: ${provider.id}`,
-          `未配置 API Key: ${provider.id}，请在 .env 文件中设置 ${envKeyVar} 或通过"配置 API Key"命令设置`
+          `未配置 API Key: ${provider.id}，请通过"配置 API Key"命令设置`
         );
       }
 
