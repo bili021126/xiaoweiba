@@ -5,11 +5,9 @@
 import 'reflect-metadata';
 import { container } from 'tsyringe';
 import { AgentRunner } from '../../src/infrastructure/agent/AgentRunner';
-import { IEventBus } from '../../src/core/ports/IEventBus';
-import { IAgentRegistry } from '../../src/core/ports/IAgentRegistry';
-import { IMemoryPort } from '../../src/core/ports/IMemoryPort';
 import { TaskTokenManager } from '../../src/core/security/TaskTokenManager';
 import { AgentSelectedEvent } from '../../src/core/events/DomainEvent';
+import { createMockEventBus, createMockAgentRegistry, createMockMemoryPort } from '../__mocks__/globalMocks';
 
 jest.mock('vscode', () => ({
   workspace: { getConfiguration: jest.fn() }
@@ -17,20 +15,17 @@ jest.mock('vscode', () => ({
 
 describe('AgentRunner Integration', () => {
   let runner: AgentRunner;
-  let mockEventBus: Partial<IEventBus>;
-  let mockRegistry: Partial<IAgentRegistry>;
-  let mockMemoryPort: Partial<IMemoryPort>;
 
   beforeEach(() => {
     container.clearInstances();
 
-    mockEventBus = { publish: jest.fn(), subscribe: jest.fn() };
-    mockRegistry = { getAgent: jest.fn() };
-    mockMemoryPort = { recordMemory: jest.fn().mockResolvedValue('mem_123') };
+    const mockEventBus = createMockEventBus();
+    const mockRegistry = createMockAgentRegistry();
+    const mockMemoryPort = createMockMemoryPort();
 
-    container.registerInstance('IEventBus', mockEventBus as IEventBus);
-    container.registerInstance('IAgentRegistry', mockRegistry as IAgentRegistry);
-    container.registerInstance('IMemoryPort', mockMemoryPort as IMemoryPort);
+    container.registerInstance('IEventBus', mockEventBus);
+    container.registerInstance('IAgentRegistry', mockRegistry);
+    container.registerInstance('IMemoryPort', mockMemoryPort);
     
     const taskTokenManager = new TaskTokenManager();
     container.registerInstance(TaskTokenManager, taskTokenManager);
@@ -39,6 +34,7 @@ describe('AgentRunner Integration', () => {
   });
 
   it('should revoke token after successful execution', async () => {
+    const mockRegistry = container.resolve('IAgentRegistry') as any;
     const token = (container.resolve(TaskTokenManager) as TaskTokenManager).generateToken('test', 'write');
     
     // 模拟 Agent 执行成功
@@ -55,6 +51,7 @@ describe('AgentRunner Integration', () => {
   });
 
   it('should handle agent execution failure', async () => {
+    const mockRegistry = container.resolve('IAgentRegistry') as any;
     const token = (container.resolve(TaskTokenManager) as TaskTokenManager).generateToken('test', 'write');
     
     (mockRegistry.getAgent as jest.Mock).mockReturnValue({
