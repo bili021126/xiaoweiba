@@ -249,6 +249,9 @@ describe('ExpertSelector - 深度测试', () => {
       
       // 应该保存快照
       expect(mockContext.workspaceState.update).toHaveBeenCalled();
+      
+      // 验证是否调用了多次（至少一次快照，一次权重更新）
+      expect((mockContext.workspaceState.update as jest.Mock).mock.calls.length).toBeGreaterThanOrEqual(1);
     });
 
     it('应该在连续异常时触发熔断', async () => {

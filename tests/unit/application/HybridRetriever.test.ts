@@ -4,16 +4,11 @@
 
 import { container } from 'tsyringe';
 import { HybridRetriever } from '../../../src/core/application/HybridRetriever';
-import { QueryExecutor } from '../../../src/core/application/QueryExecutor';
-import { EmbeddingService } from '../../../src/core/application/EmbeddingService';
-import { VectorEngine } from '../../../src/core/application/VectorEngine';
-import { DatabaseManager } from '../../../src/storage/DatabaseManager';
+import { createMockDatabaseManager } from '../../__mocks__/globalMocks';
 import { EpisodicMemoryRecord } from '../../../src/core/memory/types';
 
 // Mock 依赖
-const mockDbManager = {
-  getDatabase: jest.fn()
-};
+const mockDbManager = createMockDatabaseManager();
 
 const mockQueryExecutor = {
   searchByKeywords: jest.fn(),
