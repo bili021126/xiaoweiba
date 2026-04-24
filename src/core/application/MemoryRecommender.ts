@@ -7,14 +7,13 @@
  */
 
 import { injectable, inject } from 'tsyringe';
-import { EpisodicMemory } from '../memory/EpisodicMemory';
-import { Recommendation } from '../ports/IMemoryPort';
-import { PathUtils } from '../../utils/ProjectFingerprint'; // ✅ 修复 #39：使用统一路径工具
+import { IMemoryPort, Recommendation } from '../ports/IMemoryPort'; // ✅ 架构合规：依赖端口
+import { PathUtils } from '../../utils/ProjectFingerprint';
 
 @injectable()
 export class MemoryRecommender {
   constructor(
-    @inject(EpisodicMemory) private episodicMemory: EpisodicMemory
+    @inject('IMemoryPort') private memoryPort: IMemoryPort
   ) {}
 
   /**
@@ -26,7 +25,7 @@ export class MemoryRecommender {
       const fileName = PathUtils.getFileName(filePath);
       
       // 搜索与该文件相关的记忆
-      const memories = await this.episodicMemory.search(fileName, {
+      const memories = await this.memoryPort.search(fileName, {
         limit: 5
       });
 

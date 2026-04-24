@@ -7,12 +7,12 @@
  */
 
 import { injectable, inject } from 'tsyringe';
-import { EpisodicMemory } from '../memory/EpisodicMemory';
+import { IMemoryPort } from '../ports/IMemoryPort'; // ✅ 架构合规：依赖端口
 
 @injectable()
 export class MemoryExporter {
   constructor(
-    @inject(EpisodicMemory) private episodicMemory: EpisodicMemory
+    @inject('IMemoryPort') private memoryPort: IMemoryPort
   ) {}
 
   /**
@@ -21,7 +21,7 @@ export class MemoryExporter {
   async retrieveAll(options?: { limit?: number }): Promise<any[]> {
     try {
       const limit = options?.limit || 1000;
-      const memories = await this.episodicMemory.retrieve({ limit });
+      const memories = await this.memoryPort.retrieveAll({ limit });
       return memories;
     } catch (error) {
       console.error('[MemoryExporter] retrieveAll failed:', error);
@@ -42,15 +42,7 @@ export class MemoryExporter {
     metadata?: Record<string, any>;
   }): Promise<string> {
     try {
-      return await this.episodicMemory.record({
-        taskType: record.taskType as any,
-        summary: record.summary,
-        entities: record.entities,
-        outcome: record.outcome as any,
-        modelId: record.modelId || 'unknown',
-        durationMs: record.durationMs || 0,
-        metadata: record.metadata
-      });
+      return await this.memoryPort.recordMemory(record);
     } catch (error) {
       console.error('[MemoryExporter] recordMemory failed:', error);
       throw error;
