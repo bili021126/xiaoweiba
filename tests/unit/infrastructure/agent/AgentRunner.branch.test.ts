@@ -12,6 +12,15 @@ jest.mock('vscode', () => ({
   workspace: { getConfiguration: jest.fn() }
 }));
 
+// Mock console.error to suppress logs in tests
+beforeAll(() => {
+  jest.spyOn(console, 'error').mockImplementation(() => {});
+});
+
+afterAll(() => {
+  (console.error as jest.Mock).mockRestore();
+});
+
 describe('AgentRunner Branch Coverage', () => {
   let runner: AgentRunner;
 

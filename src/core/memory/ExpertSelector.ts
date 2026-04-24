@@ -316,7 +316,12 @@ export class ExpertSelector {
 
     try {
       const currentWeights = this.context.workspaceState.get<RetrievalWeights>(this.STORAGE_KEY) || DEFAULT_WEIGHTS;
-      const snapshots = this.context.workspaceState.get<WeightSnapshot[]>(this.SNAPSHOTS_KEY) || [];
+      let snapshots = this.context.workspaceState.get<WeightSnapshot[]>(this.SNAPSHOTS_KEY);
+      
+      // 确保 snapshots 是数组
+      if (!Array.isArray(snapshots)) {
+        snapshots = [];
+      }
 
       // 添加新快照
       snapshots.push({

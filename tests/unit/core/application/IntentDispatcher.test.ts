@@ -12,6 +12,15 @@ jest.mock('vscode', () => ({
   window: { showInformationMessage: jest.fn() }
 }));
 
+// Mock console.error to suppress logs in tests
+beforeAll(() => {
+  jest.spyOn(console, 'error').mockImplementation(() => {});
+});
+
+afterAll(() => {
+  (console.error as jest.Mock).mockRestore();
+});
+
 describe('IntentDispatcher (Global Mock)', () => {
   let dispatcher: IntentDispatcher;
 

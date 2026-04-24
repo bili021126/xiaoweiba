@@ -12,9 +12,15 @@ const mockFingerprint = createMockProjectFingerprint();
 
 describe('FeedbackRecorder (Global Mock)', () => {
   let recorder: FeedbackRecorder;
+  let mockDbManager: any;
+  let mockFingerprint: any;
 
   beforeEach(() => {
     container.clearInstances();
+    
+    mockDbManager = createMockDatabaseManager();
+    mockFingerprint = createMockProjectFingerprint();
+    
     container.registerInstance('DatabaseManager', mockDbManager);
     container.registerInstance('ProjectFingerprint', mockFingerprint);
     
