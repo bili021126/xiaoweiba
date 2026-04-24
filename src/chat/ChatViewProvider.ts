@@ -42,9 +42,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     // ✅ 订阅流式块事件（逐字更新）
     this.unsubscribers.push(
       this.eventBus.subscribe(StreamChunkEvent.type, (event) => {
-        // ✅ 修复：从 payload 中提取 chunk 数据
-        const streamEvent = event as any;
-        const payload = streamEvent.payload || streamEvent;
+        // ✅ 类型安全：StreamChunkEvent的payload有明确结构
+        const streamEvent = event as StreamChunkEvent;
+        const payload = streamEvent.payload;
         
         this.view?.webview.postMessage({
           type: 'streamChunk',
@@ -76,8 +76,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     // ✅ P1-02: 订阅会话列表更新事件
     this.unsubscribers.push(
       this.eventBus.subscribe(SessionListUpdatedEvent.type, async (event) => {
-        const sessionEvent = event as any;
-        const payload = sessionEvent.payload || sessionEvent;
+        // ✅ 类型安全：SessionListUpdatedEvent的payload有明确结构
+        const sessionEvent = event as SessionListUpdatedEvent;
+        const payload = sessionEvent.payload;
         
         try {
           // ✅ 修复：如果是新建会话，保存当前会话 ID
@@ -103,8 +104,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     // ✅ P1-04: 订阅会话历史加载事件（用于渲染完整历史）
     this.unsubscribers.push(
       this.eventBus.subscribe(SessionHistoryLoadedEvent.type, (event) => {
-        const historyEvent = event as any;
-        const payload = historyEvent.payload || historyEvent;
+        // ✅ 类型安全：SessionHistoryLoadedEvent的payload有明确结构
+        const historyEvent = event as SessionHistoryLoadedEvent;
+        const payload = historyEvent.payload;
         
         // 通知前端加载会话历史
         const messageData = {

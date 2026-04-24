@@ -12,7 +12,9 @@ module.exports = {
     'plugin:@typescript-eslint/recommended'
   ],
   rules: {
-    '@typescript-eslint/no-explicit-any': 'warn',
+    // ✅ 任务4：消除 any 类型，提升类型安全性
+    // 注意：Record<string, any> 用于元数据和动态对象，暂时允许
+    '@typescript-eslint/no-explicit-any': ['error', { ignoreRestArgs: true }],
     '@typescript-eslint/explicit-module-boundary-types': 'off',
     '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
     

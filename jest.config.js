@@ -46,10 +46,10 @@ module.exports = {
   ],
   coverageThreshold: {
     global: {
-      branches: 50,  // 降低阈值，反映实际项目水平
-      functions: 55,
-      lines: 60,
-      statements: 60
+      branches: 55,  // ✅ 门禁：分支覆盖率目标 55% → 70%
+      functions: 60, // ✅ 门禁：函数覆盖率目标 60%
+      lines: 65,     // ✅ 门禁：行覆盖率目标 65%
+      statements: 65 // ✅ 门禁：语句覆盖率目标 65%
     }
   },
   coverageReporters: ['text', 'lcov', 'clover'],
