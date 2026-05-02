@@ -1,42 +1,32 @@
 """
 AutonomousAgent 基类
 
-所有子 Agent 必须继承此类，遵循 Think→Act→Observe 标准循环
+所有子 Agent 必须继承此类，实现 SubAgent 端口
+遵循 Think→Act→Observe 标准循环和双向端口原则
 遵循 Cortex 架构法典 AG-001 ~ AG-006
 """
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional
+import asyncio
 import time
+from typing import List, Dict, Any, Optional
+
+from core.ports.sub_agent import SubAgent, AgentResult, AgentCapability
+from core.ports.memory_portal import MemoryPortal
+from core.events.event_bus import EventBus
+from core.events.domain_events import TaskStartedEvent, TaskCompletedEvent, TaskFailedEvent
 
 
-@dataclass
-class AgentCapability:
-    """Agent 能力描述"""
-    name: str
-    description: str
-    priority: int = 0
-
-
-@dataclass
-class AgentResult:
-    """Agent 执行结果"""
-    success: bool
-    data: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
-    token_usage: Optional[Dict[str, int]] = None
-    duration_ms: Optional[int] = None
-    model_id: Optional[str] = None
-
-
-class AutonomousAgent(ABC):
+class AutonomousAgent(SubAgent):
     """
-    所有子 Agent 的抽象基类
+    所有子 Agent 的抽象基类，实现 SubAgent 端口
     
     遵循 Think→Act→Observe 标准循环：
     1. Think: 分析意图，制定计划
     2. Act: 执行计划（调用 LLM、工具等）
     3. Observe: 观察结果，记录性能
+    
+    双向端口原则：
+    - 对外提供服务：实现 SubAgent 接口
+    - 对内消费服务：通过构造函数注入依赖（MemoryPortal, EventBus, LLM Client）
     
     架构约束：
     - AG-001: 每个 Agent 必须声明 supported_intents
@@ -47,16 +37,34 @@ class AutonomousAgent(ABC):
     - AG-006: System Prompt 包含行为约束
     """
     
+    def __init__(
+        self,
+        memory_portal: MemoryPortal,
+        event_bus: EventBus,
+        llm_client: Any
+    ):
+        """
+        初始化 Agent（双向端口原则）
+        
+        Args:
+            memory_portal: 记忆访问端口
+            event_bus: 事件总线
+            llm_client: LLM 客户端
+        """
+        self.memory_portal = memory_portal
+        self.event_bus = event_bus
+        self.llm_client = llm_client
+    
     @property
     @abstractmethod
     def agent_id(self) -> str:
         """
-        Agent ID (kebab-case)
+        Agent ID (snake_case)
         
         示例：
-        - "chat-agent"
-        - "code-explainer"
-        - "generate-commit"
+        - "chat_agent"
+        - "code_explainer"
+        - "generate_commit"
         """
         pass
     
@@ -72,19 +80,48 @@ class AutonomousAgent(ABC):
         """支持的意图类型列表"""
         pass
     
-    @abstractmethod
-    async def execute(self, intent: Dict, context: Dict) -> AgentResult:
+    async def execute(self, intent: str, context: Dict[str, Any]) -> AgentResult:
         """
-        执行 Agent 逻辑
+        执行 Agent 逻辑（带重试机制）
         
         Args:
-            intent: 意图对象，包含用户输入和参数
+            intent: 用户意图类型
             context: 上下文信息，包括记忆、会话历史等
             
         Returns:
             AgentResult 执行结果
         """
-        pass
+        # 发布任务开始事件
+        await self.event_bus.publish(TaskStartedEvent(
+            task_id=context.get("task_id", "unknown"),
+            agent_id=self.agent_id
+        ))
+        
+        try:
+            result = await self.execute_with_retry(intent, context)
+            
+            # 发布任务完成事件
+            await self.event_bus.publish(TaskCompletedEvent(
+                task_id=context.get("task_id", "unknown"),
+                agent_id=self.agent_id,
+                success=result.success,
+                result=result.data
+            ))
+            
+            return result
+            
+        except Exception as e:
+            # 发布任务失败事件
+            await self.event_bus.publish(TaskFailedEvent(
+                task_id=context.get("task_id", "unknown"),
+                agent_id=self.agent_id,
+                error=str(e)
+            ))
+            
+            return AgentResult(
+                success=False,
+                error=str(e)
+            )
     
     @abstractmethod
     def get_capabilities(self) -> List[AgentCapability]:
@@ -246,7 +283,3 @@ class AutonomousAgent(ABC):
     
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(id={self.agent_id}, intents={self.supported_intents})"
-
-
-# 导入 asyncio（在 handle_error 中使用）
-import asyncio

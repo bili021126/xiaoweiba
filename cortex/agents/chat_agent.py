@@ -3,10 +3,16 @@ Chat Agent - 闲聊助手
 
 处理用户的日常对话、问答、建议等通用意图
 使用 DeepSeek V4-Flash 模型以控制成本
+遵循双向端口原则
 """
+import time
 from typing import List, Dict, Any
-from .base_agent import AutonomousAgent, AgentResult, AgentCapability
-from core.deepseek_client import DeepSeekClient
+
+from .base_agent import AutonomousAgent
+from core.ports.sub_agent import AgentResult, AgentCapability
+from core.ports.memory_portal import MemoryPortal
+from core.events.event_bus import EventBus
+from core.ports.llm_port import LLMPort
 
 
 class ChatAgent(AutonomousAgent):
@@ -21,7 +27,7 @@ class ChatAgent(AutonomousAgent):
     
     @property
     def agent_id(self) -> str:
-        return "chat-agent"
+        return "chat_agent"  # snake_case
     
     @property
     def name(self) -> str:
@@ -31,14 +37,21 @@ class ChatAgent(AutonomousAgent):
     def supported_intents(self) -> List[str]:
         return ["chat", "question", "suggestion"]
     
-    def __init__(self, deepseek: DeepSeekClient):
+    def __init__(
+        self,
+        memory_portal: MemoryPortal,
+        event_bus: EventBus,
+        llm_client: LLMPort
+    ):
         """
-        初始化 Chat Agent
+        初始化 Chat Agent（双向端口原则）
         
         Args:
-            deepseek: DeepSeek API 客户端
+            memory_portal: 记忆访问端口
+            event_bus: 事件总线
+            llm_client: LLM 客户端（实现 LLMPort）
         """
-        self.deepseek = deepseek
+        super().__init__(memory_portal, event_bus, llm_client)
     
     def get_capabilities(self) -> List[AgentCapability]:
         return [
@@ -112,8 +125,8 @@ class ChatAgent(AutonomousAgent):
         # 添加当前用户输入
         messages.append({"role": "user", "content": user_input})
         
-        # 调用 DeepSeek API
-        response = await self.deepseek.chat_completion(
+        # 调用 LLM 端口（而非直接调用 DeepSeekClient）
+        response = await self.llm_client.chat_completion(
             messages=messages,
             model="deepseek-v4-flash",  # 使用 Flash 控制成本
             temperature=0.7,
@@ -121,9 +134,9 @@ class ChatAgent(AutonomousAgent):
         )
         
         return {
-            "reply": response.choices[0].message.content,
-            "model_id": response.model,
-            "token_usage": response.usage.model_dump()
+            "reply": response["choices"][0]["message"]["content"],
+            "model_id": response.get("model", "deepseek-v4-flash"),
+            "token_usage": response.get("usage", {})
         }
     
     async def observe(self, result: Any, start_time: float) -> AgentResult:
@@ -139,6 +152,3 @@ class ChatAgent(AutonomousAgent):
             model_id=result["model_id"]
         )
     
-    async def execute(self, intent: Dict, context: Dict) -> AgentResult:
-        """执行 Agent 逻辑（带重试）"""
-        return await self.execute_with_retry(intent, context, max_retries=3)

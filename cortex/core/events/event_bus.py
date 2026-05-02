@@ -2,20 +2,11 @@
 基于 asyncio 的事件总线
 
 实现发布-订阅模式，支持跨模块异步通信
+遵循 COM-001 ~ COM-004
 """
 import asyncio
 from typing import Callable, Dict, List, Any, Optional
-from dataclasses import dataclass, field
-from datetime import datetime
-
-
-@dataclass
-class DomainEvent:
-    """领域事件基类"""
-    event_type: str
-    payload: Dict[str, Any] = field(default_factory=dict)
-    timestamp: float = field(default_factory=lambda: datetime.now().timestamp())
-    source: Optional[str] = None
+from .domain_events import DomainEvent
 
 
 class EventBus:
@@ -138,40 +129,3 @@ class EventBus:
             self.subscribers.pop(event_type, None)
         else:
             self.subscribers.clear()
-
-
-# 预定义事件类型常量
-class EventTypes:
-    """事件类型常量"""
-    
-    # Agent 相关
-    AGENT_SELECTED = "agent.selected"
-    AGENT_EXECUTION_STARTED = "agent.execution_started"
-    AGENT_EXECUTION_COMPLETED = "agent.execution_completed"
-    AGENT_EXECUTION_FAILED = "agent.execution_failed"
-    
-    # 任务相关
-    TASK_STARTED = "task.started"
-    TASK_PROGRESS = "task.progress"
-    TASK_COMPLETED = "task.completed"
-    TASK_FAILED = "task.failed"
-    TASK_PAUSED = "task.paused"
-    TASK_RESUMED = "task.resumed"
-    
-    # 概念相关
-    CONCEPT_SUBMITTED = "concept.submitted"
-    CONCEPT_CLARIFIED = "concept.clarified"
-    BLUEPRINT_GENERATED = "blueprint.generated"
-    BLUEPRINT_CONFIRMED = "blueprint.confirmed"
-    
-    # 记忆相关
-    MEMORY_RETRIEVED = "memory.retrieved"
-    MEMORY_STORED = "memory.stored"
-    
-    # 安全相关
-    TOOL_EXECUTED = "tool.executed"
-    SECURITY_VIOLATION = "security.violation"
-    
-    # 系统相关
-    SYSTEM_HEALTH_CHECK = "system.health_check"
-    SYSTEM_ERROR = "system.error"
