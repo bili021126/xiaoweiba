@@ -8,51 +8,31 @@
  */
 
 import 'reflect-metadata';
-import * as path from 'path';
 import { container } from 'tsyringe';
-
-let IntentDispatcher: any;
-let AgentRunner: any;
-let AgentRegistryImpl: any;
-let EventBus: any;
-let DatabaseManager: any;
-let ConfigManager: any;
-let AuditLogger: any;
-let TaskTokenManager: any;
-let EpisodicMemory: any;
+import { IntentDispatcher } from '../../src/core/application/IntentDispatcher';
+import { AgentRunner } from '../../src/infrastructure/agent/AgentRunner';
+import { AgentRegistryImpl } from '../../src/infrastructure/agent/AgentRegistryImpl';
+import { EventBus } from '../../src/core/eventbus/EventBus';
+import { DatabaseManager } from '../../src/storage/DatabaseManager';
+import { ConfigManager } from '../../src/storage/ConfigManager';
+import { AuditLogger } from '../../src/core/security/AuditLogger';
+import { TaskTokenManager } from '../../src/core/security/TaskTokenManager';
+import { EpisodicMemory } from '../../src/core/memory/EpisodicMemory';
+import { ProjectFingerprint } from '../../src/utils/ProjectFingerprint';
+import { IAgent } from '../../src/core/agent/IAgent';
+import { IMemoryPort } from '../../src/core/ports/IMemoryPort';
+import { IEventBus } from '../../src/core/ports/IEventBus';
+import { IAgentRegistry } from '../../src/core/agent/IAgentRegistry';
 
 describe('Agent 调度全流程 E2E 测试', () => {
-  let intentDispatcher: any;
-  let agentRunner: any;
-  let agentRegistry: any;
-  let eventBus: any;
-  let databaseManager: any;
-  let episodicMemory: any;
+  let intentDispatcher: IntentDispatcher;
+  let agentRunner: AgentRunner;
+  let agentRegistry: AgentRegistryImpl;
+  let eventBus: EventBus;
+  let databaseManager: DatabaseManager;
+  let episodicMemory: EpisodicMemory;
 
   beforeAll(async () => {
-    const outPath = path.join(__dirname, '../../../out/tests/src');
-
-    const ConfigManagerModule = require(path.join(outPath, 'storage/ConfigManager'));
-    const DatabaseManagerModule = require(path.join(outPath, 'storage/DatabaseManager'));
-    const AuditLoggerModule = require(path.join(outPath, 'core/security/AuditLogger'));
-    const ProjectFingerprintModule = require(path.join(outPath, 'utils/ProjectFingerprint'));
-    const EpisodicMemoryModule = require(path.join(outPath, 'core/memory/EpisodicMemory'));
-    const TaskTokenModule = require(path.join(outPath, 'core/security/TaskToken'));
-    const AgentRegistryModule = require(path.join(outPath, 'infrastructure/agent/AgentRegistryImpl'));
-    const EventBusModule = require(path.join(outPath, 'core/eventbus/EventBus'));
-    const IntentDispatcherModule = require(path.join(outPath, 'core/application/IntentDispatcher'));
-    const AgentRunnerModule = require(path.join(outPath, 'infrastructure/agent/AgentRunner'));
-
-    ConfigManager = ConfigManagerModule.ConfigManager;
-    DatabaseManager = DatabaseManagerModule.DatabaseManager;
-    AuditLogger = AuditLoggerModule.AuditLogger;
-    EpisodicMemory = EpisodicMemoryModule.EpisodicMemory;
-    TaskTokenManager = TaskTokenModule.TaskTokenManager;
-    AgentRegistryImpl = AgentRegistryModule.AgentRegistryImpl;
-    EventBus = EventBusModule.EventBus;
-    IntentDispatcher = IntentDispatcherModule.IntentDispatcher;
-    AgentRunner = AgentRunnerModule.AgentRunner;
-
     container.clearInstances();
 
     // Mock 配置
@@ -75,12 +55,12 @@ describe('Agent 调度全流程 E2E 测试', () => {
     container.registerInstance('ConfigManager', configManager);
 
     // 初始化数据库
-    databaseManager = new DatabaseManager(configManager);
+    databaseManager = new DatabaseManager(configManager as any);
     await databaseManager.initialize();
     container.registerInstance('DatabaseManager', databaseManager);
 
     // 初始化审计日志
-    const auditLogger = new AuditLogger(configManager);
+    const auditLogger = new AuditLogger(configManager as any);
     container.registerInstance('AuditLogger', auditLogger);
 
     // Mock 项目指纹
@@ -93,8 +73,8 @@ describe('Agent 调度全流程 E2E 测试', () => {
     episodicMemory = new EpisodicMemory(
       databaseManager,
       auditLogger,
-      mockFingerprint,
-      configManager,
+      mockFingerprint as any,
+      configManager as any,
       {} as any, {} as any, {} as any, {} as any, {} as any, {} as any
     );
     container.registerInstance('EpisodicMemory', episodicMemory);

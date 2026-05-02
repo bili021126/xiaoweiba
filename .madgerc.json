@@ -1,0 +1,17 @@
+{
+  "includeNpm": false,
+  "exclude": [
+    "node_modules",
+    "out",
+    ".vscode-test",
+    "tests"
+  ],
+  "fileExtensions": [
+    ".ts",
+    ".tsx"
+  ],
+  "tsConfig": "./tsconfig.json",
+  "warning": {
+    "circular": true
+  }
+}

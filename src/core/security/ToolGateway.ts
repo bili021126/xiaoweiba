@@ -8,7 +8,7 @@
  */
 
 import { injectable, inject } from 'tsyringe';
-import { TaskTokenManager } from './TaskTokenManager';
+import { TaskTokenManager, TaskPermissionLevel } from './TaskTokenManager';
 import { AuditLogger } from './AuditLogger';
 
 /**

@@ -1,7 +1,7 @@
 import { SessionCompressor } from '../../src/core/application/SessionCompressor';
 import { ChatAgent } from '../../src/agents/ChatAgent';
 import { Intent } from '../../src/core/domain/Intent';
-import { MemoryContext } from '../../src/core/domain/MemoryContext';
+import { ChatMemoryContext } from '../../src/core/domain/MemoryContext';
 import { ILLMPort } from '../../src/core/ports/ILLMPort';
 import { IMemoryPort } from '../../src/core/ports/IMemoryPort';
 import { IEventBus } from '../../src/core/ports/IEventBus';
@@ -64,7 +64,7 @@ describe('三层记忆结构 E2E 测试', () => {
       codeContext: undefined
     };
 
-    const memoryContext: MemoryContext = {
+    const memoryContext: ChatMemoryContext = {
       episodicMemories: [],
       preferenceRecommendations: [],
       keyDecisions: result.newKeyDecisions.map(d => ({
@@ -77,7 +77,7 @@ describe('三层记忆结构 E2E 测试', () => {
 
     // 模拟 ChatAgent 构建系统提示词
     const mockPromptComposer = {
-      buildSystemPrompt: jest.fn().mockImplementation((intent: Intent, memoryContext: MemoryContext) => {
+      buildSystemPrompt: jest.fn().mockImplementation((intent: Intent, memoryContext: ChatMemoryContext) => {
         let prompt = '你是小尾巴，一个智能编程助手。\n\n';
         
         // L1: 核心意图
@@ -107,7 +107,15 @@ describe('三层记忆结构 E2E 测试', () => {
         return prompt;
       })
     } as any;
-    const chatAgent = new ChatAgent(mockLLMPort, {} as IMemoryPort, {} as IEventBus, mockPromptComposer);
+    
+    // Mock DialogManager
+    const mockDialogManager = {
+      getCurrentSessionId: jest.fn().mockReturnValue('test-session'),
+      addMessage: jest.fn(),
+      getHistory: jest.fn().mockResolvedValue([])
+    } as any;
+    
+    const chatAgent = new ChatAgent(mockLLMPort, {} as IMemoryPort, {} as IEventBus, mockPromptComposer, mockDialogManager);
     const systemPrompt = (chatAgent as any).buildSystemPrompt(intent, memoryContext);
 
     // 验证提示词包含三层结构

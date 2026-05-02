@@ -30,7 +30,10 @@
     "lint:fix": "eslint src --ext ts --fix",
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
     "check": "npm run compile && npm run lint && npm run test:unit",
-    "check:architecture": "node scripts/check-architecture-compliance.js"
+    "check:architecture": "node scripts/check-architecture-compliance.js",
+    "check:circular": "madge --circular --extensions ts src/",
+    "check:dependencies": "depcruise src --config .dependency-cruiser.js",
+    "graph:dependencies": "madge --image docs/dependency-graph.png --extensions ts src/"
   },
   "categories": [
     "AI",
@@ -243,10 +246,12 @@
     "@typescript-eslint/parser": "^6.13.0",
     "@vscode/test-electron": "^2.3.8",
     "@vscode/vsce": "^3.9.1",
+    "dependency-cruiser": "^17.3.10",
     "esbuild": "^0.28.0",
     "eslint": "^8.54.0",
     "glob": "^13.0.6",
     "jest": "^29.7.0",
+    "madge": "^8.0.0",
     "mocha": "^11.7.5",
     "prettier": "^3.1.0",
     "ts-jest": "^29.1.1",

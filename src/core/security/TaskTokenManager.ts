@@ -87,4 +87,34 @@ export class TaskTokenManager {
   getActiveTokenCount(): number {
     return this.activeTokens.size;
   }
+
+  // ========================================
+  // Cortex 法典 SEC-001: ToolGateway 兼容接口
+  // ========================================
+
+  /**
+   * 验证令牌（ToolGateway 兼容接口）
+   * @param tokenId 令牌ID
+   * @returns 是否有效
+   */
+  async validate(tokenId: string): Promise<boolean> {
+    const token = this.activeTokens.get(tokenId);
+    if (!token) return false;
+
+    // 检查是否过期
+    if (Date.now() > token.expiresAt) {
+      this.activeTokens.delete(tokenId);
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * 消耗令牌（一次性使用，ToolGateway 兼容接口）
+   * @param tokenId 令牌ID
+   */
+  async consume(tokenId: string): Promise<void> {
+    this.revokeToken(tokenId);
+  }
 }

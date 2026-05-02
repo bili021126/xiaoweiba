@@ -317,4 +317,61 @@ export class AuditLogger {
       return [];
     }
   }
+
+  // ========================================
+  // Cortex 法典 SEC-005: 安全事件日志扩展
+  // ========================================
+
+  /**
+   * 记录安全事件（SEC-005 扩展）
+   * @param event 安全事件名称
+   * @param severity 严重程度
+   * @param details 事件详情
+   */
+  async logSecurityEvent(params: {
+    event: string;
+    severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+    details: Record<string, unknown>;
+  }): Promise<void> {
+    await this.log(
+      `SECURITY_EVENT:${params.event}`,
+      params.severity === 'CRITICAL' ? 'failure' : 'success',
+      0,
+      {
+        parameters: {
+          severity: params.severity,
+          ...params.details
+        }
+      }
+    );
+  }
+
+  /**
+   * 记录工具调用（SEC-005 扩展）
+   * @param params 工具调用参数
+   */
+  async logToolCall(params: {
+    toolName: string;
+    parameters: Record<string, unknown>;
+    riskLevel: string;
+    agentId?: string;
+    sessionId?: string;
+    success: boolean;
+    error?: string;
+  }): Promise<void> {
+    await this.log(
+      `TOOL_CALL:${params.toolName}`,
+      params.success ? 'success' : 'failure',
+      0,
+      {
+        sessionId: params.sessionId,
+        parameters: {
+          riskLevel: params.riskLevel,
+          agentId: params.agentId,
+          ...params.parameters,
+          ...(params.error ? { error: params.error } : {})
+        }
+      }
+    );
+  }
 }

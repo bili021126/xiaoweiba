@@ -139,7 +139,8 @@ ARCHITECTURE_COMPLIANCE_REPORT.md（合规检查）
 
 ## 📚 相关文档
 
-- [Cortex 架构法典 v1.0](./CORTEX_ARCHITECTURE_CODEX.md) - **新增**：七大约束铁律的工程规范
+- **[架构宪章 v2.0](./ARCHITECTURE_CHARTER.md)** - ⭐ **最新**：整合了所有核心规范的终极文档
+- [Cortex 架构法典 v1.0](./CORTEX_ARCHITECTURE_CODEX.md) - 原始版本（已整合到宪章）
 - [架构强制约束规范](./architecture-constraints.md) - 详细实施指南
 - [架构合规性检查报告](./ARCHITECTURE_COMPLIANCE_REPORT.md) - 当前合规状态
 - [意图驱动架构](./INTENT_DRIVEN_ARCHITECTURE.md) - 系统设计文档
@@ -147,5 +148,7 @@ ARCHITECTURE_COMPLIANCE_REPORT.md（合规检查）
 ---
 
 **维护者**：小尾巴团队  
-**最后更新**：2026-05-02  
-**下次审查**：2026-06-02（或重大架构变更后）
+**最后更新**：2026-05-03  
+**下次审查**：2026-06-03（或重大架构变更后）
+
+> **注意**: 本文档的核心内容已整合到《架构宪章 v2.0》中。建议优先阅读宪章以获取最新的完整规范。

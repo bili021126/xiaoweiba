@@ -1,0 +1,120 @@
+name: Architecture Compliance Check
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  # ========================================
+  # Job 1: 循环依赖检查 (madge)
+  # ========================================
+  circular-deps:
+    name: Circular Dependencies Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Check circular dependencies
+        run: |
+          echo "🔍 Checking for circular dependencies..."
+          npm run check:circular || true  # 允许已知警告
+        continue-on-error: true
+      
+      - name: Generate dependency graph
+        run: |
+          mkdir -p docs
+          npm run graph:dependencies || echo "⚠️ Failed to generate graph"
+        continue-on-error: true
+      
+      - name: Upload dependency graph
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dependency-graph
+          path: docs/dependency-graph.png
+          retention-days: 30
+
+  # ========================================
+  # Job 2: 架构规则检查 (dependency-cruiser)
+  # ========================================
+  architecture-rules:
+    name: Architecture Rules Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Compile TypeScript
+        run: npm run compile
+      
+      - name: Check architecture rules
+        run: npm run check:dependencies
+
+  # ========================================
+  # Job 3: 架构合规性综合检查
+  # ========================================
+  architecture-compliance:
+    name: Architecture Compliance
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run architecture compliance check
+        run: npm run check:architecture
+
+  # ========================================
+  # Job 4: ESLint 架构规则检查
+  # ========================================
+  eslint-architecture:
+    name: ESLint Architecture Rules
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run ESLint
+        run: npm run lint
