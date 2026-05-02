@@ -33,6 +33,7 @@
 
 | 文档 | 说明 | 状态 |
 |------|------|------|
+| [CORE_ENGINE_IMPLEMENTATION_SPEC.md](./CORE_ENGINE_IMPLEMENTATION_SPEC.md) | **核心引擎实施规范 v1.0** - Phase 1（核心闭环）开发的"唯一真理源" | ✅ **新增** |
 | [ULTIMATE_ARCHITECTURE_ROADMAP.md](./ULTIMATE_ARCHITECTURE_ROADMAP.md) | 终极架构演进路线图 - 从 v2.0 到 v3.0 | ✅ 已规划 |
 | [ARCHITECTURE_GAP_ANALYSIS.md](./ARCHITECTURE_GAP_ANALYSIS.md) | 架构差距分析矩阵 - 当前 vs 目标 | ✅ 已分析 |
 
