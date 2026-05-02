@@ -53,7 +53,7 @@ module.exports = {
       {
         selector: 'property',
         filter: '^id$',
-        format: ['camelCase', 'kebab-case'],
+        format: ['camelCase'],
         modifiers: ['readonly']
       }
     ],
