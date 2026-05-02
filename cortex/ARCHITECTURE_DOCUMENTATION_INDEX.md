@@ -74,7 +74,8 @@
 - `agents/chat_agent.py` - ChatAgent（遵循双向端口原则）
 
 #### 记忆系统核心算法
-- [MEMORY_SYSTEM_HYBRID_ATTENTION_SPEC.md](./MEMORY_SYSTEM_HYBRID_ATTENTION_SPEC.md) | **记忆系统混合注意力架构规范** - CSA/HCA 映射 + Lightning Indexer + 记忆蒸馏 | ✅ **新增** |
+- [MEMORY_SYSTEM_HYBRID_ATTENTION_SPEC.md](./MEMORY_SYSTEM_HYBRID_ATTENTION_SPEC.md) | **记忆系统混合注意力架构规范** - CSA/HCA 映射 + Lightning Indexer + 记忆蒸馏 | ✅ 已定义 |
+- [FULL_STACK_HYBRID_ATTENTION_MAPPING.md](./FULL_STACK_HYBRID_ATTENTION_MAPPING.md) | **全栈混合注意力架构映射规范** - Agent调度/执行/安全/交互/模型选择的全局映射 | ✅ **新增** |
 
 ---
 
