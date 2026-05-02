@@ -73,6 +73,9 @@
 - `agents/base_agent.py` - AutonomousAgent 基类（实现 SubAgent 端口）
 - `agents/chat_agent.py` - ChatAgent（遵循双向端口原则）
 
+#### 记忆系统核心算法
+- [MEMORY_SYSTEM_HYBRID_ATTENTION_SPEC.md](./MEMORY_SYSTEM_HYBRID_ATTENTION_SPEC.md) | **记忆系统混合注意力架构规范** - CSA/HCA 映射 + Lightning Indexer + 记忆蒸馏 | ✅ **新增** |
+
 ---
 
 ### 4️⃣ 测试与质量保障
