@@ -1,8 +1,8 @@
 # 小尾巴（XiaoWeiba）架构强制约束规范
 
-**版本**: v1.1  
+**版本**: v1.2  
 **生效时间**: Phase 2 完成后  
-**最后更新**: 2026-05-02  
+**最后更新**: 2026-05-03（法典修正案：Agents 层重新定位）  
 **维护者**: 小尾巴团队  
 **约束原则**: 违反任何一条，代码不得合并
 
@@ -29,6 +29,9 @@
 | **Application** | Domain Ports, Domain Models | Infrastructure |
 | **Domain Ports** | 无（纯接口） | 任何实现层 |
 | **Infrastructure** | Domain Ports, Domain Models | Application |
+| **Agents** ⭐ | **Domain Ports, Domain Models, Infrastructure** | **Application, UI** |
+
+> **⭐ Agents 层特例说明**：Agents 是连接内外网的“路由器”或“映射器”，扮演双向翻译角色。它必须同时理解“内网”的领域语言（Intent, MemoryContext）和“外网”的技术设施。因此，Agents 层被允许合法依赖 Domain 和 Infrastructure 层，但禁止反向依赖 Application 和 UI 层。
 
 ### 1.2 具体规则
 
@@ -48,9 +51,53 @@ export class MemoryAdapter implements IMemoryPort { }
 import { IntentDispatcher } from '../core/application';  // 禁止
 ```
 
-### 1.3 ESLint 强制规则
+### 1.3 Agents 层特例详解
 
-已在 `.eslintrc.js` 中配置 `no-restricted-imports` 规则，详见配置文件。
+#### 1.3.1 Agents 的双向端口职责
+
+Agents 层不是传统的 Infrastructure 层，而是**双向翻译器**：
+
+```
+“来”的方向：元Agent 调度意图给 子Agent
+    数据从 Domain 流向 Infrastructure
+
+“回”的方向：子Agent 执行完毕，返回 AgentResult
+    数据从 Infrastructure 流回 Application
+```
+
+在这个双向模型里，`src/agents/` 目录下的代码扮演的是连接内外网的“路由器”或“映射器”角色，而不是固定的某一层。它必须同时理解：
+- **“内网”的领域语言**：Intent, MemoryContext, TaskPlan
+- **“外网”的技术设施**：LLMClient, ToolGateway, EventBus
+
+#### 1.3.2 允许的依赖关系
+
+```typescript
+// ✅ 正确：Agents 可以依赖 Domain Ports
+import { IMemoryPort } from '../core/ports/IMemoryPort';
+import { Intent } from '../core/domain/types';
+
+// ✅ 正确：Agents 可以依赖 Infrastructure
+import { LLMClient } from '../infrastructure/llm/LLMClient';
+import { ToolGateway } from '../infrastructure/tools/ToolGateway';
+
+// ❌ 错误：Agents 禁止依赖 Application
+import { IntentDispatcher } from '../core/application/IntentDispatcher';  // 禁止
+
+// ❌ 错误：Agents 禁止依赖 UI
+import { ChatViewProvider } from '../chat/ChatViewProvider';  // 禁止
+```
+
+#### 1.3.3 架构优势
+
+这个设计带来三大好处：
+
+1. **代码更简洁**：未来 ErrorAnalysisAgent 可以直接从 Domain 层获取领域事件和上下文，而不必绕道。
+2. **设计更清晰**：“8字形”交路在文件目录上变得一目了然，新成员能快速理解这个核心设计。
+3. **演进更流畅**：为未来更复杂的智能体协作模式解除了结构性的障碍。
+
+### 1.4 ESLint 强制规则
+
+已在 `.eslintrc.js` 中配置 `no-restricted-imports` 规则，详见配置文件。**注意：Agents 层已获特例，允许合法依赖 Domain 和 Infrastructure 层。**
 
 ---
 

@@ -59,14 +59,15 @@ module.exports = {
     ],
     
     // ✅ Phase 2.4: 强制架构约束 - 禁止跨层直接导入
-    // 遵循《小尾巴架构强制约束规范 v1.0》
+    // 遵循《小尾巴架构强制约束规范 v1.2》（Agents 层特例）
     'no-restricted-imports': [
       'error',
       {
         paths: [
           // ========================================
           // 规则1: 禁止直接导入记忆模块的具体实现
-          // 适用层级: UI/Chat/Agents/Application
+          // 适用层级: UI/Chat/Application
+          // ⭐ Agents 层特例：Agents 可以合法依赖 IMemoryPort（通过端口）
           // ========================================
           
           // 禁止直接导入 EpisodicMemory（所有层级）
