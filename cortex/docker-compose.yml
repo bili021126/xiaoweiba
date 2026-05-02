@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  cortex-api:
+    build: .
+    container_name: cortex-api
+    ports:
+      - "8000:8000"
+    environment:
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - CORTEX_HOST=0.0.0.0
+      - CORTEX_PORT=8000
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - cortex-network
+
+  # ChromaDB 服务（可选，如果使用独立 ChromaDB）
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: cortex-chromadb
+    ports:
+      - "8001:8000"
+    volumes:
+      - chroma-data:/chroma/chroma
+    restart: unless-stopped
+    networks:
+      - cortex-network
+
+volumes:
+  chroma-data:
+    driver: local
+
+networks:
+  cortex-network:
+    driver: bridge
