@@ -1,0 +1,97 @@
+# Cortex 配置文件
+# 基于小尾巴 config.yaml 迁移并适配独立应用架构
+
+# 模型配置
+model:
+  # 默认使用的模型
+  default: deepseek-v4-flash
+  
+  # DeepSeek V4-Pro（复杂推理任务）
+  deepseek_v4_pro:
+    name: DeepSeek V4 Pro
+    api_url: https://api.deepseek.com
+    beta_api_url: https://api.deepseek.com/beta
+    model_name: deepseek-v4-pro
+    max_tokens: 16384
+    temperature: 0.3
+    enabled: true
+  
+  # DeepSeek V4-Flash（高频轻任务）
+  deepseek_v4_flash:
+    name: DeepSeek V4 Flash
+    api_url: https://api.deepseek.com
+    beta_api_url: https://api.deepseek.com/beta
+    model_name: deepseek-v4-flash
+    max_tokens: 4096
+    temperature: 0.1
+    enabled: true
+
+# 安全配置
+security:
+  # 信任级别：strict / moderate / lenient
+  trust_level: moderate
+  # TaskToken 有效期（分钟）
+  task_token_expiry_minutes: 5
+  # 审计日志保留天数
+  audit_log_retention_days: 30
+  # 危险命令黑名单
+  command_blacklist:
+    - "rm\\s+-rf\\s+/"
+    - "sudo\\s+"
+    - "chmod\\s+777"
+    - "mkfs\\."
+    - "dd\\s+if="
+
+# 记忆配置
+memory:
+  # SQLite 数据库路径
+  sqlite_db_path: ./data/cortex.db
+  # ChromaDB 数据路径
+  chroma_db_path: ./data/chroma
+  # 记忆保留天数
+  retention_days: 90
+  # 混合检索权重
+  retrieval_weights:
+    vector: 0.40      # 向量相似度
+    keyword: 0.25     # 关键词匹配
+    time_decay: 0.15  # 时间衰减
+    importance: 0.20  # 重要性
+  # 时间衰减系数（半衰期约7天）
+  decay_lambda: 0.1
+
+# Agent 配置
+agents:
+  # 最大重试次数
+  max_retries: 3
+  # 执行超时时间（秒）
+  execution_timeout_seconds: 300
+  # Wilson Lower Bound 置信度
+  wilson_confidence: 0.95
+
+# 沙箱配置
+sandbox:
+  # 默认隔离层级：L1（临时目录）/ L2（Git分支）/ L3（Docker容器）
+  default_isolation_level: L1
+  # Docker 容器内存限制
+  docker_memory_limit: 512m
+  # 工作目录
+  work_dir: ./data/sandbox
+
+# API 配置
+api:
+  # 服务器主机
+  host: 0.0.0.0
+  # 服务器端口
+  port: 8000
+  # 调试模式
+  debug: false
+  # CORS 允许的来源
+  cors_origins:
+    - "*"
+
+# 前端配置
+frontend:
+  # Textual TUI 主题
+  textual_theme: dark
+  # Web UI 端口
+  web_port: 3000
