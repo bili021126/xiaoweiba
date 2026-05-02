@@ -1,19 +1,21 @@
 """
 AutonomousAgent 基类单元测试
 
-测试 Agent 的标准循环和错误处理
+测试 Agent 的标准循环、错误处理和双向端口原则
+遵循 TEST-001 ~ TEST-004：只 Mock 端口抽象，不 Mock 具体实现
 """
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from cortex.agents.base_agent import AutonomousAgent, AgentResult, AgentCapability
+from cortex.agents.base_agent import AutonomousAgent
+from cortex.core.ports.sub_agent import AgentResult, AgentCapability
+from tests.helpers import create_mock_memory_portal, create_mock_event_bus, create_mock_llm_port
 
 
 class MockAgent(AutonomousAgent):
-    """用于测试的 Mock Agent"""
+    """用于测试的 Mock Agent（遵循双向端口原则）"""
     
     @property
     def agent_id(self) -> str:
-        return "mock-agent"
+        return "mock_agent"  # snake_case
     
     @property
     def name(self) -> str:
@@ -23,6 +25,10 @@ class MockAgent(AutonomousAgent):
     def supported_intents(self):
         return ["test"]
     
+    def __init__(self, memory_portal: MemoryPortal, event_bus: EventBus, llm_client):
+        """通过构造函数注入依赖（双向端口原则）"""
+        super().__init__(memory_portal, event_bus, llm_client)
+    
     def get_capabilities(self):
         return [
             AgentCapability(name="test_cap", description="Test capability")
@@ -31,10 +37,10 @@ class MockAgent(AutonomousAgent):
     async def think(self, intent: str, context: dict) -> dict:
         return {"plan": "test plan"}
     
-    async def act(self, plan: dict) -> dict:
+    async def act(self, plan: dict, context: dict) -> dict:
         return {"action_result": "success"}
     
-    async def observe(self, action_result: dict) -> AgentResult:
+    async def observe(self, action_result: dict, start_time: float) -> AgentResult:
         return AgentResult(success=True, data=action_result)
 
 
@@ -73,15 +79,36 @@ class TestAutonomousAgent:
     """AutonomousAgent 基类测试"""
     
     @pytest.fixture
-    def agent(self):
-        """创建 Mock Agent 实例"""
-        return MockAgent()
+    def mock_memory_portal(self):
+        """创建 Mock MemoryPortal（使用工厂函数）"""
+        return create_mock_memory_portal()
+    
+    @pytest.fixture
+    def mock_event_bus(self):
+        """创建 Mock EventBus（使用工厂函数）"""
+        return create_mock_event_bus()
+    
+    @pytest.fixture
+    def mock_llm_client(self):
+        """创建 Mock LLM Client（使用工厂函数）"""
+        return create_mock_llm_port()
+    
+    @pytest.fixture
+    def agent(self, mock_memory_portal, mock_event_bus, mock_llm_client):
+        """创建 Mock Agent 实例（注入依赖）"""
+        return MockAgent(mock_memory_portal, mock_event_bus, mock_llm_client)
     
     def test_agent_properties(self, agent):
         """测试 Agent 属性"""
-        assert agent.agent_id == "mock-agent"
+        assert agent.agent_id == "mock_agent"  # snake_case
         assert agent.name == "Mock Agent"
         assert agent.supported_intents == ["test"]
+    
+    def test_dependency_injection(self, agent, mock_memory_portal, mock_event_bus, mock_llm_client):
+        """测试依赖注入（双向端口原则）"""
+        assert agent.memory_portal is mock_memory_portal
+        assert agent.event_bus is mock_event_bus
+        assert agent.llm_client is mock_llm_client
     
     def test_get_capabilities(self, agent):
         """测试获取能力列表"""
@@ -90,15 +117,18 @@ class TestAutonomousAgent:
         assert capabilities[0].name == "test_cap"
     
     @pytest.mark.asyncio
-    async def test_execute_success(self, agent):
-        """测试成功执行"""
-        result = await agent.execute("test", {"context": "data"})
+    async def test_execute_success(self, agent, mock_event_bus):
+        """测试成功执行并发布事件"""
+        result = await agent.execute("test", {"context": "data", "task_id": "task_123"})
         
         assert result.success is True
         assert result.data is not None
+        
+        # 验证发布了 TaskStartedEvent 和 TaskCompletedEvent
+        assert mock_event_bus.publish.call_count >= 2
     
     @pytest.mark.asyncio
-    async def test_execute_with_retry(self, agent):
+    async def test_execute_with_retry(self, agent, mock_event_bus):
         """测试重试机制"""
         call_count = 0
         
@@ -113,28 +143,31 @@ class TestAutonomousAgent:
         
         agent.think = failing_then_success
         
-        result = await agent.execute("test", {})
+        result = await agent.execute("test", {"task_id": "task_456"})
         
         assert result.success is True
         assert call_count == 2  # 第一次失败，第二次成功
     
     @pytest.mark.asyncio
-    async def test_execute_max_retries_exceeded(self, agent):
-        """测试超过最大重试次数"""
+    async def test_execute_max_retries_exceeded(self, agent, mock_event_bus):
+        """测试超过最大重试次数并发布 TaskFailedEvent"""
         async def always_fail(intent, context):
             raise Exception("Persistent failure")
         
         agent.think = always_fail
         
-        result = await agent.execute("test", {})
+        result = await agent.execute("test", {"task_id": "task_789"})
         
         assert result.success is False
         assert "Persistent failure" in result.error
+        
+        # 验证发布了 TaskFailedEvent
+        assert mock_event_bus.publish.call_count >= 2
     
     @pytest.mark.asyncio
     async def test_execute_records_duration(self, agent):
         """测试执行时长记录"""
-        result = await agent.execute("test", {})
+        result = await agent.execute("test", {"task_id": "task_duration"})
         
         assert result.duration_ms is not None
         assert result.duration_ms >= 0
