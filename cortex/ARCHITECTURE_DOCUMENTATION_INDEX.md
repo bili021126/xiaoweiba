@@ -14,7 +14,8 @@
 
 | 文档 | 说明 | 状态 |
 |------|------|------|
-| [PHILOSOPHICAL_BOUNDARIES_AND_DISILLUSIONMENT.md](./PHILOSOPHICAL_BOUNDARIES_AND_DISILLUSIONMENT.md) | **架构哲学边界与隐喻祛魅宣言 v1.0** - Cortex 的"自我认知宪章" | ✅ **新增** |
+| [EXISTENTIAL_MANIFESTO_SPEECH_AND_BEING.md](./EXISTENTIAL_MANIFESTO_SPEECH_AND_BEING.md) | **架构存在论宣言：言说与存在的矛盾 v1.0** - Cortex 的"本体论自白" | ✅ **新增** |
+| [PHILOSOPHICAL_BOUNDARIES_AND_DISILLUSIONMENT.md](./PHILOSOPHICAL_BOUNDARIES_AND_DISILLUSIONMENT.md) | **架构哲学边界与隐喻祛魅宣言 v1.0** - Cortex 的"自我认知宪章" | ✅ 已定义 |
 | [AGENT_DESIGN_PHILOSOPHY.md](./AGENT_DESIGN_PHILOSOPHY.md) | **Agent 设计哲学白皮书** - 理解 Cortex 灵魂的"第一性原理" | ✅ 已定义 |
 | [AGENT_TECHNICAL_SPECIFICATION.md](./AGENT_TECHNICAL_SPECIFICATION.md) | **Agent 体系技术规范 v1.0** - 所有 Agent 功能实现的"唯一真理源" | ✅ 已定义 |
 | [ARCHITECTURE_CONFLICT_RESOLUTION_SPEC.md](./ARCHITECTURE_CONFLICT_RESOLUTION_SPEC.md) | **架构深层矛盾调和与边界定义规范 v1.0** - Phase 1-5 开发的"宪法修正案" | ✅ 已定义 |
