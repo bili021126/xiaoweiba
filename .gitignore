@@ -8,3 +8,7 @@ coverage/
 .DS_Store
 Thumbs.db
 nul
+
+# Python cache files
+cortex/**/__pycache__/
+cortex/**/*.pyc
