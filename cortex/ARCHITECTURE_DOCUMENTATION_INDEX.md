@@ -14,9 +14,10 @@
 
 | 文档 | 说明 | 状态 |
 |------|------|------|
+| [PHILOSOPHICAL_BOUNDARIES_AND_DISILLUSIONMENT.md](./PHILOSOPHICAL_BOUNDARIES_AND_DISILLUSIONMENT.md) | **架构哲学边界与隐喻祛魅宣言 v1.0** - Cortex 的"自我认知宪章" | ✅ **新增** |
 | [AGENT_DESIGN_PHILOSOPHY.md](./AGENT_DESIGN_PHILOSOPHY.md) | **Agent 设计哲学白皮书** - 理解 Cortex 灵魂的"第一性原理" | ✅ 已定义 |
 | [AGENT_TECHNICAL_SPECIFICATION.md](./AGENT_TECHNICAL_SPECIFICATION.md) | **Agent 体系技术规范 v1.0** - 所有 Agent 功能实现的"唯一真理源" | ✅ 已定义 |
-| [ARCHITECTURE_CONFLICT_RESOLUTION_SPEC.md](./ARCHITECTURE_CONFLICT_RESOLUTION_SPEC.md) | **架构深层矛盾调和与边界定义规范 v1.0** - Phase 1-5 开发的"宪法修正案" | ✅ **新增** |
+| [ARCHITECTURE_CONFLICT_RESOLUTION_SPEC.md](./ARCHITECTURE_CONFLICT_RESOLUTION_SPEC.md) | **架构深层矛盾调和与边界定义规范 v1.0** - Phase 1-5 开发的"宪法修正案" | ✅ 已定义 |
 | [ARCHITECTURE_CONSTRAINTS.md](./docs/architecture-constraints.md) | 《小尾巴终极架构宪章》v2.0 - 核心原则与铁律 | ✅ 已定义 |
 | [ARCHITECTURE_COMPLIANCE_CHECKLIST.md](./ARCHITECTURE_COMPLIANCE_CHECKLIST.md) | 架构合规性检查清单 - PR 合并前必查 | ✅ 已创建 |
 | [ARCHITECTURE_FIX_FINAL_REPORT.md](./ARCHITECTURE_FIX_FINAL_REPORT.md) | 架构修正完成报告 - v2.0 合规率 100% | ✅ 已完成 |
