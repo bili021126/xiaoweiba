@@ -33,8 +33,9 @@
 
 | 文档 | 说明 | 状态 |
 |------|------|------|
+| [CORTEX_ULTIMATE_BLUEPRINT.md](./CORTEX_ULTIMATE_BLUEPRINT.md) | **Cortex 框架终极设计蓝图 v1.0** - Phase 0-5 全栈开发的"唯一真理源" | ✅ **新增** |
 | [CORE_ENGINE_IMPLEMENTATION_SPEC.md](./CORE_ENGINE_IMPLEMENTATION_SPEC.md) | **核心引擎实施规范 v1.0** - Phase 1（核心闭环）开发的"唯一真理源" | ✅ 已定义 |
-| [ARCHITECTURE_RISK_MITIGATION_SPEC.md](./ARCHITECTURE_RISK_MITIGATION_SPEC.md) | **架构风险防控与增强规范 v1.0** - 9大漏洞修复方案（P0/P1/P2优先级） | ✅ **新增** |
+| [ARCHITECTURE_RISK_MITIGATION_SPEC.md](./ARCHITECTURE_RISK_MITIGATION_SPEC.md) | **架构风险防控与增强规范 v1.0** - 9大漏洞修复方案（P0/P1/P2优先级） | ✅ 已定义 |
 | [ULTIMATE_ARCHITECTURE_ROADMAP.md](./ULTIMATE_ARCHITECTURE_ROADMAP.md) | 终极架构演进路线图 - 从 v2.0 到 v3.0 | ✅ 已规划 |
 | [ARCHITECTURE_GAP_ANALYSIS.md](./ARCHITECTURE_GAP_ANALYSIS.md) | 架构差距分析矩阵 - 当前 vs 目标 | ✅ 已分析 |
 
