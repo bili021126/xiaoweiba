@@ -55,8 +55,7 @@
   - ✅ 允许：`def __init__(self, memory_portal: MemoryPortal, ...)`
 
 - [ ] **Agent ID 是否使用 snake_case**？
-  - ❌ 禁止：`agent_id = "chat-agent"`
-  - ✅ 允许：`agent_id = "chat_agent"`
+  - ✅ 允许：`agent_id = "chat_agent"` (snake_case)
 
 - [ ] **Agent 是否发布领域事件**？
   - ❌ 禁止：静默执行，无事件发布

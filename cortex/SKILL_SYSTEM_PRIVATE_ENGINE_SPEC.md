@@ -105,7 +105,7 @@ inputs:
 # 执行步骤
 steps:
   - id: "build"
-    tool: "shell"                  # 工具类型
+    tool: "execute_shell"          # 统一工具名称（遵循 Agent 技术规范）
     params:
       command: "npm run build"
       cwd: "{{ inputs.target_dir }}"
@@ -113,7 +113,7 @@ steps:
     on_failure: "stop"             # stop | skip | retry
 
   - id: "test"
-    tool: "shell"
+    tool: "execute_shell"
     params:
       command: "npm test"
       cwd: "{{ inputs.target_dir }}"
@@ -121,7 +121,7 @@ steps:
     on_failure: "stop"
 
   - id: "deploy"
-    tool: "shell"
+    tool: "execute_shell"
     params:
       command: "rsync -avz dist/ user@server:/var/www/blog/"
       cwd: "{{ inputs.target_dir }}"
@@ -137,7 +137,7 @@ steps:
 
 # 后置清理
 cleanup:
-  - tool: "shell"
+  - tool: "execute_shell"
     params:
       command: "rm -rf dist"
       cwd: "{{ inputs.target_dir }}"
@@ -147,14 +147,14 @@ cleanup:
 
 | 工具名 | 功能 | 关键参数 |
 |-------|------|---------|
-| `shell` | 执行 Shell 命令 | `command`, `cwd`, `env` |
+| `execute_shell` | 执行 Shell 命令 | `command`, `cwd`, `env` |
 | `read_file` | 读取文件 | `path` |
 | `write_file` | 写入文件 | `path`, `content` |
-| `call_llm` | 调用 LLM | `prompt`, `system`, `temperature` |
+| `call_llm` | 调用 LLM（受限模式，无工具调用能力） | `prompt`, `system`, `temperature` |
 | `show_diff` | 展示差异 | `original`, `modified` |
 | `search_memory` | 检索记忆 | `query`, `limit` |
-| `wait` | 等待 | `duration_ms` |
-| `notify` | 发送通知 | `title`, `message` |
+| `wait` | 等待（仅用于技能流程控制） | `duration_ms` |
+| `notify` | 发送本地通知 | `title`, `message` |
 
 ### 3.3 变量模板
 
