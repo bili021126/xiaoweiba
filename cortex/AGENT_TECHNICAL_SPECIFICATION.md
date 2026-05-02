@@ -196,6 +196,92 @@ async def act(self, tool_call: Dict[str, Any], task_token: str) -> Dict[str, Any
 2. **反馈给 LLM**：将工具结果作为新消息追加到对话历史，Agent 继续 Think 阶段。
 3. **循环控制**：`LoopController` 监控循环次数（默认最多 10 次），防止无限循环。
 4. **错误恢复**：`ErrorRecovery` 在工具失败时分析错误日志，生成修复方案，自动重试（最多 3 次）。
+5. **假设记录与可追溯性**：每个 Agent 在执行前应在 TaskContext 中记录自己的关键假设。
+
+#### **假设记录机制（Assumption Recording）**
+
+**作用**：解决多 Agent 交互的涌现性风险，确保下游 Agent 可以检查上游假设是否仍然成立。
+
+**技术实现**：
+- 每个 Agent 在执行前记录以下假设：
+  - `preconditions`: 前置条件（如“文件 A 必须存在”）
+  - `file_dependencies`: 依赖的文件状态（如“user_service.py 的版本必须是 v1.2”）
+  - `environment_assumptions`: 环境假设（如“Node.js 版本 >= 18”）
+- 下游 Agent 在执行前检查这些假设
+- 交付时用户可查看完整决策链
+
+**代码示例**：
+```python
+class AgentAssumptionRecorder:
+    def __init__(self, task_context: TaskContext):
+        self.task_context = task_context
+    
+    async def record_assumptions(self, agent_id: str, assumptions: Dict[str, Any]):
+        """
+        Agent 记录自己的关键假设
+        
+        Args:
+            agent_id: Agent ID
+            assumptions: 假设字典
+                {
+                    "preconditions": ["file_a_exists", "database_connected"],
+                    "file_dependencies": {
+                        "user_service.py": {"version": "v1.2", "checksum": "abc123"}
+                    },
+                    "environment_assumptions": {
+                        "node_version": ">=18",
+                        "os": "linux"
+                    }
+                }
+        """
+        assumption_record = {
+            "agent_id": agent_id,
+            "assumptions": assumptions,
+            "recorded_at": datetime.utcnow(),
+            "task_step": self.task_context.current_step_id
+        }
+        
+        # 存入 TaskContext
+        self.task_context.agent_messages.append({
+            "type": "assumption_record",
+            "data": assumption_record
+        })
+        
+        # 同时持久化到数据库（供后续审计）
+        await self.db.store_assumption_record(assumption_record)
+    
+    async def verify_assumptions(self, agent_id: str) -> List[str]:
+        """
+        Agent 验证上游假设是否仍然成立
+        
+        Returns:
+            violated_assumptions: 被违反的假设列表
+        """
+        violated = []
+        
+        # 获取所有上游 Agent 的假设记录
+        upstream_assumptions = [
+            msg for msg in self.task_context.agent_messages
+            if msg["type"] == "assumption_record" and msg["data"]["agent_id"] != agent_id
+        ]
+        
+        for record in upstream_assumptions:
+            assumptions = record["data"]["assumptions"]
+            
+            # 检查文件依赖
+            for file_path, expected_state in assumptions.get("file_dependencies", {}).items():
+                actual_checksum = await self._get_file_checksum(file_path)
+                if actual_checksum != expected_state.get("checksum"):
+                    violated.append(f"File {file_path} has been modified since {record['data']['agent_id']} assumed it.")
+            
+            # 检查环境假设
+            for env_var, expected_value in assumptions.get("environment_assumptions", {}).items():
+                actual_value = os.environ.get(env_var)
+                if actual_value != expected_value:
+                    violated.append(f"Environment variable {env_var} changed: expected {expected_value}, got {actual_value}.")
+        
+        return violated
+```
 
 **完整循环示例（代码生成）**：
 ```text

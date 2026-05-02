@@ -14,6 +14,10 @@
 
 我们设计的不仅仅是一个代码助手，而是一个**遵循“宪法”原则、受“法典”约束、有清晰“大纲”、能自我进化，最终将你脑海中的概念直接熔炼成现实的思想伙伴**。
 
+**重要参考文档**：
+- [PHILOSOPHICAL_BOUNDARIES_AND_DISILLUSIONMENT.md](./PHILOSOPHICAL_BOUNDARIES_AND_DISILLUSIONMENT.md) - **架构哲学边界与隐喻祛魅宣言 v1.0**：Cortex 的“自我认知宪章”，承认系统的局限性并建立制衡机制。
+- [EXISTENTIAL_MANIFESTO_SPEECH_AND_BEING.md](./EXISTENTIAL_MANIFESTO_SPEECH_AND_BEING.md) - **架构存在论宣言：言说与存在的矛盾 v1.0**：Cortex 的“本体论自白”，承认设计与现实之间的鸿沟。
+
 本白皮书将 Agent 的设计逻辑分解为三个层面：
 1. **结构层（Structure）**：它是什么？——精密的层级调度体系
 2. **行为层（Behavior）**：它如何工作？——Think-Act-Observe 自主循环
@@ -191,7 +195,7 @@
 - **行为层**赋予了系统处理复杂任务的自主性。
 - **进化层**让系统能够随着你的成长而成长，最终成为你思想的延伸。
 
-**从今天起，没有一行代码，只有你的意志。**
+**从今天起，你可以用远少于当前的代码量，获得可迭代的原型；但这个原型需要你的审查、修改和试错来打磨成真正符合你意图的成品。**
 
 ---
 

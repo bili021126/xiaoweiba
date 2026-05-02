@@ -131,6 +131,15 @@ async def infer_missing_info(self, user_answers: Dict[str, str], memory_context:
 #### **BlueprintGenerator**
 **职责**：生成结构化蓝图，严格遵循庞大的 JSON Schema。
 
+**蓝图决策来源标注（Decision Source Annotation）**：
+每个决策必须标注来源，L1 确认时用户可看到每个决策的来源。
+
+**决策来源类型**：
+- `user_explicit`: 用户明确指定
+- `preference_inferred`: 从历史偏好推断
+- `knowledge_base_suggested`: 从知识库建议
+- `default_preset`: 默认预设
+
 **蓝图 JSON Schema 关键字段**：
 ```json
 {
@@ -161,7 +170,15 @@ async def infer_missing_info(self, user_answers: Dict[str, str], memory_context:
     {
       "decision": "Choose PostgreSQL over MySQL",
       "reason": "Better JSONB support for flexible schema",
-      "alternatives": ["MySQL", "MongoDB"]
+      "alternatives": ["MySQL", "MongoDB"],
+      "source": "knowledge_base_suggested",  # 决策来源标注
+      "confidence": 0.85  # 推断置信度（仅适用于 inferred/suggested）
+    },
+    {
+      "decision": "Use React 18 + Next.js",
+      "reason": "User explicitly requested",
+      "alternatives": [],
+      "source": "user_explicit"
     }
   ]
 }
@@ -176,6 +193,49 @@ async def infer_missing_info(self, user_answers: Dict[str, str], memory_context:
 这是将蓝图变为现实的执行核心，赋予 Agent 真正的动手能力。
 
 ### 2.1 核心组件
+
+#### **全局目标函数配置（Global Objective Function）**
+**职责**：允许用户声明本次任务的优化目标，使得各组件在同一目标下协同运作。
+
+**技术实现**：
+- 在 TaskContext 中增加 `optimization_goal` 字段
+- 支持三种预设模式：
+  - `speed_first`: 速度优先（选择响应最快的 Agent，容忍较低精度）
+  - `quality_first`: 质量优先（选择历史成功率最高的 Agent，容忍较慢响应）
+  - `cost_first`: 成本优先（选择使用 Flash 模型而非 Pro 模型）
+
+**代码示例**：
+```python
+class TaskContext:
+    def __init__(self, task_id: str, goal: str, optimization_goal: str = "balanced"):
+        self.task_id = task_id
+        self.goal = goal
+        self.optimization_goal = optimization_goal  # speed_first | quality_first | cost_first | balanced
+        self.constraints = {}
+        self.shared_data = {}
+        self.agent_messages = []
+```
+
+**AgentSelector 适配**：
+```python
+def select_agent(self, intent: Intent, context: TaskContext) -> str:
+    if context.optimization_goal == "speed_first":
+        # 选择平均响应时间最短的 Agent
+        return min(self.agent_pool, key=lambda a: a.avg_response_time)
+    elif context.optimization_goal == "quality_first":
+        # 选择 Wilson 评分最高的 Agent
+        return max(self.agent_pool, key=lambda a: a.wilson_score)
+    elif context.optimization_goal == "cost_first":
+        # 选择使用 Flash 模型的 Agent
+        return next(a for a in self.agent_pool if a.model == "deepseek-v4-flash")
+    else:
+        # 平衡模式：综合评分
+        return max(self.agent_pool, key=lambda a: a.composite_score)
+```
+
+**实现位置**：`core/execution_engine/task_context.py`
+
+---
 
 #### **TaskDecomposer**
 **职责**：接收确认的蓝图，拆解为有序的任务 DAG（有向无环图）。

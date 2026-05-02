@@ -76,6 +76,94 @@ async def validate(self, agent_id: str, operation: str, user_id: str) -> Validat
 
 ---
 
+### 1.3 主动挑战机制（Active Challenge Mechanism）
+
+**作用**：解决信任模型只向上积累不向下重置的伦理性悖论，验证用户是否能在不确定时正确拒绝。
+
+**技术实现**：
+- 信任级别每次提升时，系统主动展示边界案例
+- 用户必须正确判断何时应该拒绝，才能完成信任升级
+- 如果用户错误地接受了高风险建议，信任级别不提升甚至降级
+
+**代码示例**：
+```python
+class TrustChallengeSystem:
+    def __init__(self, db: TrustDatabase):
+        self.db = db
+    
+    async def trigger_challenge(self, user_id: str, from_level: str, to_level: str):
+        """
+        当用户即将从 from_level 升级到 to_level 时，触发挑战
+        
+        Args:
+            user_id: 用户 ID
+            from_level: 当前信任级别
+            to_level: 目标信任级别
+        """
+        # 1. 生成边界案例
+        challenge_case = await self._generate_boundary_case(from_level, to_level)
+        
+        # 2. 向用户展示挑战
+        print(f"\n🔒 信任升级挑战：您即将从 '{from_level}' 升级到 '{to_level}'")
+        print(f"请评估以下建议是否安全：\n{challenge_case.description}\n")
+        
+        # 3. 等待用户响应
+        user_response = await self._wait_for_user_decision()
+        
+        # 4. 验证用户决策
+        correct_decision = challenge_case.correct_action  # "accept" or "reject"
+        
+        if user_response == correct_decision:
+            # 用户正确判断，允许升级
+            await self.db.upgrade_trust_level(user_id, to_level)
+            print("✅ 挑战通过！信任级别已升级。")
+        else:
+            # 用户错误判断，阻止升级
+            print(f"❌ 挑战失败。正确做法应该是：{'接受' if correct_decision == 'accept' else '拒绝'}")
+            print("信任级别保持不变。建议您先了解更多关于此操作的风险。")
+    
+    async def _generate_boundary_case(self, from_level: str, to_level: str) -> ChallengeCase:
+        """
+        生成边界案例
+        
+        Examples:
+            - 从 novice → familiar: 展示一个看似合理但有潜在风险的 Shell 命令
+            - 从 familiar → trusted: 展示一个需要仔细审查的代码重构建议
+            - 从 trusted → expert: 展示一个可能破坏数据库完整性的 SQL 优化
+        """
+        if from_level == "novice" and to_level == "familiar":
+            return ChallengeCase(
+                description="Agent 建议执行：`rm -rf node_modules && npm install`",
+                risk_level="medium",
+                correct_action="reject",  # 应该拒绝，因为 rm -rf 是危险操作
+                explanation="虽然这个命令常用于重置依赖，但 rm -rf 是高风险操作，应该在熟悉级别之前保持谨慎。"
+            )
+        elif from_level == "familiar" and to_level == "trusted":
+            return ChallengeCase(
+                description="Agent 建议重构：将所有同步函数改为异步，涉及 50+ 文件",
+                risk_level="high",
+                correct_action="reject",  # 应该拒绝，因为大规模重构需要人工审查
+                explanation="大规模重构应该在 L1 蓝图确认阶段进行，而不是自动批准。"
+            )
+        else:
+            # 默认案例
+            return ChallengeCase(
+                description="Agent 建议删除未使用的导入语句",
+                risk_level="low",
+                correct_action="accept",
+                explanation="这是低风险操作，可以安全接受。"
+            )
+```
+
+**挑战案例库**：
+- 预定义 20+ 个边界案例，覆盖不同风险等级
+- 根据用户的历史行为动态选择最相关的案例
+- 用户可以随时请求重新挑战
+
+**实现位置**：`security/trust_challenge.py`
+
+---
+
 ## 二、Agent间协作 - 任务上下文总线 (问题2)
 
 **核心思路**：新增轻量级临时通信信道，所有参与同一任务的Agent可从中获取上游结果、写入自身产出。

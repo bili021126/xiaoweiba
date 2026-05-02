@@ -226,6 +226,78 @@ async def distill_memories(concept_id: str):
 
 ---
 
+### 3.2 显式价值标记接口（Explicit Value Tagging）
+
+**作用**：解决纯粹依赖行为频率推断重要性的认知论谬误，允许用户主动标记记忆的价值。
+
+**技术实现**：
+- 增加两个用户可主动调用的接口：
+  - `mark_as_important(memory_id)`: 标记为重要（提升重要性评分）
+  - `mark_as_irrelevant(memory_id)`: 标记为不相关（降低重要性评分，甚至从推荐列表中隐藏）
+
+**代码示例**：
+```python
+class MemoryValueTagger:
+    def __init__(self, db: MemoryDatabase):
+        self.db = db
+    
+    async def mark_as_important(self, memory_id: str, reason: str = ""):
+        """
+        用户主动标记记忆为重要
+        
+        Args:
+            memory_id: 记忆 ID
+            reason: 可选的标记原因（用于审计和后续分析）
+        """
+        await self.db.update_memory_importance(
+            memory_id,
+            importance_multiplier=2.0,  # 重要性翻倍
+            user_tagged=True,
+            tag_reason=reason,
+            tagged_at=datetime.utcnow()
+        )
+    
+    async def mark_as_irrelevant(self, memory_id: str, reason: str = ""):
+        """
+        用户主动标记记忆为不相关
+        
+        Args:
+            memory_id: 记忆 ID
+            reason: 可选的标记原因
+        """
+        await self.db.update_memory_importance(
+            memory_id,
+            importance_multiplier=0.1,  # 重要性降至 10%
+            user_tagged=True,
+            tag_reason=reason,
+            suppress_from_recommendations=True,  # 从推荐列表隐藏
+            tagged_at=datetime.utcnow()
+        )
+```
+
+**检索公式调整**：
+```python
+# 原始四因子加权评分
+Score = 0.40 × vector_similarity + 0.25 × keyword_match + 0.15 × time_decay + 0.20 × importance
+
+# 引入用户显式标记后的调整
+if memory.user_tagged:
+    if memory.tag == "important":
+        importance *= memory.importance_multiplier  # 2.0x
+    elif memory.tag == "irrelevant":
+        importance *= memory.importance_multiplier  # 0.1x
+        if memory.suppress_from_recommendations:
+            return -1  # 直接从推荐列表中排除
+```
+
+**UI 交互设计**：
+- 在记忆卡片上增加“👍 重要”和“👎 不相关”按钮
+- 用户点击后，系统立即更新记忆权重，并在下次检索时反映变化
+
+**实现位置**：`memory/value_tagger.py`
+
+---
+
 ## 四、上下文注入策略
 
 检索完成后，记忆注入 Agent 的上下文遵循分层结构（对应注意力机制的分层处理）。
