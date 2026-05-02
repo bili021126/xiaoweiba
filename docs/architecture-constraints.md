@@ -1,10 +1,21 @@
 # 小尾巴（XiaoWeiba）架构强制约束规范
 
-**版本**: v1.0  
+**版本**: v1.1  
 **生效时间**: Phase 2 完成后  
-**最后更新**: 2026-04-24  
+**最后更新**: 2026-05-02  
 **维护者**: 小尾巴团队  
 **约束原则**: 违反任何一条，代码不得合并
+
+---
+
+## 📜 与 Cortex 架构法典的关系
+
+本文档是 **Cortex 架构法典** 在小尾巴项目中的具体实施指南。法典定义了七大约束铁律，本文档提供了详细的实施规则和验证方法。
+
+**权威文档优先级**：
+1. [Cortex 架构法典](./CORTEX_ARCHITECTURE_CODEX.md) - 最高准则
+2. [小尾巴重构核心三原则](./CORE_PRINCIPLES.md) - 项目宪法
+3. 本文档 - 实施细节
 
 ---
 
@@ -413,3 +424,12 @@ readonly id = 'explainCodeAgent';
 - [ ] `IntentDispatcher` 中的引用
 - [ ] 测试文件中的 Mock
 - [ ] 文档中的示例代码
+
+---
+
+## 📚 相关文档
+
+- [Cortex 架构法典 v1.0](./CORTEX_ARCHITECTURE_CODEX.md) - **新增**：七大约束铁律的完整定义
+- [小尾巴重构核心三原则](./CORE_PRINCIPLES.md) - 项目宪法
+- [架构合规性检查报告](./ARCHITECTURE_COMPLIANCE_REPORT.md) - 当前合规状态
+- [意图驱动架构](./INTENT_DRIVEN_ARCHITECTURE.md) - 系统设计文档

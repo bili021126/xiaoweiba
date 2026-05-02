@@ -76,8 +76,7 @@ export class MemoryAdapter implements IMemoryPort {
     const context: MemoryContext = {
       episodicMemories: [],
       preferenceRecommendations: [],
-      userPreferences: {},
-      sessionHistory: [] // ✅ 默认空数组，防止undefined
+      userPreferences: {}
     };
 
     try {
@@ -102,24 +101,26 @@ export class MemoryAdapter implements IMemoryPort {
           // ✅ L1: 委托给 SessionContextManager 构建会话上下文
           const sessionId = (intent.metadata as any)?.sessionId;
           const coreIntent = intent.metadata?.coreIntent;
-          const existingDecisions = context.keyDecisions;
           
           if (sessionId) {
             const sessionContext = await this.sessionContextManager.buildChatContext(
               sessionId,
-              coreIntent,
-              existingDecisions
+              coreIntent
+              // existingDecisions 参数已移除，因为 context 中不再有该字段
             );
             
-            // 合并返回的上下文
+            // 合弁返回的上下文（注意：这些字段属于 ChatMemoryContext）
+            // 由于 context 是 MemoryContext 类型，不能直接赋值
+            // 需要在调用方进行类型转换或使用 as any
+            const extendedContext = context as any;
             if (sessionContext.sessionHistory) {
-              context.sessionHistory = sessionContext.sessionHistory;
+              extendedContext.sessionHistory = sessionContext.sessionHistory;
             }
             if (sessionContext.keyDecisions) {
-              context.keyDecisions = sessionContext.keyDecisions;
+              extendedContext.keyDecisions = sessionContext.keyDecisions;
             }
             if (sessionContext.sessionSummary) {
-              context.sessionSummary = sessionContext.sessionSummary;
+              extendedContext.sessionSummary = sessionContext.sessionSummary;
             }
           }
           break;
@@ -152,7 +153,6 @@ export class MemoryAdapter implements IMemoryPort {
         episodicMemories: [],
         preferenceRecommendations: [],
         userPreferences: {},
-        sessionHistory: [], // ✅ 异常时也返回空数组
         originalQuery: intent.userInput || intent.name,
         retrievalDuration: Date.now() - startTime
       };
