@@ -56,16 +56,17 @@ export class VectorIndexManager {
     const stmt = db.prepare('SELECT vector FROM episodic_memory WHERE id = ?');
     stmt.bind([id]);
     
-    let vectorBuffer: Buffer | null = null;
+    let vectorData: Uint8Array | null = null;
     if (stmt.step()) {
       const row = stmt.getAsObject() as { vector: Uint8Array };
       if (row.vector) {
-        vectorBuffer = Buffer.from(row.vector);
+        vectorData = row.vector;
       }
     }
     stmt.free();
 
-    if (!vectorBuffer) return [];
-    return Array.from(new Float32Array(vectorBuffer.buffer));
+    if (!vectorData) return [];
+    // ✅ 正确转换：Uint8Array -> Float32Array -> number[]
+    return Array.from(new Float32Array(vectorData.buffer, vectorData.byteOffset, vectorData.byteLength / 4));
   }
 }

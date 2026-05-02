@@ -12,6 +12,10 @@ module.exports = {
     'plugin:@typescript-eslint/recommended'
   ],
   rules: {
+    // ========================================
+    // Cortex 架构法典 - 代码质量规则
+    // ========================================
+    
     // ✅ 任务4：消除 any 类型，提升类型安全性
     // 注意：Record<string, any> 用于元数据和动态对象，暂时允许
     '@typescript-eslint/no-explicit-any': ['error', { ignoreRestArgs: true }],
@@ -24,6 +28,35 @@ module.exports = {
     '@typescript-eslint/no-unsafe-assignment': 'warn',
     '@typescript-eslint/no-unsafe-argument': 'warn',
     '@typescript-eslint/restrict-template-expressions': 'warn',
+    
+    // ========================================
+    // Cortex 法典 SEC-006: 禁止在类内部使用 container.resolve()
+    // 依赖必须通过构造函数注入（DEP-004）
+    // ========================================
+    'no-restricted-syntax': [
+      'error',
+      {
+        selector: 'MethodDefinition[kind="constructor"] CallExpression[callee.object.name="container"][callee.property.name="resolve"]',
+        message: '❌ [Cortex DEP-004] 禁止在构造函数中使用 container.resolve()，请使用 @inject() 装饰器进行依赖注入。\n   正确做法：constructor(@inject("IMemoryPort") private memoryPort: IMemoryPort)'
+      },
+      {
+        selector: 'PropertyDefinition CallExpression[callee.object.name="container"][callee.property.name="resolve"]',
+        message: '❌ [Cortex DEP-004] 禁止在属性初始化中使用 container.resolve()，请使用构造函数注入。'
+      }
+    ],
+    
+    // ========================================
+    // Cortex 法典 AG-007: Agent ID 命名规范（kebab-case）
+    // ========================================
+    '@typescript-eslint/naming-convention': [
+      'error',
+      {
+        selector: 'property',
+        filter: '^id$',
+        format: ['camelCase', 'kebab-case'],
+        modifiers: ['readonly']
+      }
+    ],
     
     // ✅ Phase 2.4: 强制架构约束 - 禁止跨层直接导入
     // 遵循《小尾巴架构强制约束规范 v1.0》

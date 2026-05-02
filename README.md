@@ -132,19 +132,45 @@ npm run test:unit     # 仅单元测试
 npm run coverage      # 生成覆盖率报告
 ```
 
+### 架构合规性检查
+```bash
+npm run check:architecture  # 检查代码是否符合 Cortex 架构法典
+```
+
 ---
 
 ## 📖 文档导航
 
+### 核心文档
+| 文档 | 说明 |
+|------|------|
+| **[Cortex 架构法典](./docs/CORTEX_ARCHITECTURE_CODEX.md)** | **新增**：七大约束铁律的工程规范 ⭐ |
+| **[核心三原则](./docs/CORE_PRINCIPLES.md)** | 项目宪法 - 设计哲学与价值观 |
+| **[架构约束规范](./docs/architecture-constraints.md)** | 详细实施指南与检查规则 |
+| **[合规性报告](./docs/ARCHITECTURE_COMPLIANCE_REPORT.md)** | 当前架构合规状态 |
+
+### 功能文档
 | 文档 | 说明 |
 |------|------|
 | [需求文档](https://github.com/xiaoweiba/xiaoweiba/blob/main/docs/xiaoweiba.md) | 完整功能需求与设计 |
 | [技术设计](https://github.com/xiaoweiba/xiaoweiba/blob/main/docs/xiaoweiba-technical-docs.md) | 技术架构与实现细节 |
+| [意图驱动架构](./docs/INTENT_DRIVEN_ARCHITECTURE.md) | 系统设计文档 |
+| [记忆驱动架构](./docs/MEMORY_DRIVEN_ARCHITECTURE.md) | 记忆系统架构 |
+
+### 测试与质量
+| 文档 | 说明 |
+|------|------|
 | [测试报告](https://github.com/xiaoweiba/xiaoweiba/blob/main/docs/TEST-REPORT-SUMMARY.md) | 测试覆盖与质量分析 |
 | [实现进度](https://github.com/xiaoweiba/xiaoweiba/blob/main/docs/IMPLEMENTATION-PROGRESS.md) | 开发进度与Bug修复 |
 | [UI组件指南](https://github.com/xiaoweiba/xiaoweiba/blob/main/docs/ui-components-guide.md) | UI系统使用手册 |
 | [人工测试指南](https://github.com/xiaoweiba/xiaoweiba/blob/main/docs/manual-testing-guide.md) | 手动验收测试步骤 |
+
+### 其他
+| 文档 | 说明 |
+|------|------|
 | [CHANGELOG](https://github.com/xiaoweiba/xiaoweiba/blob/main/CHANGELOG.md) | 版本更新日志 |
+| [ROADMAP](./docs/ROADMAP_550W.md) | 项目路线图 |
+| [PROGRESS](./docs/PROGRESS.md) | 详细进度跟踪 |
 
 ---
 
