@@ -75,7 +75,10 @@
 
 #### 记忆系统核心算法
 - [MEMORY_SYSTEM_HYBRID_ATTENTION_SPEC.md](./MEMORY_SYSTEM_HYBRID_ATTENTION_SPEC.md) | **记忆系统混合注意力架构规范** - CSA/HCA 映射 + Lightning Indexer + 记忆蒸馏 | ✅ 已定义 |
-- [FULL_STACK_HYBRID_ATTENTION_MAPPING.md](./FULL_STACK_HYBRID_ATTENTION_MAPPING.md) | **全栈混合注意力架构映射规范** - Agent调度/执行/安全/交互/模型选择的全局映射 | ✅ **新增** |
+- [FULL_STACK_HYBRID_ATTENTION_MAPPING.md](./FULL_STACK_HYBRID_ATTENTION_MAPPING.md) | **全栈混合注意力架构映射规范** - Agent调度/执行/安全/交互/模型选择的全局映射 | ✅ 已定义 |
+
+#### 技能系统核心规范
+- [SKILL_SYSTEM_PRIVATE_ENGINE_SPEC.md](./SKILL_SYSTEM_PRIVATE_ENGINE_SPEC.md) | **技能系统私有自动化引擎规范** - 三层体系 + YAML Schema + 自动沉淀 + 安全沙箱 | ✅ **新增** |
 
 ---
 
