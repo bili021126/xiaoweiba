@@ -1,7 +1,7 @@
 # 小尾巴（XiaoWeiba）问题记录
 
 **版本**: 1.0  
-**最后更新**: 2026-04-24（会话管理重构：前端主导/日志瘦身）
+**最后更新**: 2026-05-03（Cortex项目暂停，小尾巴文档整理与代码检查）
 
 ---
 
@@ -16,6 +16,41 @@
 | 修复方案 | 解决方案 |
 | 状态 | 待修复 / 修复中 / 已修复 |
 | 相关文件 | 涉及的文件路径 |
+
+---
+
+### 2026-05-03 - Cortex项目暂停，小尾巴文档整理与代码检查
+
+#### P2 建议（已完成）
+
+| 日期 | 问题 | 严重程度 | 原因 | 修复方案 | 状态 | 相关文件 |
+|------|------|---------|------|---------|------|----------|
+| 2026-05-03 | ESLint配置错误：naming-convention规则无效 | P2 | 使用了无效的kebab-case选项 | 移除kebab-case，仅保留camelCase | ✅ 已修复 | .eslintrc.js |
+| 2026-05-03 | 过时文档堆积，根目录混乱 | P2 | 未及时归档报告类文档 | 归档8份2026-04-22报告和2份变更日志 | ✅ 已归档 | docs/archive/ |
+| 2026-05-03 | Cortex项目文档与小尾巴混淆 | P2 | 两个项目共用docs目录 | 归档CORTEX_ARCHITECTURE_CODEX.md | ✅ 已归档 | docs/archive/ |
+| 2026-05-03 | Python缓存文件被Git追踪 | P2 | .gitignore未配置__pycache__规则 | 添加cortex/**/__pycache__/规则 | ✅ 已修复 | .gitignore |
+
+**工作概要**:
+- **代码质量检查**：
+  - ✅ ESLint配置修复（移除无效的kebab-case选项）
+  - ✅ 单元测试通过（672 passed, 9 skipped）
+  
+- **文档整理与归档**：
+  - ✅ 归档6份2026-04-22报告到 `docs/archive/2026-04-22/`
+  - ✅ 归档2份变更日志到对应archive目录
+  - ✅ 归档CORTEX_ARCHITECTURE_CODEX.md（Cortex已暂停）
+  - ✅ 归档8份Cortex项目文档到 `cortex/archive/`
+  
+- **配置优化**：
+  - ✅ 更新.gitignore，忽略Python缓存文件
+  - ✅ 创建DOCUMENT_MERGE_AND_ARCHIVE_PLAN.md
+  - ✅ 创建CHANGELOG_2026-05-03.md
+
+**成果统计**:
+- 📊 Git提交：5次
+- 📄 归档文档：16份（8份小尾巴 + 8份Cortex）
+- ✅ 核心文档：12份保持最新
+- 🧹 工作区：干净（nothing to commit）
 
 ---
 
